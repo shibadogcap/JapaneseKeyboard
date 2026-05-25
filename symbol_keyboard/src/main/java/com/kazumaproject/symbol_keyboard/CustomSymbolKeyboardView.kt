@@ -117,6 +117,28 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private var isClipboardHistoryEnabled: Boolean = false
     private var onDeleteFingerUpListener: (() -> Unit)? = null
 
+    // Emoji Kitchen 関連のメンバ変数
+    private var emojiKitchenPreviewContainer: ConstraintLayout? = null
+    private var emojiKitchenPreviewImage: android.widget.ImageView? = null
+    private var emojiKitchenPreviewLabel: TextView? = null
+    private var emojiKitchenResetButton: TextView? = null
+
+    private var firstKitchenEmoji: com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.EmojiItem? = null
+    private var secondKitchenEmoji: com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.EmojiItem? = null
+    private var generatedStickerBitmap: android.graphics.Bitmap? = null
+
+    private var emojiKitchenRecyclerView: RecyclerView? = null
+    private val emojiKitchenAdapter = EmojiKitchenStickerAdapter()
+    private var emojiKitchenLoadJob: Job? = null
+
+    // クリップボード関連のUIコンポーネント
+    private var clipboardControlLayout: LinearLayout? = null
+    private var clipboardSearchView: androidx.appcompat.widget.SearchView? = null
+    private var clipboardClearAllButton: ShapeableImageView? = null
+
+    private var clipboardClearAllListener: (() -> Unit)? = null
+    private var clipboardSearchListener: ((String) -> Unit)? = null
+
     init {
         inflate(context, R.layout.symbol_keyboard_main_layout, this)
 
@@ -125,6 +147,48 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         recycler = findViewById(R.id.symbol_candidate_recycler_view)
         returnButton = findViewById(R.id.return_jp_keyboard_button)
         deleteButton = findViewById(R.id.symbol_keyboard_delete_key)
+
+        emojiKitchenRecyclerView = findViewById(R.id.emoji_kitchen_recycler_view)
+        emojiKitchenRecyclerView?.apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context, RecyclerView.HORIZONTAL, false)
+            adapter = emojiKitchenAdapter
+        }
+
+        emojiKitchenPreviewContainer = findViewById(R.id.emoji_kitchen_preview_container)
+        emojiKitchenPreviewImage = findViewById(R.id.emoji_kitchen_preview_image)
+        emojiKitchenPreviewLabel = findViewById(R.id.emoji_kitchen_preview_label)
+        emojiKitchenResetButton = findViewById(R.id.emoji_kitchen_reset_button)
+
+        emojiKitchenResetButton?.setOnClickListener {
+            resetEmojiKitchenState()
+        }
+
+        clipboardControlLayout = findViewById(R.id.clipboard_control_layout)
+        clipboardSearchView = findViewById(R.id.clipboard_search_view)
+        clipboardClearAllButton = findViewById(R.id.clipboard_clear_all_button)
+
+        clipboardClearAllButton?.setOnClickListener {
+            clipboardClearAllListener?.invoke()
+        }
+
+        clipboardSearchView?.setOnQueryTextListener(object : androidx.appcompat.widget.SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                clipboardSearchListener?.invoke(newText.orEmpty())
+                return true
+            }
+        })
+
+        emojiKitchenPreviewImage?.setOnClickListener {
+            val bitmap = generatedStickerBitmap
+            if (bitmap != null) {
+                imageItemClickListener?.onImageClick(bitmap)
+                resetEmojiKitchenState()
+            }
+        }
 
         // Initialize default colors
         themeIconColor =
@@ -141,7 +205,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         }
 
         symbolAdapter.setOnItemClickListener { str ->
-            itemClickListener?.onClick(ClickedSymbol(mode = currentMode, symbol = str))
+            if (currentMode == SymbolMode.EMOJI_KITCHEN) {
+                handleEmojiKitchenClick(str)
+            } else {
+                itemClickListener?.onClick(ClickedSymbol(mode = currentMode, symbol = str))
+                if (currentMode == SymbolMode.EMOJI) {
+                    tryToTriggerGboardEmojiKitchen(str)
+                }
+            }
         }
 
         clipboardAdapter.setOnItemClickListener { item ->
@@ -546,6 +617,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         clipboardItemLongClickListener = l
     }
 
+    fun setOnClipboardControlListener(onClearAll: () -> Unit, onSearch: (String) -> Unit) {
+        this.clipboardClearAllListener = onClearAll
+        this.clipboardSearchListener = onSearch
+    }
+
     fun updateClipboardItems(newItems: List<ClipboardItem>) {
         this.clipBoardItems = newItems
         if (currentMode == SymbolMode.CLIPBOARD) {
@@ -555,12 +631,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
     fun setClipboardHistoryEnabled(isEnabled: Boolean) {
         this.isClipboardHistoryEnabled = isEnabled
-        if (currentMode == SymbolMode.CLIPBOARD) {
-            categoryTab.getTabAt(0)?.customView?.let {
-                val switch = it.findViewById<SwitchMaterial>(R.id.clipboard_tab_switch)
-                switch?.isChecked = isEnabled
-            }
-        }
     }
 
     fun setOnClipboardHistoryToggleListener(l: ClipboardHistoryToggleListener) {
@@ -580,6 +650,73 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             }
         if (currentMode == SymbolMode.EMOJI && !isHistoryCategorySelected()) {
             updateSymbolsForCategory(categoryTab.selectedTabPosition)
+        }
+    }
+
+    private fun handleEmojiKitchenClick(char: String) {
+        val context = context ?: return
+        val manager = com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager
+        val emojis = manager.getSupportedEmojis(context)
+        val selected = emojis.find { emoji -> emoji.char == char || emoji.codepoint == charToCodepoint(char) } ?: return
+
+        if (firstKitchenEmoji == null) {
+            firstKitchenEmoji = selected
+            buildCategoryTabs()
+            updateSymbolsForCategory(0)
+        } else if (secondKitchenEmoji == null) {
+            secondKitchenEmoji = selected
+            showEmojiKitchenPreview()
+        }
+    }
+
+    private fun charToCodepoint(char: String): String {
+        if (char.isEmpty()) return ""
+        val codePoint = char.codePointAt(0)
+        return Integer.toHexString(codePoint).lowercase()
+    }
+
+    private fun showEmojiKitchenPreview() {
+        val context = context ?: return
+        val first = firstKitchenEmoji ?: return
+        val second = secondKitchenEmoji ?: return
+
+        recycler.visibility = View.GONE
+        emojiKitchenPreviewContainer?.visibility = View.VISIBLE
+
+        val url = com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.getStickerUrl(
+            context, first.codepoint, second.codepoint
+        )
+
+        if (url != null) {
+            emojiKitchenPreviewLabel?.text = "読み込み中..."
+            lifecycleOwner?.let { owner ->
+                owner.lifecycleScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    val bitmap = com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.downloadSticker(url)
+                    if (bitmap != null) {
+                        generatedStickerBitmap = bitmap
+                        emojiKitchenPreviewImage?.setImageBitmap(bitmap)
+                        emojiKitchenPreviewLabel?.text = "合成完了！タップして送信"
+                    } else {
+                        emojiKitchenPreviewLabel?.text = "ダウンロード失敗"
+                    }
+                }
+            }
+        } else {
+            emojiKitchenPreviewLabel?.text = "組み合わせがありません"
+        }
+    }
+
+    private fun resetEmojiKitchenState() {
+        firstKitchenEmoji = null
+        secondKitchenEmoji = null
+        generatedStickerBitmap = null
+        emojiKitchenPreviewImage?.setImageBitmap(null)
+        emojiKitchenPreviewContainer?.visibility = View.GONE
+        recycler.visibility = View.VISIBLE
+
+        if (currentMode == SymbolMode.EMOJI_KITCHEN) {
+            buildCategoryTabs()
+            updateSymbolsForCategory(0)
         }
     }
 
@@ -650,6 +787,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 applyThemeToTabs(modeTab, themeBackgroundColor)
             }
         }
+        customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
     }
 
     private fun buildCategoryTabs() {
@@ -743,15 +881,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 val tab = categoryTab.newTab().setCustomView(R.layout.custom_tab_clipboard)
                 categoryTab.addTab(tab)
                 tab.customView?.let { customView ->
-                    val switch = customView.findViewById<SwitchMaterial>(R.id.clipboard_tab_switch)
-                    switch.isChecked = isClipboardHistoryEnabled
-                    switch.setOnCheckedChangeListener { _, isChecked ->
-                        isClipboardHistoryEnabled = isChecked
-                        clipboardHistoryToggleListener?.onToggled(isChecked)
-                    }
                     customView.findViewById<TextView>(R.id.clipboard_tab_text)
                         .setTextColor(normalColor)
                 }
+            }
+
+            SymbolMode.EMOJI_KITCHEN -> {
+                val tabText = if (firstKitchenEmoji == null) "1つ目を選択" else "2つ目を選択"
+                categoryTab.addTab(categoryTab.newTab().setText(tabText))
             }
         }
 
@@ -762,6 +899,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 applyThemeToTabs(categoryTab, themeBackgroundColor)
             }
         }
+        customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
     }
 
     private fun buildClipboardListItems(items: List<ClipboardItem>): List<ClipboardListItem> {
@@ -788,6 +926,13 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     }
 
     private fun updateSymbolsForCategory(index: Int) {
+        if (currentMode == SymbolMode.CLIPBOARD) {
+            clipboardControlLayout?.visibility = View.VISIBLE
+        } else {
+            clipboardControlLayout?.visibility = View.GONE
+            clipboardSearchView?.setQuery("", false)
+        }
+
         skinTonePopup?.dismiss()
         pagingJob?.cancel()
         lifecycleOwner?.let { owner ->
@@ -859,6 +1004,15 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                                 }
                             }
 
+                            SymbolMode.EMOJI_KITCHEN -> {
+                                val emojis = com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.getSupportedEmojis(context)
+                                if (firstKitchenEmoji == null) {
+                                    emojis.map { emoji -> emoji.char }
+                                } else {
+                                    com.kazumaproject.symbol_keyboard.emoji_kitchen.EmojiKitchenManager.getCombinableEmojis(context, firstKitchenEmoji!!.codepoint).map { emoji -> emoji.char }
+                                }
+                            }
+
                             else -> emptyList()
                         }
 
@@ -873,6 +1027,10 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
                         symbolAdapter.symbolTextSize = when (currentMode) {
                             SymbolMode.EMOJI -> {
+                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
+                            }
+
+                            SymbolMode.EMOJI_KITCHEN -> {
                                 if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
                             }
 
@@ -982,6 +1140,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             SymbolMode.EMOTICON -> historyEmoticonList.isNotEmpty() && categoryTab.selectedTabPosition == 0
             SymbolMode.SYMBOL -> historySymbolList.isNotEmpty() && categoryTab.selectedTabPosition == 0
             SymbolMode.CLIPBOARD -> false
+            SymbolMode.EMOJI_KITCHEN -> false
         }
     }
 
@@ -1104,6 +1263,82 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         modeTab.getTabAt(mode.ordinal)?.select()
         categoryTab.getTabAt(selectCategoryIndex.coerceIn(0, categoryTab.tabCount - 1))?.select()
         updateSymbolsForCategory(categoryTab.selectedTabPosition)
+    }
+
+    inner class EmojiKitchenStickerAdapter : RecyclerView.Adapter<EmojiKitchenStickerAdapter.StickerViewHolder>() {
+        private var items: List<android.graphics.Bitmap> = emptyList()
+
+        fun submitList(newItems: List<android.graphics.Bitmap>) {
+            items = newItems
+            notifyDataSetChanged()
+        }
+
+        inner class StickerViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val imageView: ShapeableImageView = view as ShapeableImageView
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StickerViewHolder {
+            val imageView = ShapeableImageView(parent.context).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    dpToPx(64),
+                    dpToPx(64)
+                )
+                val p = dpToPx(4)
+                setPadding(p, p, p, p)
+                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+                val shapeAppearanceModel = com.google.android.material.shape.ShapeAppearanceModel.builder()
+                    .setAllCornerSizes(dpToPx(8).toFloat())
+                    .build()
+                setShapeAppearanceModel(shapeAppearanceModel)
+                background = getTabNeumorphDrawable(themeKeyBackgroundColor, dpToPx(8).toFloat())
+            }
+            return StickerViewHolder(imageView)
+        }
+
+        override fun onBindViewHolder(holder: StickerViewHolder, position: Int) {
+            val bitmap = items[position]
+            holder.imageView.setImageBitmap(bitmap)
+            holder.imageView.setOnClickListener {
+                imageItemClickListener?.onImageClick(bitmap)
+                emojiKitchenRecyclerView?.visibility = View.GONE
+            }
+        }
+
+        override fun getItemCount() = items.size
+    }
+
+    private fun tryToTriggerGboardEmojiKitchen(char: String) {
+        emojiKitchenRecyclerView?.visibility = View.GONE
+    }
+
+    private var customTypeface: android.graphics.Typeface? = null
+
+    fun setCustomTypeface(typeface: android.graphics.Typeface?) {
+        this.customTypeface = typeface
+        
+        symbolAdapter.setCustomTypeface(typeface)
+        clipboardAdapter.setCustomTypeface(typeface)
+        
+        emojiKitchenPreviewLabel?.typeface = typeface
+        emojiKitchenResetButton?.typeface = typeface
+        
+        applyTypefaceToTabLayout(categoryTab, typeface)
+        applyTypefaceToTabLayout(modeTab, typeface)
+    }
+
+    private fun applyTypefaceToTabLayout(tabLayout: TabLayout, typeface: android.graphics.Typeface?) {
+        tabLayout.post {
+            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@post
+            for (i in 0 until slidingTabStrip.childCount) {
+                val tabView = slidingTabStrip.getChildAt(i) as? ViewGroup ?: continue
+                for (j in 0 until tabView.childCount) {
+                    val child = tabView.getChildAt(j)
+                    if (child is TextView) {
+                        child.typeface = typeface
+                    }
+                }
+            }
+        }
     }
 
 }

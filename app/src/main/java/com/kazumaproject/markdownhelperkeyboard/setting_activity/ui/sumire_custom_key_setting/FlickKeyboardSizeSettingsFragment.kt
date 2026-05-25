@@ -29,11 +29,11 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
     private var textSeekBar: SeekBar? = null
     private var specialTextSeekBar: SeekBar? = null
 
-    private var widthValueText: TextView? = null
-    private var heightValueText: TextView? = null
-    private var iconValueText: TextView? = null
-    private var textValueText: TextView? = null
-    private var specialTextValueText: TextView? = null
+    private var widthValueText: android.widget.EditText? = null
+    private var heightValueText: android.widget.EditText? = null
+    private var iconValueText: android.widget.EditText? = null
+    private var textValueText: android.widget.EditText? = null
+    private var specialTextValueText: android.widget.EditText? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -105,9 +105,11 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
 
         val listener = object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                saveCurrentValues()
-                updateValueLabels()
-                renderPreview()
+                if (fromUser) {
+                    saveCurrentValues()
+                    updateValueLabels()
+                    renderPreview()
+                }
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
@@ -119,6 +121,60 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
         iconSeekBar?.setOnSeekBarChangeListener(listener)
         textSeekBar?.setOnSeekBarChangeListener(listener)
         specialTextSeekBar?.setOnSeekBarChangeListener(listener)
+
+        val editTextWatcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (s.isNullOrEmpty()) return
+                val value = s.toString().toDoubleOrNull() ?: return
+                
+                if (widthValueText?.hasFocus() == true) {
+                    val clamped = value.toInt().coerceIn(MIN_PERCENT, MAX_PERCENT)
+                    widthSeekBar?.progress = clamped - MIN_PERCENT
+                    saveCurrentValues()
+                    renderPreview()
+                } else if (heightValueText?.hasFocus() == true) {
+                    val clamped = value.toInt().coerceIn(MIN_PERCENT, MAX_PERCENT)
+                    heightSeekBar?.progress = clamped - MIN_PERCENT
+                    saveCurrentValues()
+                    renderPreview()
+                } else if (iconValueText?.hasFocus() == true) {
+                    val clamped = value.toInt().coerceIn(MIN_PERCENT, MAX_ICON_PERCENT)
+                    iconSeekBar?.progress = clamped - MIN_PERCENT
+                    saveCurrentValues()
+                    renderPreview()
+                } else if (textValueText?.hasFocus() == true) {
+                    val clamped = value.toFloat().coerceIn(MIN_TEXT_SIZE_SP, MAX_TEXT_SIZE_SP)
+                    textSeekBar?.progress = (clamped - MIN_TEXT_SIZE_SP).toInt()
+                    saveCurrentValues()
+                    renderPreview()
+                } else if (specialTextValueText?.hasFocus() == true) {
+                    val clamped = value.toFloat().coerceIn(MIN_TEXT_SIZE_SP, MAX_TEXT_SIZE_SP)
+                    specialTextSeekBar?.progress = (clamped - MIN_TEXT_SIZE_SP).toInt()
+                    saveCurrentValues()
+                    renderPreview()
+                }
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        }
+
+        widthValueText?.addTextChangedListener(editTextWatcher)
+        heightValueText?.addTextChangedListener(editTextWatcher)
+        iconValueText?.addTextChangedListener(editTextWatcher)
+        textValueText?.addTextChangedListener(editTextWatcher)
+        specialTextValueText?.addTextChangedListener(editTextWatcher)
+
+        val focusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                updateValueLabels()
+            }
+        }
+
+        widthValueText?.onFocusChangeListener = focusChangeListener
+        heightValueText?.onFocusChangeListener = focusChangeListener
+        iconValueText?.onFocusChangeListener = focusChangeListener
+        textValueText?.onFocusChangeListener = focusChangeListener
+        specialTextValueText?.onFocusChangeListener = focusChangeListener
 
         updateValueLabels()
     }
@@ -144,12 +200,20 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
         AppPreference.flick_special_key_text_size_sp = currentSpecialTextSizeSp
     }
 
+    private fun setEditTextValue(editText: android.widget.EditText?, value: String) {
+        if (editText == null) return
+        if (editText.text.toString() != value) {
+            editText.setText(value)
+            editText.setSelection(editText.text.length)
+        }
+    }
+
     private fun updateValueLabels() {
-        widthValueText?.text = "${currentWidthPercent}%"
-        heightValueText?.text = "${currentHeightPercent}%"
-        iconValueText?.text = "${currentIconPercent}%"
-        textValueText?.text = String.format("%.1fsp", currentTextSizeSp)
-        specialTextValueText?.text = String.format("%.1fsp", currentSpecialTextSizeSp)
+        setEditTextValue(widthValueText, currentWidthPercent.toString())
+        setEditTextValue(heightValueText, currentHeightPercent.toString())
+        setEditTextValue(iconValueText, currentIconPercent.toString())
+        setEditTextValue(textValueText, String.format(java.util.Locale.US, "%.1f", currentTextSizeSp))
+        setEditTextValue(specialTextValueText, String.format(java.util.Locale.US, "%.1f", currentSpecialTextSizeSp))
     }
 
     private fun renderPreview() {
@@ -163,8 +227,10 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
             customBgColor = AppPreference.custom_theme_bg_color,
             customKeyColor = AppPreference.custom_theme_key_color,
             customSpecialKeyColor = AppPreference.custom_theme_special_key_color,
+            customEnterKeyColor = AppPreference.custom_theme_enter_key_color,
             customKeyTextColor = AppPreference.custom_theme_key_text_color,
             customSpecialKeyTextColor = AppPreference.custom_theme_special_key_text_color,
+            customEnterKeyTextColor = AppPreference.custom_theme_enter_key_text_color,
             liquidGlassEnable = AppPreference.liquid_glass_preference,
             customBorderEnable = AppPreference.custom_theme_border_enable,
             customBorderColor = AppPreference.custom_theme_border_color,

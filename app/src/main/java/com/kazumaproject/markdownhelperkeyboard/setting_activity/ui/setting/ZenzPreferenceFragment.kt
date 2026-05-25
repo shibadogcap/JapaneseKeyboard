@@ -11,9 +11,13 @@ import com.kazumaproject.markdownhelperkeyboard.R
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class ZenzPreferenceFragment : PreferenceFragmentCompat() {
+
+    @Inject
+    lateinit var appPreference: AppPreference
 
     private val openModelLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -42,7 +46,7 @@ class ZenzPreferenceFragment : PreferenceFragmentCompat() {
                 when (which) {
                     0 -> {
                         // デフォルトに戻す
-                        AppPreference.zenz_model_uri_preference = ""
+                        appPreference.zenz_model_uri_preference = ""
                         updateModelPrefSummary()
 
                         // 即時反映したいならここで initModel を呼んでおく（任意）
@@ -67,7 +71,7 @@ class ZenzPreferenceFragment : PreferenceFragmentCompat() {
             requireContext().contentResolver.takePersistableUriPermission(uri, flags)
 
             // 保存（“パス”ではなく Uri 文字列）
-            AppPreference.zenz_model_uri_preference = uri.toString()
+            appPreference.zenz_model_uri_preference = uri.toString()
             updateModelPrefSummary()
 
             // 即時反映したいならここで initModel を呼ぶ（内部コピーは AppModule 側で行う想定）
@@ -82,7 +86,7 @@ class ZenzPreferenceFragment : PreferenceFragmentCompat() {
 
     private fun updateModelPrefSummary() {
         val modelPref = findPreference<Preference>("zenz_model_select_preference") ?: return
-        val uriStr = AppPreference.zenz_model_uri_preference
+        val uriStr = appPreference.zenz_model_uri_preference
 
         modelPref.summary = if (uriStr.isBlank()) {
             "デフォルト（Assets）"

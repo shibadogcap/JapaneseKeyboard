@@ -38,4 +38,12 @@ interface QWERTYKeyListener {
         qwertyKey: QWERTYKey,
         character: Char
     )
+
+    /**
+     * QWERTYキーが特定の方向へフリックされたときに呼び出されます。
+     */
+    fun onFlickDirectionQWERTYKey(
+        qwertyKey: QWERTYKey,
+        direction: String
+    ) {}
 }

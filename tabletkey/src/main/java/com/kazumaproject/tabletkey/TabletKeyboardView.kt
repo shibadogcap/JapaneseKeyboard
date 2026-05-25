@@ -168,7 +168,7 @@ class TabletKeyboardView @JvmOverloads constructor(
     )
 
     // All AppCompatImageButton keys (side and utility keys)
-    private val allImageButtonKeys = listOf(
+    private val allImageButtonKeys: List<View> = listOf(
         binding.keyKigou,
         binding.keyPrevious,
         binding.keySwitchKeyMode,
@@ -297,7 +297,7 @@ class TabletKeyboardView @JvmOverloads constructor(
     private val _tabletCapsLockState = MutableStateFlow(TabletCapsLockState())
     private val tabletCapsLockState: StateFlow<TabletCapsLockState> =
         _tabletCapsLockState.asStateFlow()
-    private val uiScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var uiScope: CoroutineScope? = null
 
     private var isDynamicColorsEnable = false
 
@@ -324,8 +324,18 @@ class TabletKeyboardView @JvmOverloads constructor(
         handleCurrentInputModeSwitch(inputMode = currentInputMode.get())
 
         //setMaterialYouTheme()
+    }
 
-        uiScope.launch {
+    private fun createViewScope(): CoroutineScope {
+        return CoroutineScope(Dispatchers.Main + SupervisorJob())
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (uiScope == null) {
+            uiScope = createViewScope()
+        }
+        uiScope?.launch {
             tabletCapsLockState.collectLatest { state ->
                 Log.d("tabletCapsLockState", "$state")
                 when (currentInputMode.get()) {
@@ -390,8 +400,10 @@ class TabletKeyboardView @JvmOverloads constructor(
         customBgColor: Int,
         customKeyColor: Int,
         customSpecialKeyColor: Int,
+        customEnterKeyColor: Int,
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
+        customEnterKeyTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
@@ -433,8 +445,10 @@ class TabletKeyboardView @JvmOverloads constructor(
                     backgroundColor = customBgColor,
                     normalKeyColor = customKeyColor,
                     specialKeyColor = customSpecialKeyColor,
+                    enterKeyColor = customEnterKeyColor,
                     normalKeyTextColor = customKeyTextColor,
                     specialKeyTextColor = customSpecialKeyTextColor,
+                    enterKeyTextColor = customEnterKeyTextColor,
                     borderWidth = borderWidth
                 )
             }
@@ -454,8 +468,10 @@ class TabletKeyboardView @JvmOverloads constructor(
         backgroundColor: Int,
         normalKeyColor: Int,
         specialKeyColor: Int,
+        enterKeyColor: Int,
         normalKeyTextColor: Int,
         specialKeyTextColor: Int,
+        enterKeyTextColor: Int,
         borderWidth: Int
     ) {
         val density = context.resources.displayMetrics.density
@@ -481,7 +497,11 @@ class TabletKeyboardView @JvmOverloads constructor(
 
             val specialKeys = listOf(
                 keyKigou, keyPrevious, keySwitchKeyMode, keyLeftCursor,
-                keyRightCursor, keyDelete, keySpace, keyEnter
+                keyRightCursor, keyDelete, keySpace
+            )
+
+            val enterKeys = listOf(
+                keyEnter
             )
 
             // --- 色の適用処理 ---
@@ -513,9 +533,31 @@ class TabletKeyboardView @JvmOverloads constructor(
                 } else {
                     view.background = specialDrawableState?.newDrawable()?.mutate()
                 }
-                ImageViewCompat.setImageTintList(view, specialColorStateList)
+                if (view is android.widget.ImageView) {
+                    ImageViewCompat.setImageTintList(view, specialColorStateList)
+                } else if (view is TextView) {
+                    view.setTextColor(specialColorStateList)
+                }
             }
 
+            // 4. 確定キーへの適用
+            val enterDrawableState =
+                getDynamicNeumorphDrawable(enterKeyColor, radius).constantState
+            val enterColorStateList = ColorStateList.valueOf(enterKeyTextColor)
+
+            enterKeys.forEach { view ->
+                if (customBorderEnable) {
+                    view.setDrawableSolidColor(enterKeyColor)
+                    view.setBorder(customBorderColor, borderWidth)
+                } else {
+                    view.background = enterDrawableState?.newDrawable()?.mutate()
+                }
+                if (view is android.widget.ImageView) {
+                    ImageViewCompat.setImageTintList(view, enterColorStateList)
+                } else if (view is TextView) {
+                    view.setTextColor(enterColorStateList)
+                }
+            }
         }
     }
 
@@ -1245,7 +1287,8 @@ class TabletKeyboardView @JvmOverloads constructor(
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         release()
-        uiScope.cancel()
+        uiScope?.cancel()
+        uiScope = null
     }
 
     private fun release() {

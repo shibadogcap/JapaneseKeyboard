@@ -20,7 +20,54 @@
         app:tabRippleColor="@null" />
 
 
-    <!-- 中央の RecyclerView を左右ボタンの間に挟む -->
+    <!-- Emoji Kitchen 横スクロール用RecyclerView (Gboard風) -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/emoji_kitchen_recycler_view"
+        android:layout_width="0dp"
+        android:layout_height="80dp"
+        android:visibility="gone"
+        android:background="@android:color/transparent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/category_tab_layout" />
+
+    <!-- クリップボード検索 ＆ 全クリアコントロール -->
+    <LinearLayout
+        android:id="@+id/clipboard_control_layout"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp"
+        android:gravity="center_vertical"
+        android:background="@android:color/transparent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/emoji_kitchen_recycler_view">
+
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/clipboard_search_view"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@drawable/symbol_keyboard_buttons_bg"
+            app:queryHint="履歴を検索..."
+            app:iconifiedByDefault="false"
+            app:queryBackground="@android:color/transparent" />
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/clipboard_clear_all_button"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/symbol_keyboard_buttons_bg"
+            android:scaleType="center"
+            android:src="@drawable/backspace_24px"
+            android:tint="@color/tab_unselected" />
+
+    </LinearLayout>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/symbol_candidate_recycler_view"
         android:layout_width="0dp"
@@ -29,7 +76,66 @@
         app:layout_constraintBottom_toTopOf="@id/bottom_bar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/category_tab_layout" />
+        app:layout_constraintTop_toBottomOf="@id/clipboard_control_layout" />
+
+    <!-- Emoji Kitchen プレビュー用コンテナ -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/emoji_kitchen_preview_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        android:background="@android:color/transparent"
+        app:layout_constraintBottom_toTopOf="@id/bottom_bar"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/category_tab_layout">
+
+        <ImageView
+            android:id="@+id/emoji_kitchen_preview_image"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:contentDescription="Emoji Kitchen Preview"
+            android:scaleType="centerInside"
+            android:clickable="true"
+            android:focusable="true"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/emoji_kitchen_preview_label"
+            app:layout_constraintVertical_chainStyle="packed" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/emoji_kitchen_preview_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="合成完了！タップして送信"
+            android:textColor="@color/keyboard_icon_color"
+            android:textSize="12sp"
+            app:layout_constraintTop_toBottomOf="@id/emoji_kitchen_preview_image"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/emoji_kitchen_reset_button" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/emoji_kitchen_reset_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="8dp"
+            android:text="やり直す"
+            android:textColor="@color/keyboard_icon_color"
+            android:textSize="14sp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="@drawable/symbol_keyboard_buttons_bg"
+            app:layout_constraintTop_toBottomOf="@id/emoji_kitchen_preview_label"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- 既存の BottomBar（戻る / モード切替 / 削除） -->
     <LinearLayout

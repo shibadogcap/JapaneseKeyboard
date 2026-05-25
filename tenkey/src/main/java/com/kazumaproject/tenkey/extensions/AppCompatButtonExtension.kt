@@ -124,6 +124,14 @@ fun AppCompatButton.setTenKeyTextJapanese(
     colorTextInt: Int
 ) {
     textSize = KEY_JAPANESE_SIZE + delta
+    this.isSingleLine = true
+    this.maxLines = 1
+    this.gravity = Gravity.CENTER
+    this.setPadding(0, 0, 0, 0)
+    androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+        this,
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+    )
     when (modeTheme) {
         "default" -> {
             setTextColor(
@@ -199,6 +207,11 @@ fun AppCompatButton.setTenKeyTextJapaneseWithFlickGuide(
     this.isSingleLine = false
     this.maxLines = 3
     this.gravity = Gravity.CENTER
+    this.setPadding(0, 0, 0, 0)
+    androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+        this,
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
+    )
     // 行間を少し詰めたいなら（好みで調整）
     this.setLineSpacing(0f, 0.9f)
 
@@ -315,6 +328,14 @@ fun AppCompatButton.setTenKeyTextEnglish(
     colorTextInt: Int
 ) {
     textSize = KEY_ENGLISH_SIZE + delta
+    this.isSingleLine = true
+    this.maxLines = 1
+    this.gravity = Gravity.CENTER
+    this.setPadding(0, 0, 0, 0)
+    androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+        this,
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+    )
 
     when (modeTheme) {
         "default" -> {
@@ -363,6 +384,14 @@ fun AppCompatButton.setTenKeyTextNumber(
     colorTextInt: Int
 ) {
     textSize = KEY_NUMBER_SIZE + delta
+    this.isSingleLine = true
+    this.maxLines = 1
+    this.gravity = Gravity.CENTER
+    this.setPadding(0, 0, 0, 0)
+    androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+        this,
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+    )
 
     when (modeTheme) {
         "default" -> {

@@ -764,7 +764,7 @@
         app:layout_constraintStart_toEndOf="@id/key_n"
         app:layout_constraintTop_toBottomOf="@id/guideline_a_row" />
 
-    <androidx.appcompat.widget.AppCompatImageButton
+    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/key_delete"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -773,9 +773,10 @@
         android:layout_marginEnd="2dp"
         android:background="@drawable/qwerty_key_side_bg"
         android:elevation="@dimen/qwerty_side_key_elevation_size"
-        android:scaleType="centerInside"
-        android:src="@drawable/baseline_backspace_24"
-        android:tint="@color/keyboard_icon_color"
+        android:text=""
+        android:textColor="@color/keyboard_icon_color"
+        android:textSize="@dimen/qwerty_key_text_size"
+        android:textAllCaps="false"
         app:layout_constraintBottom_toTopOf="@id/guideline_z_row"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/key_m"
@@ -841,7 +842,7 @@
         app:layout_constraintStart_toEndOf="@id/switch_number_layout"
         app:layout_constraintTop_toBottomOf="@id/guideline_z_row" />
 
-    <androidx.appcompat.widget.AppCompatImageButton
+    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/key_emoji"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -850,9 +851,10 @@
         android:background="@drawable/qwerty_key_side_bg"
         android:contentDescription="@string/string_emoji"
         android:elevation="@dimen/qwerty_side_key_elevation_size"
-        android:scaleType="centerInside"
-        android:src="@drawable/baseline_emoji_emotions_24"
-        android:tint="@color/keyboard_icon_color"
+        android:text=""
+        android:textColor="@color/keyboard_icon_color"
+        android:textSize="@dimen/qwerty_key_text_size"
+        android:textAllCaps="false"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/key_switch_default"
@@ -860,7 +862,7 @@
         app:layout_constraintStart_toEndOf="@id/key_123"
         app:layout_constraintTop_toBottomOf="@id/guideline_z_row" />
 
-    <androidx.appcompat.widget.AppCompatImageButton
+    <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/key_switch_default"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -868,9 +870,10 @@
         android:layout_marginStart="4dp"
         android:background="@drawable/qwerty_key_side_bg"
         android:elevation="@dimen/qwerty_side_key_elevation_size"
-        android:scaleType="centerInside"
-        android:src="@drawable/language_24dp"
-        android:tint="@color/keyboard_icon_color"
+        android:text=""
+        android:textColor="@color/keyboard_icon_color"
+        android:textSize="@dimen/qwerty_key_text_size"
+        android:textAllCaps="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/key_touten"
         app:layout_constraintHorizontal_weight="0.5"

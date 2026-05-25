@@ -40,7 +40,7 @@
             app:defaultValue="false"
             app:summary="@string/enable_zenz_right_context_preference_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="300"
             android:key="zenz_debounce_time_preference"
             android:max="1024"
@@ -50,7 +50,7 @@
             app:showSeekBarValue="true"
             app:summary="@string/zenz_debounce_time_preference_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="32"
             android:key="zenz_maximum_letter_count_preference"
             android:max="128"
@@ -60,7 +60,7 @@
             app:showSeekBarValue="true"
             app:summary="@string/zenz_maximum_letter_count_preference_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="512"
             android:key="zenz_maximum_context_count_preference"
             android:max="1024"
@@ -70,7 +70,7 @@
             app:showSeekBarValue="true"
             app:summary="@string/zenz_maximum_context_count_preference_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="4"
             android:key="zenz_maximum_thread_count_preference"
             android:max="8"

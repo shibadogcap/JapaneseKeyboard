@@ -154,6 +154,8 @@ data class ImePreferencesSnapshot(
     val customThemeCandidateItemBgColor: Int,
     val customThemeCandidateItemPressedBgColor: Int,
     val customThemeShortcutIconColor: Int,
+    val customThemeEnterKeyColor: Int,
+    val customThemeEnterKeyTextColor: Int,
     val liquidGlassThemePreference: Boolean,
     val liquidGlassBlurRadiousPreference: Int,
     val liquidGlassKeyBlurRadiousPreference: Int,
@@ -180,6 +182,24 @@ data class ImePreferencesSnapshot(
     val enableTypoCorrectionJapaneseFlickKeyboardPreference: Boolean,
     val enableTypoCorrectionQwertyEnglishKeyboardPreference: Boolean,
     val enableGemmaTranslationPreference: Boolean,
+    val customIconEnterPath: String,
+    val customIconSpacePath: String,
+    val customIconArrowLeftPath: String,
+    val customIconArrowRightPath: String,
+    val customFontKeyPath: String,
+    val customFontCandidatePath: String,
+    val customIconModeSwitchPath: String,
+    val customTextModeSwitch: String,
+    val customIconUndoPath: String,
+    val customTextUndo: String,
+    val customIconEmojiPath: String,
+    val customTextEmoji: String,
+    val customIconDeletePath: String,
+    val customTextDelete: String,
+    val customTextEnter: String,
+    val customTextSpace: String,
+    val customTextSymbol: String,
+    val customText123: String,
 ) {
     companion object {
         fun from(
@@ -431,6 +451,8 @@ data class ImePreferencesSnapshot(
                 customThemeShortcutIconColor = appPreference.getCustomThemeShortcutIconColor(
                     appPreference.custom_theme_special_key_text_color
                 ),
+                customThemeEnterKeyColor = appPreference.custom_theme_enter_key_color,
+                customThemeEnterKeyTextColor = appPreference.custom_theme_enter_key_text_color,
                 liquidGlassThemePreference = appPreference.liquid_glass_preference,
                 liquidGlassBlurRadiousPreference = appPreference.liquid_glass_blur_radius,
                 liquidGlassKeyBlurRadiousPreference = appPreference.liquid_glass_key_alpha,
@@ -468,7 +490,25 @@ data class ImePreferencesSnapshot(
                 enableTypoCorrectionQwertyEnglishKeyboardPreference =
                     appPreference.enable_typo_correction_qwerty_english_keyboard_preference,
                 enableGemmaTranslationPreference =
-                    AppVariantConfig.hasGemma && appPreference.enable_gemma_translation_preference
+                    AppVariantConfig.hasGemma && appPreference.enable_gemma_translation_preference,
+                customIconEnterPath = appPreference.custom_icon_enter_path,
+                customIconSpacePath = appPreference.custom_icon_space_path,
+                customIconArrowLeftPath = appPreference.custom_icon_arrow_left_path,
+                customIconArrowRightPath = appPreference.custom_icon_arrow_right_path,
+                customFontKeyPath = appPreference.custom_font_key_path,
+                customFontCandidatePath = appPreference.custom_font_candidate_path,
+                customIconModeSwitchPath = appPreference.custom_icon_mode_switch_path,
+                customTextModeSwitch = appPreference.custom_text_mode_switch,
+                customIconUndoPath = appPreference.custom_icon_undo_path,
+                customTextUndo = appPreference.custom_text_undo,
+                customIconEmojiPath = appPreference.custom_icon_emoji_path,
+                customTextEmoji = appPreference.custom_text_emoji,
+                customIconDeletePath = appPreference.custom_icon_delete_path,
+                customTextDelete = appPreference.custom_text_delete,
+                customTextEnter = appPreference.custom_text_enter,
+                customTextSpace = appPreference.custom_text_space,
+                customTextSymbol = appPreference.custom_text_symbol,
+                customText123 = appPreference.custom_text_123,
             )
         }
     }

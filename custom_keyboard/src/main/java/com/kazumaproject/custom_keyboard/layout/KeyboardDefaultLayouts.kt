@@ -596,9 +596,9 @@ object KeyboardDefaultLayouts {
             ), FlickDirection.UP to FlickAction.Action(
                 KeyAction.InputText("ひらがな小文字"), label = "小"
             ), FlickDirection.UP_LEFT to FlickAction.Action(
-                KeyAction.InputText("濁点"), label = "゛"
+                KeyAction.InputText("濁点"), label = "□゛"
             ), FlickDirection.UP_RIGHT to FlickAction.Action(
-                KeyAction.InputText("半濁点"), label = "゜"
+                KeyAction.InputText("半濁点"), label = "□゜"
             )
         )
 
@@ -877,9 +877,9 @@ object KeyboardDefaultLayouts {
             ), FlickDirection.UP to FlickAction.Action(
                 KeyAction.InputText("ひらがな小文字"), label = "小"
             ), FlickDirection.UP_LEFT to FlickAction.Action(
-                KeyAction.InputText("濁点"), label = "゛"
+                KeyAction.InputText("濁点"), label = "□゛"
             ), FlickDirection.UP_RIGHT to FlickAction.Action(
-                KeyAction.InputText("半濁点"), label = "゜"
+                KeyAction.InputText("半濁点"), label = "□゜"
             )
         )
 

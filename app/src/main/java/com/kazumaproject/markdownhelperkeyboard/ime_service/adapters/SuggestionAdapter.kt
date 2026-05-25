@@ -11,6 +11,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.FrameLayout
+import android.util.Size
+import android.view.inputmethod.InlineSuggestion
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
@@ -101,6 +104,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         const val VIEW_TYPE_SUGGESTION = 1
         const val VIEW_TYPE_CUSTOM_LAYOUT_PICKER = 2
         const val VIEW_TYPE_GEMMA_ACTION = 3
+        const val VIEW_TYPE_INLINE_SUGGESTION = 4
     }
 
     enum class HelperIcon {
@@ -117,6 +121,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private val adapterScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     var onListUpdated: (() -> Unit)? = null
+    var onClipboardUpdated: (() -> Unit)? = null
 
     // Holds the preview content for the empty state.
     private var clipboardText: String = ""
@@ -137,6 +142,32 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private var showCustomTab: Boolean = true
 
     private var incognitoIconDrawable: android.graphics.drawable.Drawable? = null
+    private var customTypeface: android.graphics.Typeface? = null
+
+    private var inlineSuggestions: List<InlineSuggestion> = emptyList()
+
+    private val inlineCount: Int
+        get() = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            inlineSuggestions.size
+        } else {
+            0
+        }
+
+    fun setInlineSuggestions(suggestions: List<InlineSuggestion>) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            this.inlineSuggestions = suggestions
+            notifyDataSetChanged()
+        }
+    }
+
+    fun hasInlineSuggestions(): Boolean {
+        return inlineSuggestions.isNotEmpty()
+    }
+
+    fun setCustomTypeface(typeface: android.graphics.Typeface?) {
+        this.customTypeface = typeface
+        notifyItemRangeChanged(0, itemCount)
+    }
 
     private var candidateTextSize: Float = 14f
     private var candidateTextColor: Int? = null
@@ -178,6 +209,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         onCustomLayoutItemClickListener = null
         onShowSoftKeyboardClick = null
         onListUpdated = null
+        onClipboardUpdated = null
         incognitoIconDrawable = null
         adapterScope.cancel()
     }
@@ -238,6 +270,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         if (suggestions.isEmpty()) {
             notifyItemChanged(0)
         }
+        onClipboardUpdated?.invoke()
     }
 
     /**
@@ -250,7 +283,13 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         if (suggestions.isEmpty()) {
             notifyItemChanged(0)
         }
+        onClipboardUpdated?.invoke()
     }
+
+    fun hasClipboardPreview(): Boolean {
+        return clipboardText.isNotEmpty() || clipboardBitmap != null
+    }
+
 
 
     fun setUndoPreviewText(text: String) {
@@ -342,9 +381,19 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         val nameTextView: MaterialTextView = itemView.findViewById(R.id.custom_layout_name)
     }
 
+    inner class InlineSuggestionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val container: FrameLayout = itemView as FrameLayout
+    }
+
     override fun getItemViewType(position: Int): Int {
+        val inlineSize = inlineCount
+        if (position < inlineSize) {
+            return VIEW_TYPE_INLINE_SUGGESTION
+        }
+        val adjustedPosition = position - inlineSize
+
         return if (suggestions.isNotEmpty()) {
-            if (suggestions[position].isSelectedTextGemmaActionCandidate()) {
+            if (suggestions[adjustedPosition].isSelectedTextGemmaActionCandidate()) {
                 VIEW_TYPE_GEMMA_ACTION
             } else {
                 VIEW_TYPE_SUGGESTION
@@ -359,7 +408,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     override fun getItemCount(): Int {
-        return if (suggestions.isNotEmpty()) {
+        val baseCount = if (suggestions.isNotEmpty()) {
             suggestions.size
         } else {
             if (currentMode is TenKeyQWERTYMode.Custom && customLayouts.isNotEmpty()) {
@@ -368,6 +417,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 1
             }
         }
+        return inlineCount + baseCount
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -403,23 +453,54 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 GemmaActionViewHolder(itemView)
             }
 
+            VIEW_TYPE_INLINE_SUGGESTION -> {
+                val container = FrameLayout(parent.context).apply {
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+                InlineSuggestionViewHolder(container)
+            }
+
             else -> throw IllegalArgumentException("Unknown view type: $viewType")
         }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (holder.itemViewType) {
+            VIEW_TYPE_INLINE_SUGGESTION -> onBindInlineSuggestionViewHolder(
+                holder as InlineSuggestionViewHolder, position
+            )
             VIEW_TYPE_EMPTY -> onBindEmptyViewHolder(holder as EmptyViewHolder)
             VIEW_TYPE_SUGGESTION -> onBindSuggestionViewHolder(
-                holder as SuggestionViewHolder, position
+                holder as SuggestionViewHolder, position - inlineCount
             )
             VIEW_TYPE_GEMMA_ACTION -> onBindGemmaActionViewHolder(
-                holder as GemmaActionViewHolder, position
+                holder as GemmaActionViewHolder, position - inlineCount
             )
 
             VIEW_TYPE_CUSTOM_LAYOUT_PICKER -> onBindCustomLayoutViewHolder(
-                holder as CustomLayoutViewHolder, position
+                holder as CustomLayoutViewHolder, position - inlineCount
             )
+        }
+    }
+
+    private fun onBindInlineSuggestionViewHolder(holder: InlineSuggestionViewHolder, position: Int) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val suggestion = inlineSuggestions[position]
+            holder.container.removeAllViews()
+
+            val width = ViewGroup.LayoutParams.WRAP_CONTENT
+            val height = ViewGroup.LayoutParams.MATCH_PARENT
+            val size = Size(width, height)
+
+            suggestion.inflate(holder.itemView.context, size, holder.itemView.context.mainExecutor) { view ->
+                if (view != null) {
+                    holder.container.removeAllViews()
+                    holder.container.addView(view)
+                }
+            }
         }
     }
 
@@ -427,6 +508,12 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         val isDynamicColorEnable = DynamicColors.isDynamicColorAvailable()
         Timber.d("SuggestionAdapter onBindEmptyViewHolder: $clipboardText $isPasteEnabled")
         holder.apply {
+            undoIcon?.typeface = customTypeface
+            redoIcon?.typeface = customTypeface
+            reconvertIcon?.typeface = customTypeface
+            clipboardPreviewText?.typeface = customTypeface
+            clipboardPreviewTextDescription?.typeface = customTypeface
+
             incognitoIcon?.apply {
                 if (incognitoIconDrawable != null) {
                     visibility = View.VISIBLE
@@ -638,6 +725,9 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 .plus(" ".repeat(paddingLength))
         }
 
+        holder.text.typeface = customTypeface
+        holder.yomiText.typeface = customTypeface
+        holder.typeText.typeface = customTypeface
         holder.text.textSize = candidateTextSize
         val yomiPresentation = resolveCandidateYomiPresentation(
             showCandidateYomiForLiveConversion = showCandidateYomiForLiveConversion,
@@ -759,6 +849,8 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private fun onBindGemmaActionViewHolder(holder: GemmaActionViewHolder, position: Int) {
         applyCandidateItemBackground(holder.itemView)
         val suggestion = suggestions[position]
+        holder.actionText.typeface = customTypeface
+        holder.badgeText.typeface = customTypeface
         holder.actionText.text = suggestion.string
         holder.actionText.textSize = candidateTextSize
         holder.badgeText.text = when (suggestion.type) {
@@ -784,6 +876,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private fun onBindCustomLayoutViewHolder(holder: CustomLayoutViewHolder, position: Int) {
         val layoutItem = customLayouts[position]
+        holder.nameTextView.typeface = customTypeface
         holder.nameTextView.text = layoutItem.name
         holder.itemView.setOnClickListener {
             onCustomLayoutItemClickListener?.invoke(position)

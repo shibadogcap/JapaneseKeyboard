@@ -38,7 +38,7 @@ object AppPreference {
         CircularFlickDirection.SLOT_6
     )
 
-    private val CLIPBOARD_HISTORY_ENABLE = Pair("clipboard_history_preference", false)
+    private val CLIPBOARD_HISTORY_ENABLE = Pair("clipboard_history_preference", true)
     private val TIME_SAME_PRONOUNCE_TYPING = Pair("time_same_pronounce_typing_preference", 1000)
     private val FLICK_SENSITIVITY = Pair("flick_sensitivity_preference", 100)
     private val LONG_PRESS_TIMEOUT = Pair("long_press_timeout_preference", 300)
@@ -279,6 +279,11 @@ object AppPreference {
     private val CUSTOM_THEME_SHORTCUT_ICON_COLOR =
         Pair(CustomThemeColorPreferenceKeys.SHORTCUT_ICON_COLOR, Color.BLACK)
 
+    private val CUSTOM_THEME_ENTER_KEY_COLOR =
+        Pair("custom_theme_enter_key_color_preference", Color.BLUE)
+    private val CUSTOM_THEME_ENTER_KEY_TEXT_COLOR =
+        Pair("custom_theme_enter_key_text_color_preference", Color.WHITE)
+
     // New variables for Custom Border
     private val CUSTOM_THEME_BORDER_ENABLE = Pair("theme_custom_border_enable", false)
     private val CUSTOM_THEME_BORDER_COLOR = Pair("theme_custom_border_color", Color.BLACK)
@@ -360,6 +365,9 @@ object AppPreference {
 
     private val CLIPBOARD_UNPINNED_RETENTION_HOURS_PREFERENCE =
         Pair("clipboard_unpinned_retention_hours_preference", 1)
+
+    private val CLIPBOARD_MAX_HISTORY_COUNT_PREFERENCE =
+        Pair("clipboard_max_history_count_preference", 100)
 
     private val ROUND_KEYBOARD_CORNER_PREFERENCE =
         Pair("round_corner_keyboard_preference", false)
@@ -1517,6 +1525,24 @@ object AppPreference {
             it.putInt(CUSTOM_THEME_SPECIAL_KEY_TEXT_COLOR.first, value)
         }
 
+    var custom_theme_enter_key_color: Int
+        get() = readIntPreference(
+            CUSTOM_THEME_ENTER_KEY_COLOR.first,
+            CUSTOM_THEME_ENTER_KEY_COLOR.second
+        )
+        set(value) = preferences.edit {
+            it.putInt(CUSTOM_THEME_ENTER_KEY_COLOR.first, value)
+        }
+
+    var custom_theme_enter_key_text_color: Int
+        get() = readIntPreference(
+            CUSTOM_THEME_ENTER_KEY_TEXT_COLOR.first,
+            CUSTOM_THEME_ENTER_KEY_TEXT_COLOR.second
+        )
+        set(value) = preferences.edit {
+            it.putInt(CUSTOM_THEME_ENTER_KEY_TEXT_COLOR.first, value)
+        }
+
     var custom_theme_candidate_text_color: Int
         get() = getCustomThemeCandidateTextColor(custom_theme_key_text_color)
         set(value) = preferences.edit {
@@ -1909,6 +1935,15 @@ object AppPreference {
         )
         set(value) = preferences.edit {
             it.putInt(CLIPBOARD_UNPINNED_RETENTION_HOURS_PREFERENCE.first, value.coerceIn(1, 72))
+        }
+
+    var clipboard_max_history_count_preference: Int
+        get() = preferences.getInt(
+            CLIPBOARD_MAX_HISTORY_COUNT_PREFERENCE.first,
+            CLIPBOARD_MAX_HISTORY_COUNT_PREFERENCE.second
+        )
+        set(value) = preferences.edit {
+            it.putInt(CLIPBOARD_MAX_HISTORY_COUNT_PREFERENCE.first, value.coerceIn(10, 200))
         }
 
     var keyboard_corner_round_preference: Boolean
@@ -2910,4 +2945,137 @@ object AppPreference {
             }
         }
     }
+
+    private val CUSTOM_ICON_ENTER_PATH = Pair("custom_icon_enter_path", "")
+    private val CUSTOM_ICON_SPACE_PATH = Pair("custom_icon_space_path", "")
+    private val CUSTOM_ICON_ARROW_LEFT_PATH = Pair("custom_icon_arrow_left_path", "")
+    private val CUSTOM_ICON_ARROW_RIGHT_PATH = Pair("custom_icon_arrow_right_path", "")
+
+    private val CUSTOM_FONT_KEY_PATH = Pair("custom_font_key_path", "")
+    private val CUSTOM_FONT_CANDIDATE_PATH = Pair("custom_font_candidate_path", "")
+
+    private val CUSTOM_ICON_MODE_SWITCH_PATH = Pair("custom_icon_mode_switch_path", "")
+    private val CUSTOM_TEXT_MODE_SWITCH = Pair("custom_text_mode_switch", "")
+
+    private val CUSTOM_ICON_UNDO_PATH = Pair("custom_icon_undo_path", "")
+    private val CUSTOM_TEXT_UNDO = Pair("custom_text_undo", "")
+
+    private val CUSTOM_ICON_EMOJI_PATH = Pair("custom_icon_emoji_path", "")
+    private val CUSTOM_TEXT_EMOJI = Pair("custom_text_emoji", "")
+
+    private val CUSTOM_ICON_DELETE_PATH = Pair("custom_icon_delete_path", "")
+    private val CUSTOM_TEXT_DELETE = Pair("custom_text_delete", "")
+
+    private val CUSTOM_TEXT_ENTER = Pair("custom_text_enter", "")
+    private val CUSTOM_TEXT_SPACE = Pair("custom_text_space", "")
+    private val CUSTOM_TEXT_SYMBOL = Pair("custom_text_symbol", "")
+    private val CUSTOM_TEXT_123 = Pair("custom_text_123", "")
+
+    var custom_icon_enter_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_PATH.first, CUSTOM_ICON_ENTER_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_PATH.first, value)
+        }
+
+    var custom_icon_space_path: String
+        get() = preferences.getString(CUSTOM_ICON_SPACE_PATH.first, CUSTOM_ICON_SPACE_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SPACE_PATH.first, value)
+        }
+
+    var custom_icon_arrow_left_path: String
+        get() = preferences.getString(CUSTOM_ICON_ARROW_LEFT_PATH.first, CUSTOM_ICON_ARROW_LEFT_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ARROW_LEFT_PATH.first, value)
+        }
+
+    var custom_icon_arrow_right_path: String
+        get() = preferences.getString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, CUSTOM_ICON_ARROW_RIGHT_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, value)
+        }
+
+    var custom_font_key_path: String
+        get() = preferences.getString(CUSTOM_FONT_KEY_PATH.first, CUSTOM_FONT_KEY_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_FONT_KEY_PATH.first, value)
+        }
+
+    var custom_font_candidate_path: String
+        get() = preferences.getString(CUSTOM_FONT_CANDIDATE_PATH.first, CUSTOM_FONT_CANDIDATE_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_FONT_CANDIDATE_PATH.first, value)
+        }
+
+    var custom_icon_mode_switch_path: String
+        get() = preferences.getString(CUSTOM_ICON_MODE_SWITCH_PATH.first, CUSTOM_ICON_MODE_SWITCH_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_MODE_SWITCH_PATH.first, value)
+        }
+
+    var custom_text_mode_switch: String
+        get() = preferences.getString(CUSTOM_TEXT_MODE_SWITCH.first, CUSTOM_TEXT_MODE_SWITCH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_MODE_SWITCH.first, value)
+        }
+
+    var custom_icon_undo_path: String
+        get() = preferences.getString(CUSTOM_ICON_UNDO_PATH.first, CUSTOM_ICON_UNDO_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_UNDO_PATH.first, value)
+        }
+
+    var custom_text_undo: String
+        get() = preferences.getString(CUSTOM_TEXT_UNDO.first, CUSTOM_TEXT_UNDO.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_UNDO.first, value)
+        }
+
+    var custom_icon_emoji_path: String
+        get() = preferences.getString(CUSTOM_ICON_EMOJI_PATH.first, CUSTOM_ICON_EMOJI_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_EMOJI_PATH.first, value)
+        }
+
+    var custom_text_emoji: String
+        get() = preferences.getString(CUSTOM_TEXT_EMOJI.first, CUSTOM_TEXT_EMOJI.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_EMOJI.first, value)
+        }
+
+    var custom_icon_delete_path: String
+        get() = preferences.getString(CUSTOM_ICON_DELETE_PATH.first, CUSTOM_ICON_DELETE_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_DELETE_PATH.first, value)
+        }
+
+    var custom_text_delete: String
+        get() = preferences.getString(CUSTOM_TEXT_DELETE.first, CUSTOM_TEXT_DELETE.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_DELETE.first, value)
+        }
+
+    var custom_text_enter: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER.first, CUSTOM_TEXT_ENTER.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER.first, value)
+        }
+
+    var custom_text_space: String
+        get() = preferences.getString(CUSTOM_TEXT_SPACE.first, CUSTOM_TEXT_SPACE.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_SPACE.first, value)
+        }
+
+    var custom_text_symbol: String
+        get() = preferences.getString(CUSTOM_TEXT_SYMBOL.first, CUSTOM_TEXT_SYMBOL.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_SYMBOL.first, value)
+        }
+
+    var custom_text_123: String
+        get() = preferences.getString(CUSTOM_TEXT_123.first, CUSTOM_TEXT_123.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_123.first, value)
+        }
 }

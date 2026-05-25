@@ -47,7 +47,7 @@
             app:defaultValue="false"
             app:summary="@string/flick_keymap_guide_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="9"
             android:dependency="flick_keymap_guide"
             android:key="flick_guide_text_size_sp_preference"
@@ -57,7 +57,7 @@
             app:showSeekBarValue="true"
             app:summary="@string/flick_guide_text_size_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="1"
             android:dependency="flick_keymap_guide"
             android:key="flick_guide_max_characters_preference"

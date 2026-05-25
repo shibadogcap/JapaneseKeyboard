@@ -80,6 +80,13 @@ class SymbolAdapter :
         notifyDataSetChanged()
     }
 
+    private var customTypeface: android.graphics.Typeface? = null
+
+    fun setCustomTypeface(typeface: android.graphics.Typeface?) {
+        this.customTypeface = typeface
+        notifyDataSetChanged()
+    }
+
     inner class SymbolViewHolder(itemView: View) :
         RecyclerView.ViewHolder(itemView) {
         val symbolTextView: MaterialTextView = itemView.findViewById(R.id.symbol_text)
@@ -142,6 +149,9 @@ class SymbolAdapter :
         } else {
             holder.symbolTextView.text = ""
             holder.skinToneIndicator.visibility = View.GONE
+        }
+        customTypeface?.let {
+            holder.symbolTextView.typeface = it
         }
     }
 

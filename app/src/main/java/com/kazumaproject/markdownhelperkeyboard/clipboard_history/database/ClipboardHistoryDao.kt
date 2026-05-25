@@ -33,6 +33,12 @@ interface ClipboardHistoryDao {
     @Query("SELECT * FROM clipboard_history WHERE isPinned = 0 AND timestamp < :threshold")
     suspend fun getExpiredUnpinnedItems(threshold: Long): List<ClipboardHistoryItem>
 
+    @Query("SELECT * FROM clipboard_history WHERE preview LIKE '%' || :query || '%' ORDER BY timestamp DESC")
+    fun searchHistory(query: String): Flow<List<ClipboardHistoryItem>>
+
+    @Query("SELECT * FROM clipboard_history WHERE isPinned = 0")
+    suspend fun getUnpinnedItems(): List<ClipboardHistoryItem>
+
     @Query("DELETE FROM clipboard_history WHERE id = :id")
     suspend fun deleteById(id: Long)
 

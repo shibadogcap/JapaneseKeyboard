@@ -8,7 +8,7 @@ import com.kazumaproject.markdownhelperkeyboard.variant.AppVariantConfig
 
 data class SettingTabSpec(
     val title: (Context) -> String,
-    val fragmentFactory: () -> Fragment,
+    val fragmentClass: Class<out Fragment>,
 )
 
 object SettingTabRegistry {
@@ -16,56 +16,56 @@ object SettingTabRegistry {
         val tabs = mutableListOf(
             SettingTabSpec(
                 title = { context -> context.getString(R.string.category_common) },
-                fragmentFactory = { CommonPreferenceFragment() },
+                fragmentClass = CommonPreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { context -> context.getString(R.string.keyboardthemefragment) },
-                fragmentFactory = { KeyboardThemeFragment() },
+                fragmentClass = KeyboardThemeFragment::class.java,
+            ),
+            SettingTabSpec(
+                title = { context -> context.getString(R.string.category_custom_keyboard_title) },
+                fragmentClass = CustomKeyboardPreferenceFragment::class.java,
             ),
         )
 
         if (AppVariantConfig.hasZenz) {
             tabs += SettingTabSpec(
                 title = { "zenz" },
-                fragmentFactory = { ZenzPreferenceFragment() },
+                fragmentClass = ZenzPreferenceFragment::class.java,
             )
         }
 
         if (AppVariantConfig.hasGemma) {
             tabs += SettingTabSpec(
                 title = { "Gemma" },
-                fragmentFactory = { GemmaPreferenceFragment() },
+                fragmentClass = GemmaPreferenceFragment::class.java,
             )
         }
 
         tabs += listOf(
             SettingTabSpec(
                 title = { context -> context.getString(R.string.category_dictionary) },
-                fragmentFactory = { DictionaryPreferenceFragment() },
+                fragmentClass = DictionaryPreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { context -> context.getString(R.string.category_kana) },
-                fragmentFactory = { KanaPreferenceFragment() },
+                fragmentClass = KanaPreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { "QWERTY" },
-                fragmentFactory = { QwertyPreferenceFragment() },
+                fragmentClass = QwertyPreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { context -> context.getString(R.string.category_sumire_input_keyboard_title) },
-                fragmentFactory = { SumirePreferenceFragment() },
-            ),
-            SettingTabSpec(
-                title = { context -> context.getString(R.string.category_custom_keyboard_title) },
-                fragmentFactory = { CustomKeyboardPreferenceFragment() },
+                fragmentClass = SumirePreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { context -> context.getString(R.string.tablet_preference_category_title) },
-                fragmentFactory = { TabletPreferenceFragment() },
+                fragmentClass = TabletPreferenceFragment::class.java,
             ),
             SettingTabSpec(
                 title = { context -> context.getString(R.string.hardware_keyboard_category_title) },
-                fragmentFactory = { HardwareKeyboardPreferenceFragment() },
+                fragmentClass = HardwareKeyboardPreferenceFragment::class.java,
             ),
         )
 

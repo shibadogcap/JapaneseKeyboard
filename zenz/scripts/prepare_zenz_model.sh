@@ -44,13 +44,20 @@ if [[ -f "${OUTPUT_FILE}" && -f "${STAMP_FILE}" ]] && grep -qx "${EXPECTED_STAMP
   exit 0
 fi
 
-python3 -m venv "${VENV_DIR}"
-PYTHON_BIN="${VENV_DIR}/bin/python"
-PIP_BIN="${VENV_DIR}/bin/pip"
+if command -v uv >/dev/null 2>&1; then
+  uv venv "${VENV_DIR}" --python 3.12 --clear
+  PYTHON_BIN="${VENV_DIR}/bin/python"
+  uv pip install --python "${PYTHON_BIN}" huggingface_hub >/dev/null
+  uv pip install --python "${PYTHON_BIN}" -r "${LLAMA_CPP_DIR}/requirements/requirements-convert_hf_to_gguf.txt" >/dev/null
+else
+  python3 -m venv "${VENV_DIR}"
+  PYTHON_BIN="${VENV_DIR}/bin/python"
+  PIP_BIN="${VENV_DIR}/bin/pip"
 
-"${PIP_BIN}" install --upgrade pip >/dev/null
-"${PIP_BIN}" install huggingface_hub >/dev/null
-"${PIP_BIN}" install -r "${LLAMA_CPP_DIR}/requirements/requirements-convert_hf_to_gguf.txt" >/dev/null
+  "${PIP_BIN}" install --upgrade pip >/dev/null
+  "${PIP_BIN}" install huggingface_hub >/dev/null
+  "${PIP_BIN}" install -r "${LLAMA_CPP_DIR}/requirements/requirements-convert_hf_to_gguf.txt" >/dev/null
+fi
 
 rm -rf "${MODEL_DIR}"
 mkdir -p "${MODEL_DIR}"

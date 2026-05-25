@@ -33,6 +33,13 @@ android {
     }
 
     namespace 'com.kazumaproject.symbol_keyboard'
+
+    buildFeatures {
+        viewBinding true
+    }
+    viewBinding {
+        enabled = true
+    }
 }
 
 dependencies {

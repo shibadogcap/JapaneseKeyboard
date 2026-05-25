@@ -87,7 +87,7 @@
             app:defaultValue="false"
             app:summary="@string/enable_prediction_search_learn_dictionary_preference_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="4"
             android:dependency="enable_prediction_search_learn_dictionary_preference"
             android:key="learn_prediction_preference"
@@ -106,7 +106,7 @@
             android:summaryOn="@string/user_dictionary_summary_on"
             android:title="@string/user_dictionary_title" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="2"
             android:dependency="user_dictionary_preference"
             android:key="user_dictionary_prefix_match_number"

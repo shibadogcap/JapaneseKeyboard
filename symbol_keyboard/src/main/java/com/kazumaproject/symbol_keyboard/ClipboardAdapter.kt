@@ -27,6 +27,13 @@ class ClipboardAdapter :
         this.onItemActionListener = listener
     }
 
+    private var customTypeface: android.graphics.Typeface? = null
+
+    fun setCustomTypeface(typeface: android.graphics.Typeface?) {
+        this.customTypeface = typeface
+        notifyDataSetChanged()
+    }
+
     fun isHeader(position: Int): Boolean {
         return peek(position) is ClipboardListItem.Header
     }
@@ -36,6 +43,7 @@ class ClipboardAdapter :
 
         fun bind(item: ClipboardListItem.Header) {
             titleView.text = item.title
+            customTypeface?.let { titleView.typeface = it }
         }
     }
 
@@ -58,6 +66,7 @@ class ClipboardAdapter :
         }
 
         fun bind(item: ClipboardItem) {
+            customTypeface?.let { textView.typeface = it }
             when (item) {
                 is ClipboardItem.Image -> {
                     imageView.visibility = View.VISIBLE

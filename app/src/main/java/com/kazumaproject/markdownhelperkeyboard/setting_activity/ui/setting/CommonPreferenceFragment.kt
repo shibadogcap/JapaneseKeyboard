@@ -48,7 +48,7 @@ class CommonPreferenceFragment : PreferenceFragmentCompat() {
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri == null) return@registerForActivityResult
             runCatching {
-                val json = AppPreference.exportAllToJson()
+                val json = appPreference.exportAllToJson()
                 writeTextToUri(uri, json)
             }.onSuccess {
                 toast("Backup exported")
@@ -62,10 +62,10 @@ class CommonPreferenceFragment : PreferenceFragmentCompat() {
             if (uri == null) return@registerForActivityResult
             runCatching {
                 val json = readTextFromUri(uri)
-                AppPreference.importAllFromJson(json, replaceAll = true)
+                appPreference.importAllFromJson(json, replaceAll = true)
 
                 // 旧→新キー移行などがあるなら復元後に実行
-                AppPreference.migrateSumirePreferenceIfNeeded()
+                appPreference.migrateSumirePreferenceIfNeeded()
             }.onSuccess {
                 toast("Backup imported")
                 requireActivity().recreate()

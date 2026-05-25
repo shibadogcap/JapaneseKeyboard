@@ -144,6 +144,8 @@ class FlickKeyboardView @JvmOverloads constructor(
     private var customSpecialKeyColor: Int = Color.GRAY
     private var customKeyTextColor: Int = Color.BLACK
     private var customSpecialKeyTextColor: Int = Color.BLACK
+    private var customEnterKeyColor: Int = Color.BLUE
+    private var customEnterKeyTextColor: Int = Color.WHITE
 
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
@@ -295,8 +297,10 @@ class FlickKeyboardView @JvmOverloads constructor(
         customBgColor: Int,
         customKeyColor: Int,
         customSpecialKeyColor: Int,
+        customEnterKeyColor: Int,
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
+        customEnterKeyTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
@@ -309,8 +313,10 @@ class FlickKeyboardView @JvmOverloads constructor(
         this.customBgColor = customBgColor
         this.customKeyColor = customKeyColor
         this.customSpecialKeyColor = customSpecialKeyColor
+        this.customEnterKeyColor = customEnterKeyColor
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
+        this.customEnterKeyTextColor = customEnterKeyTextColor
         this.liquidGlassEnable = liquidGlassEnable
         this.customBorderEnable = customBorderEnable
         this.customBorderColor = customBorderColor
@@ -1016,21 +1022,41 @@ class FlickKeyboardView @JvmOverloads constructor(
 
                 when (themeMode) {
                     "custom" -> {
+                        val isEnterKey = keyData.action is KeyAction.Enter ||
+                                keyData.action is KeyAction.Confirm ||
+                                keyData.action is KeyAction.NewLine ||
+                                keyData.action is KeyAction.ForceNewLine
+
                         if (customBorderEnable) {
-                            setDrawableSolidColor(customKeyColor)
-                            setTextColor(customKeyTextColor)
+                            val baseColor = when {
+                                isEnterKey -> customEnterKeyColor
+                                keyData.isSpecialKey -> customSpecialKeyColor
+                                else -> customKeyColor
+                            }
+                            val textColor = when {
+                                isEnterKey -> customEnterKeyTextColor
+                                keyData.isSpecialKey -> customSpecialKeyTextColor
+                                else -> customKeyTextColor
+                            }
+                            setDrawableSolidColor(baseColor)
+                            setTextColor(textColor)
                             setBorder(customBorderColor, borderWidth)
                         } else {
-                            val targetBaseColor =
-                                if (keyData.isSpecialKey) customSpecialKeyColor else customKeyColor
-                            val targetTextColor =
-                                if (keyData.isSpecialKey) customSpecialKeyTextColor else customKeyTextColor
-                            val targetHighlightColor =
-                                if (keyData.isSpecialKey) {
-                                    manipulateColor(customSpecialKeyColor, 1.2f)
-                                } else {
-                                    customSpecialKeyColor
-                                }
+                            val targetBaseColor = when {
+                                isEnterKey -> customEnterKeyColor
+                                keyData.isSpecialKey -> customSpecialKeyColor
+                                else -> customKeyColor
+                            }
+                            val targetTextColor = when {
+                                isEnterKey -> customEnterKeyTextColor
+                                keyData.isSpecialKey -> customSpecialKeyTextColor
+                                else -> customKeyTextColor
+                            }
+                            val targetHighlightColor = when {
+                                isEnterKey -> manipulateColor(customEnterKeyColor, 1.2f)
+                                keyData.isSpecialKey -> manipulateColor(customSpecialKeyColor, 1.2f)
+                                else -> customSpecialKeyColor
+                            }
 
                             val neumorphDrawable = getDynamicNeumorphDrawable(
                                 baseColor = targetBaseColor,

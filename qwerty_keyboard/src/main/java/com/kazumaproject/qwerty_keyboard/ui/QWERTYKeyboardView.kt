@@ -159,6 +159,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private var lockedPointerId: Int? = null
 
     private var isCursorMode: Boolean = false
+    private var currentShowCursors: Boolean = false
 
     // カーソルモード中のタッチの初期位置を記録する変数
     private var cursorInitialX = 0f
@@ -269,6 +270,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private var customSpecialKeyColor: Int = Color.GRAY
     private var customKeyTextColor: Int = Color.BLACK
     private var customSpecialKeyTextColor: Int = Color.BLACK
+    private var customEnterKeyColor: Int = Color.BLUE
+    private var customEnterKeyTextColor: Int = Color.WHITE
 
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
@@ -303,6 +306,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val spaceKeyText = binding.keySpace.text
         startStateCollectors()
         renderCurrentStateImmediately(enterKeyText, spaceKeyText)
+        applySpecialKeyCustomizations()
     }
 
     override fun onDetachedFromWindow() {
@@ -372,7 +376,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private fun applyRomajiModeLabels(romajiMode: Boolean) {
         binding.apply {
             if (romajiMode) {
-                keySpace.text = resources.getString(com.kazumaproject.core.R.string.space_japanese)
+                keySpace.text = "日本語"
                 keyKuten.text = "。"
                 keyTouten.text = "、"
             } else {
@@ -380,6 +384,219 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 keyKuten.text = "."
                 keyTouten.text = ","
             }
+            cursorLeft.isVisible = currentShowCursors || romajiMode
+            cursorRight.isVisible = currentShowCursors || romajiMode
+        }
+    }
+
+    private var hasCustomEnterIcon = false
+    private var hasCustomSpaceIcon = false
+
+    private var customEnterDrawable: Drawable? = null
+    private var customSpaceDrawable: Drawable? = null
+
+    private var customModeSwitchDrawable: Drawable? = null
+    private var customUndoDrawable: Drawable? = null
+    private var customEmojiDrawable: Drawable? = null
+    private var customDeleteDrawable: Drawable? = null
+
+    private var customTextModeSwitchStr: String = ""
+    private var customTextUndoStr: String = ""
+    private var customTextEmojiStr: String = ""
+    private var customTextDeleteStr: String = ""
+
+    private var customTextEnterStr: String = ""
+    private var customTextSpaceStr: String = ""
+    private var customTextSymbolStr: String = ""
+    private var customText123Str: String = ""
+
+    private val cachedDeleteDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_backspace_24)
+    }
+    private val cachedEmojiDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_emoji_emotions_24)
+    }
+    private val cachedSwitchDefaultDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.language_24dp)
+    }
+    private val cachedArrowRightAltDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_arrow_right_alt_24)
+    }
+    private val cachedSpaceDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_space_bar_24)
+    }
+
+    private fun fitDrawable(drawable: Drawable?, targetDp: Int = 24): Drawable? {
+        if (drawable == null) return null
+        val density = resources.displayMetrics.density
+        val targetPx = (targetDp * density).toInt()
+        val originalWidth = drawable.intrinsicWidth
+        val originalHeight = drawable.intrinsicHeight
+        val width: Int
+        val height: Int
+        if (originalWidth > 0 && originalHeight > 0) {
+            val ratio = originalWidth.toFloat() / originalHeight.toFloat()
+            if (ratio > 1f) {
+                width = targetPx
+                height = (targetPx / ratio).toInt()
+            } else {
+                width = (targetPx * ratio).toInt()
+                height = targetPx
+            }
+        } else {
+            width = targetPx
+            height = targetPx
+        }
+        drawable.setBounds(0, 0, width, height)
+        return drawable
+    }
+
+    private fun setButtonImageOrText(
+        button: androidx.appcompat.widget.AppCompatButton,
+        defaultDrawable: Drawable?,
+        customDrawable: Drawable?,
+        customText: String
+    ) {
+        button.gravity = android.view.Gravity.CENTER
+        if (customText.isNotEmpty()) {
+            button.text = customText
+            button.setCompoundDrawables(null, null, null, null)
+            button.setPadding(0, 0, 0, 0)
+            button.isSingleLine = true
+            button.maxLines = 1
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+                button,
+                androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+            )
+        } else {
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+                button,
+                androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
+            )
+            button.setPadding(0, 0, 0, 0)
+            if (customDrawable != null) {
+                button.text = ""
+                button.setCompoundDrawables(fitDrawable(customDrawable), null, null, null)
+            } else {
+                if (defaultDrawable != null) {
+                    button.text = ""
+                    button.setCompoundDrawables(fitDrawable(defaultDrawable), null, null, null)
+                } else {
+                    button.text = ""
+                    button.setCompoundDrawables(null, null, null, null)
+                }
+            }
+        }
+    }
+
+    fun applySpecialKeyCustomizations() {
+        setButtonImageOrText(
+            binding.keySwitchDefault,
+            cachedSwitchDefaultDrawable,
+            customModeSwitchDrawable,
+            customText123Str.ifEmpty { customTextModeSwitchStr }
+        )
+        setButtonImageOrText(
+            binding.keyEmoji,
+            cachedEmojiDrawable,
+            customEmojiDrawable,
+            customTextSymbolStr.ifEmpty { customTextEmojiStr }
+        )
+        setButtonImageOrText(
+            binding.keyDelete,
+            cachedDeleteDrawable,
+            customDeleteDrawable,
+            customTextDeleteStr
+        )
+        setButtonImageOrText(
+            binding.keySpace,
+            cachedSpaceDrawable,
+            customSpaceDrawable,
+            customTextSpaceStr
+        )
+        setButtonImageOrText(
+            binding.keyReturn,
+            cachedArrowRightAltDrawable,
+            customEnterDrawable,
+            customTextEnterStr
+        )
+    }
+
+    fun setCustomIcons(
+        enterPath: String,
+        spacePath: String,
+        leftArrowPath: String,
+        rightArrowPath: String,
+        modeSwitchPath: String = "",
+        undoPath: String = "",
+        emojiPath: String = "",
+        deletePath: String = "",
+        customTextModeSwitch: String = "",
+        customTextUndo: String = "",
+        customTextEmoji: String = "",
+        customTextDelete: String = "",
+        customTextEnter: String = "",
+        customTextSpace: String = "",
+        customTextSymbol: String = "",
+        customText123: String = ""
+    ) {
+        val enterDrawable = loadCustomIcon(enterPath)
+        customEnterDrawable = enterDrawable?.let { fitDrawable(it) }
+
+        val spaceDrawable = loadCustomIcon(spacePath)
+        customSpaceDrawable = spaceDrawable?.let { fitDrawable(it) }
+
+        val leftDrawable = loadCustomIcon(leftArrowPath)
+        if (leftDrawable != null) {
+            binding.cursorLeft.setImageDrawable(fitDrawable(leftDrawable))
+            androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorLeft, null)
+        }
+
+        val rightDrawable = loadCustomIcon(rightArrowPath)
+        if (rightDrawable != null) {
+            binding.cursorRight.setImageDrawable(fitDrawable(rightDrawable))
+            androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorRight, null)
+        }
+
+        customModeSwitchDrawable = loadCustomIcon(modeSwitchPath)
+        customUndoDrawable = loadCustomIcon(undoPath)
+        customEmojiDrawable = loadCustomIcon(emojiPath)
+        customDeleteDrawable = loadCustomIcon(deletePath)
+
+        customTextModeSwitchStr = customTextModeSwitch
+        customTextUndoStr = customTextUndo
+        customTextEmojiStr = customTextEmoji
+        customTextDeleteStr = customTextDelete
+
+        customTextEnterStr = customTextEnter
+        customTextSpaceStr = customTextSpace
+        customTextSymbolStr = customTextSymbol
+        customText123Str = customText123
+
+        applySpecialKeyCustomizations()
+    }
+
+    private fun loadCustomIcon(path: String): Drawable? {
+        if (path.isBlank()) return null
+        val file = java.io.File(path)
+        if (!file.exists()) return null
+        return try {
+            if (path.endsWith(".svg", ignoreCase = true)) {
+                file.inputStream().use { inputStream ->
+                    val svg = com.caverock.androidsvg.SVG.getFromInputStream(inputStream)
+                    val picture = svg.renderToPicture()
+                    android.graphics.drawable.PictureDrawable(picture)
+                }
+            } else {
+                val bitmap = android.graphics.BitmapFactory.decodeFile(path)
+                if (bitmap != null) {
+                    android.graphics.drawable.BitmapDrawable(resources, bitmap)
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -395,8 +612,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         customBgColor: Int,
         customKeyColor: Int,
         customSpecialKeyColor: Int,
+        customEnterKeyColor: Int,
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
+        customEnterKeyTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
@@ -413,8 +632,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         this.customBgColor = customBgColor
         this.customKeyColor = customKeyColor
         this.customSpecialKeyColor = customSpecialKeyColor
+        this.customEnterKeyColor = customEnterKeyColor
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
+        this.customEnterKeyTextColor = customEnterKeyTextColor
         this.liquidGlassEnable = liquidGlassEnable
 
         this.customBorderEnable = customBorderEnable
@@ -435,8 +656,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     backgroundColor = customBgColor,
                     normalKeyColor = customKeyColor,
                     specialKeyColor = customSpecialKeyColor,
+                    enterKeyColor = customEnterKeyColor,
                     normalKeyTextColor = customKeyTextColor,
                     specialKeyTextColor = customSpecialKeyTextColor,
+                    enterKeyTextColor = customEnterKeyTextColor,
                     borderWidth = borderWidth
                 )
             }
@@ -459,10 +682,12 @@ class QWERTYKeyboardView @JvmOverloads constructor(
      */
     fun setFullCustomNeumorphismTheme(
         backgroundColor: Int,
-        normalKeyColor: Int, // 引数を追加
+        normalKeyColor: Int,
         specialKeyColor: Int,
+        enterKeyColor: Int,
         normalKeyTextColor: Int,
         specialKeyTextColor: Int,
+        enterKeyTextColor: Int,
         borderWidth: Int
     ) {
         val density = context.resources.displayMetrics.density
@@ -484,8 +709,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 keyZ, keyX, keyC, keyV, keyB, keyN, keyM, keySpace
             )
 
+            // keyReturn をここから除外する
             val specialKeys = listOf(
-                keyShift, keyDelete, keySwitchDefault, keyEmoji, keyReturn, key123,
+                keyShift, keyDelete, keySwitchDefault, keyEmoji, key123,
                 switchNumberLayout, cursorLeft, cursorRight, switchRomajiEnglish
             )
 
@@ -529,6 +755,23 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     ImageViewCompat.setImageTintList(view, specialColorStateList)
                 }
                 view.setDrawableAlpha(liquidGlassKeyAlphaEnable)
+            }
+
+            // 4. 確定キーへの適用 (enterKeyColorを使用)
+            val enterDrawableState =
+                getDynamicNeumorphDrawable(enterKeyColor, radius).constantState
+
+            val enterColorStateList = ColorStateList.valueOf(enterKeyTextColor)
+
+            keyReturn.apply {
+                if (customBorderEnable) {
+                    setDrawableSolidColor(customEnterKeyColor)
+                    setBorder(customBorderColor, borderWidth)
+                } else {
+                    background = enterDrawableState?.newDrawable()?.mutate()
+                }
+                setTextColor(enterColorStateList)
+                setDrawableAlpha(liquidGlassKeyAlphaEnable)
             }
         }
     }
@@ -1121,19 +1364,24 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     }
 
     fun setSpaceKeyText(text: String) {
+        if (hasCustomSpaceIcon) {
+            binding.keySpace.text = ""
+            return
+        }
         binding.keySpace.text = text
     }
 
     fun setReturnKeyText(text: String) {
+        if (hasCustomEnterIcon) {
+            binding.keyReturn.text = ""
+            return
+        }
         binding.keyReturn.text = text
     }
 
     private val specialIconButtons: List<AppCompatImageButton> by lazy {
         listOf(
             binding.keyShift,
-            binding.keyDelete,
-            binding.keyEmoji,
-            binding.keySwitchDefault,
             binding.cursorLeft,
             binding.cursorRight
         )
@@ -1147,7 +1395,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             binding.keyTouten,
             binding.switchRomajiEnglish,
             binding.switchNumberLayout,
-            binding.keyReturn
+            binding.keyReturn,
+            binding.keyDelete,
+            binding.keyEmoji,
+            binding.keySwitchDefault
         )
     }
 
@@ -2009,7 +2260,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         }
     }
 
-    private enum class FlickDirection { NONE, UP, DOWN, LEFT }
+    private enum class FlickDirection { NONE, UP, DOWN, LEFT, RIGHT }
 
     private fun detectFlickDirection(
         x: Float, y: Float, startX: Float, startY: Float, threshold: Float
@@ -2017,7 +2268,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val dx = x - startX
         val dy = y - startY
         if (abs(dx) > abs(dy)) {
-            if (abs(dx) > threshold && dx < 0) return FlickDirection.LEFT
+            if (abs(dx) > threshold) {
+                return if (dx < 0) FlickDirection.LEFT else FlickDirection.RIGHT
+            }
         } else {
             if (abs(dy) > threshold) return if (dy < 0) FlickDirection.UP else FlickDirection.DOWN
         }
@@ -2100,6 +2353,13 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
         pointerStartCoords[pointerId]?.let { (startX, startY) ->
             val flickDirection = detectFlickDirection(x, y, startX, startY, flickThreshold)
+            val qwertyKey = previousView?.let { qwertyButtonMap[it] } ?: QWERTYKey.QWERTYKeyNotSelect
+            val isCursorKey = qwertyKey == QWERTYKey.QWERTYKeyCursorLeft || qwertyKey == QWERTYKey.QWERTYKeyCursorRight
+            if (isCursorKey && flickDirection != FlickDirection.NONE && previousView != null) {
+                applyCommonFlickEffects(pointerId, previousView)
+                qwertyKeyListener?.onFlickDirectionQWERTYKey(qwertyKey, flickDirection.name)
+                return
+            }
             when (flickDirection) {
                 FlickDirection.UP -> {
                     // Delete キーの上フリックを優先 (左フリックと同じ流儀)
@@ -2136,6 +2396,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                         return
                     }
                 }
+
+                FlickDirection.RIGHT -> {}
 
                 FlickDirection.NONE -> {}
             }
@@ -2200,6 +2462,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val layoutRes = R.layout.key_preview_large
         val popupView = LayoutInflater.from(context).inflate(layoutRes, this, false)
         val tv = popupView.findViewById<TextView>(R.id.preview_text)
+        customTypeface?.let { tv.typeface = it }
         val iv = popupView.findViewById<ImageView>(R.id.preview_bubble_bg)
         tv.setTextSize(
             TypedValue.COMPLEX_UNIT_SP,
@@ -2585,12 +2848,17 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         showKutouten: Boolean,
         showEmojiKey: Boolean = false
     ) {
-        binding.cursorLeft.isVisible = showCursors
-        binding.cursorRight.isVisible = showCursors
+        this.currentShowCursors = showCursors
+        binding.cursorLeft.isVisible = showCursors || romajiModeState.value
+        binding.cursorRight.isVisible = showCursors || romajiModeState.value
         binding.keySwitchDefault.isVisible = showSwitchKey
         binding.keyEmoji.isVisible = showEmojiKey
         binding.keyKuten.isVisible = showKutouten
         binding.keyTouten.isVisible = showKutouten
+    }
+
+    fun setKey123Visibility(state: Boolean) {
+        binding.key123.isVisible = state
     }
 
     fun setRomajiEnglishSwitchKeyVisibility(showRomajiEnglishKey: Boolean) {
@@ -2764,6 +3032,33 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
     fun setDefaultView() {
         _qwertyMode.update { QWERTYMode.Default }
+    }
+
+    private var customTypeface: android.graphics.Typeface? = null
+
+    fun setCustomTypeface(typeface: android.graphics.Typeface?) {
+        this.customTypeface = typeface
+        val views = listOf(
+            binding.keyA, binding.keyB, binding.keyC, binding.keyD, binding.keyE,
+            binding.keyF, binding.keyG, binding.keyH, binding.keyI, binding.keyJ,
+            binding.keyK, binding.keyL, binding.keyM, binding.keyN, binding.keyO,
+            binding.keyP, binding.keyQ, binding.keyR, binding.keyS, binding.keyT,
+            binding.keyU, binding.keyV, binding.keyW, binding.keyX, binding.keyY,
+            binding.keyZ, binding.keySpace, binding.keyReturn, binding.key123,
+            binding.keyKuten, binding.keyTouten, binding.switchRomajiEnglish,
+            binding.switchNumberLayout, binding.keySwitchDefault, binding.keyEmoji,
+            binding.keyDelete
+        )
+        views.forEach { view ->
+            when (view) {
+                is androidx.appcompat.widget.AppCompatButton -> {
+                    view.setTypeface(typeface)
+                }
+                is com.google.android.material.textview.MaterialTextView -> {
+                    view.setTypeface(typeface)
+                }
+            }
+        }
     }
 }
 

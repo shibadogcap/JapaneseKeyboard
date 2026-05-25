@@ -54,7 +54,7 @@
             app:defaultValue="false"
             app:summary="@string/flick_keymap_guide_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="9"
             android:dependency="flick_keymap_guide"
             android:key="flick_guide_text_size_sp_preference"
@@ -64,7 +64,7 @@
             app:showSeekBarValue="true"
             app:summary="@string/flick_guide_text_size_summary" />
 
-        <SeekBarPreference
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
             android:defaultValue="1"
             android:dependency="flick_keymap_guide"
             android:key="flick_guide_max_characters_preference"
@@ -73,6 +73,23 @@
             app:min="1"
             app:showSeekBarValue="true"
             app:summary="@string/flick_guide_max_characters_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="クリップボード履歴の設定">
+        <SwitchPreferenceCompat
+            android:key="clipboard_history_preference"
+            android:title="クリップボード履歴を有効にする"
+            android:summary="コピーしたテキストや画像をクリップボード履歴として保存します"
+            android:defaultValue="true" />
+
+        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
+            android:defaultValue="100"
+            android:key="clipboard_max_history_count_preference"
+            android:max="200"
+            android:title="履歴の最大保持件数"
+            app:min="10"
+            app:showSeekBarValue="true"
+            app:summary="保持するクリップボード履歴の最大件数を設定します（10〜200件）" />
     </PreferenceCategory>
 
 </PreferenceScreen>

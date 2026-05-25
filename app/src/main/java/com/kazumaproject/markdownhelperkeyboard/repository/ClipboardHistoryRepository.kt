@@ -168,6 +168,43 @@ class ClipboardHistoryRepository @Inject constructor(
     }
 
     /**
+     * キーワードによる履歴の検索
+     */
+    fun searchHistory(query: String): Flow<List<ClipboardHistoryItem>> {
+        return dao.searchHistory(query)
+    }
+
+    /**
+     * ピン留めされていないすべての履歴と実ファイルを削除します。
+     */
+    suspend fun deleteUnpinnedAll() = withContext(Dispatchers.IO) {
+        val unpinned = dao.getUnpinnedItems()
+        unpinned.forEach { item ->
+            fileStore.deleteFile(item.contentPath)
+            dao.deleteById(item.id)
+        }
+    }
+
+    /**
+     * 最大保持件数を超える古いアンピン履歴を自動消去します。
+     */
+    suspend fun pruneOldItems(maxCount: Int) = withContext(Dispatchers.IO) {
+        if (maxCount <= 0) return@withContext
+        val all = dao.getAllHistorySuspended()
+        if (all.size > maxCount) {
+            val unpinned = all.filterNot { it.isPinned }
+            val totalToPrune = all.size - maxCount
+            if (totalToPrune > 0) {
+                val toPrune = unpinned.sortedBy { it.timestamp }.take(totalToPrune)
+                toPrune.forEach { item ->
+                    fileStore.deleteFile(item.contentPath)
+                    dao.deleteById(item.id)
+                }
+            }
+        }
+    }
+
+    /**
      * すべての履歴とファイルを削除します。
      */
     suspend fun deleteAll() = withContext(Dispatchers.IO) {

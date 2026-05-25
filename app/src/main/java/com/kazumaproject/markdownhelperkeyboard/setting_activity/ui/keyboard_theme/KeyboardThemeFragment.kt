@@ -12,18 +12,58 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
 import com.afollestad.materialdialogs.MaterialDialog
+import com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
 import com.afollestad.materialdialogs.color.colorChooser
 import com.google.android.material.color.DynamicColors
 import com.kazumaproject.markdownhelperkeyboard.R
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import android.net.Uri
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import java.io.File
+import java.io.FileOutputStream
 
 @AndroidEntryPoint
 class KeyboardThemeFragment : PreferenceFragmentCompat() {
 
     @Inject
     lateinit var appPreference: AppPreference
+
+    private val selectEnterLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_icon", "enter") }
+    }
+    private val selectSpaceLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_space_icon", "space") }
+    }
+    private val selectLeftLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_left_arrow_icon", "left") }
+    }
+    private val selectRightLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_right_arrow_icon", "right") }
+    }
+    private val selectModeSwitchLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_mode_switch_icon", "mode_switch") }
+    }
+    private val selectUndoLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_undo_icon", "undo") }
+    }
+    private val selectEmojiLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_emoji_icon", "emoji") }
+    }
+    private val selectDeleteLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_delete_icon", "delete") }
+    }
+    private val selectFontKeyLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleFontSelected(it, "custom_font_key_select", "custom_font_key") }
+    }
+    private val selectFontCandidateLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleFontSelected(it, "custom_font_candidate_select", "custom_font_candidate") }
+    }
 
     companion object {
         // System Theme Keys
@@ -42,6 +82,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         private const val PREF_KEY_CUSTOM_SPECIAL_KEY = "theme_custom_special_key_color"
         private const val PREF_KEY_CUSTOM_TEXT = "theme_custom_key_text_color"
         private const val PREF_KEY_CUSTOM_SPECIAL_TEXT = "theme_custom_special_key_text_color"
+        private const val PREF_KEY_CUSTOM_ENTER = "theme_custom_enter_key_color"
+        private const val PREF_KEY_CUSTOM_ENTER_TEXT = "theme_custom_enter_key_text_color"
         private const val PREF_KEY_CUSTOM_CANDIDATE_TEXT =
             "theme_custom_candidate_text_color"
         private const val PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG =
@@ -99,7 +141,7 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         }
         systemCategory.addPreference(liquidGlassSwitch)
 
-        val liquidGlassBlurPref = SeekBarPreference(context).apply {
+        val liquidGlassBlurPref = SeekBarWithEditTextPreference(context).apply {
             key = PREF_KEY_LIQUID_GLASS_BLUR
             title = getString(R.string.blur_radius)
             min = 0
@@ -109,7 +151,7 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         }
         systemCategory.addPreference(liquidGlassBlurPref)
 
-        val liquidGlassKeyAlphaPref = SeekBarPreference(context).apply {
+        val liquidGlassKeyAlphaPref = SeekBarWithEditTextPreference(context).apply {
             key = PREF_KEY_LIQUID_GLASS_KEY_ALPHA
             title = getString(R.string.key_transparency)
             min = 0
@@ -212,6 +254,22 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         ) { appPreference.custom_theme_special_key_text_color }
         customCategory.addPreference(customSpecialTextPref)
 
+        // Custom Enter Key Color
+        val customEnterKeyPref = createColorPreference(
+            context,
+            PREF_KEY_CUSTOM_ENTER,
+            "確定キーの背景色"
+        ) { appPreference.custom_theme_enter_key_color }
+        customCategory.addPreference(customEnterKeyPref)
+
+        // Custom Enter Key Text Color
+        val customEnterTextPref = createColorPreference(
+            context,
+            PREF_KEY_CUSTOM_ENTER_TEXT,
+            "確定キーの文字色"
+        ) { appPreference.custom_theme_enter_key_text_color }
+        customCategory.addPreference(customEnterTextPref)
+
         val customCandidateTextPref = createColorPreference(
             context,
             PREF_KEY_CUSTOM_CANDIDATE_TEXT,
@@ -260,7 +318,7 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         customCategory.addPreference(customBorderColorPref)
 
         // Custom Border Width (修正: 初期値の設定とリスナーの追加)
-        val customBorderWidthPref = SeekBarPreference(context).apply {
+        val customBorderWidthPref = SeekBarWithEditTextPreference(context).apply {
             key = PREF_KEY_CUSTOM_BORDER_WIDTH
             title = getString(R.string.custom_border_width)
             min = 1
@@ -359,7 +417,149 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             true
         }
 
+        // -------------------------------------------------------
+        // Custom Font & Custom Icon Category
+        // -------------------------------------------------------
+        // -------------------------------------------------------
+        // Custom Font & Custom Icon Category
+        // -------------------------------------------------------
+        val fontCategory = PreferenceCategory(context).apply {
+            title = "カスタムフォントの設定"
+        }
+        screen.addPreference(fontCategory)
+
+        val fontKeySelectPref = Preference(context).apply {
+            key = "custom_font_key_select"
+            title = "キーボードフォントのインポート"
+        }
+        fontCategory.addPreference(fontKeySelectPref)
+
+        val fontCandidateSelectPref = Preference(context).apply {
+            key = "custom_font_candidate_select"
+            title = "変換候補フォントのインポート"
+        }
+        fontCategory.addPreference(fontCandidateSelectPref)
+
+        val iconCategory = PreferenceCategory(context).apply {
+            title = "特殊キーの見た目のカスタマイズ"
+        }
+        screen.addPreference(iconCategory)
+
+        // 統合された特殊キーの見た目設定
+        val modeSwitchPref = Preference(context).apply {
+            key = "custom_key_appearance_mode_switch"
+            title = "「あa1 / 地球儀」キーの見た目"
+            updateSpecialKeySummary(this, "mode_switch")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "mode_switch", selectModeSwitchLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(modeSwitchPref)
+
+        val emojiPref = Preference(context).apply {
+            key = "custom_key_appearance_emoji"
+            title = "「記号 / 絵文字」キーの見た目"
+            updateSpecialKeySummary(this, "emoji")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "emoji", selectEmojiLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(emojiPref)
+
+        val deletePref = Preference(context).apply {
+            key = "custom_key_appearance_delete"
+            title = "「削除 (Backspace)」キーの見た目"
+            updateSpecialKeySummary(this, "delete")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "delete", selectDeleteLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(deletePref)
+
+        val undoPref = Preference(context).apply {
+            key = "custom_key_appearance_undo"
+            title = "「戻る (Undo)」キーの見た目"
+            updateSpecialKeySummary(this, "undo")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "undo", selectUndoLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(undoPref)
+
+        val enterPref = Preference(context).apply {
+            key = "custom_key_appearance_enter"
+            title = "「確定 (Enter)」キーの見た目"
+            updateSpecialKeySummary(this, "enter")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter", selectEnterLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterPref)
+
+        val spacePref = Preference(context).apply {
+            key = "custom_key_appearance_space"
+            title = "「スペース (変換)」キーの見た目"
+            updateSpecialKeySummary(this, "space")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "space", selectSpaceLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(spacePref)
+
+        val symbolPref = Preference(context).apply {
+            key = "custom_key_appearance_symbol"
+            title = "「記号」キーのテキスト"
+            updateSpecialKeySummary(this, "symbol")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "symbol", null)
+                true
+            }
+        }
+        iconCategory.addPreference(symbolPref)
+
+        val text123Pref = Preference(context).apply {
+            key = "custom_key_appearance_123"
+            title = "「123」キーのテキスト"
+            updateSpecialKeySummary(this, "123")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "123", null)
+                true
+            }
+        }
+        iconCategory.addPreference(text123Pref)
+
+        val iconLeftPref = Preference(context).apply {
+            key = "custom_key_appearance_left"
+            title = "「左移動 (←)」キーの画像"
+            updateSpecialKeySummary(this, "left")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "left", selectLeftLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(iconLeftPref)
+
+        val iconRightPref = Preference(context).apply {
+            key = "custom_key_appearance_right"
+            title = "「右移動 (→)」キーの画像"
+            updateSpecialKeySummary(this, "right")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "right", selectRightLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(iconRightPref)
+
         preferenceScreen = screen
+
+        setupFontPreference("custom_font_key_select", "custom_font_key")
+        setupFontPreference("custom_font_candidate_select", "custom_font_candidate")
 
         // Initialize state based on current preference
         updateCheckStates(appPreference.theme_mode)
@@ -408,6 +608,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         findPreference<Preference>(PREF_KEY_CUSTOM_SPECIAL_KEY)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_SPECIAL_TEXT)?.isVisible = isVisible
+        findPreference<Preference>(PREF_KEY_CUSTOM_ENTER)?.isVisible = isVisible
+        findPreference<Preference>(PREF_KEY_CUSTOM_ENTER_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_ITEM_PRESSED_BG)?.isVisible = isVisible
@@ -431,6 +633,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             PREF_KEY_CUSTOM_TEXT -> appPreference.custom_theme_key_text_color = color
             PREF_KEY_CUSTOM_SPECIAL_TEXT -> appPreference.custom_theme_special_key_text_color =
                 color
+            PREF_KEY_CUSTOM_ENTER -> appPreference.custom_theme_enter_key_color = color
+            PREF_KEY_CUSTOM_ENTER_TEXT -> appPreference.custom_theme_enter_key_text_color = color
             PREF_KEY_CUSTOM_CANDIDATE_TEXT -> appPreference.custom_theme_candidate_text_color =
                 color
             PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG ->
@@ -519,5 +723,348 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             positiveButton(android.R.string.ok)
             negativeButton(android.R.string.cancel)
         }
+    }
+
+    private fun showSpecialKeyAppearanceDialog(pref: Preference, type: String, launcher: ActivityResultLauncher<String>?) {
+        val context = requireContext()
+        val currentText = when (type) {
+            "mode_switch" -> appPreference.custom_text_mode_switch
+            "undo" -> appPreference.custom_text_undo
+            "emoji" -> appPreference.custom_text_emoji
+            "delete" -> appPreference.custom_text_delete
+            "enter" -> appPreference.custom_text_enter
+            "space" -> appPreference.custom_text_space
+            "symbol" -> appPreference.custom_text_symbol
+            "123" -> appPreference.custom_text_123
+            else -> ""
+        }
+
+        val options = mutableListOf<String>()
+        val supportsText = type != "left" && type != "right"
+        if (supportsText) {
+            options.add("カスタムテキストを設定する")
+        }
+        if (launcher != null) {
+            options.add("カスタム画像を設定する")
+        }
+        options.add("デフォルトに戻す")
+
+        AlertDialog.Builder(context)
+            .setTitle(pref.title)
+            .setItems(options.toTypedArray()) { _, which ->
+                val selectedOption = options[which]
+                when (selectedOption) {
+                    "カスタムテキストを設定する" -> {
+                        showTextInputDialog(pref, type, currentText)
+                    }
+                    "カスタム画像を設定する" -> {
+                        launcher?.launch("image/*")
+                    }
+                    "デフォルトに戻す" -> {
+                        resetSpecialKey(type)
+                        updateSpecialKeySummary(pref, type)
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun showTextInputDialog(pref: Preference, type: String, currentText: String) {
+        val context = requireContext()
+        val editText = android.widget.EditText(context).apply {
+            setText(currentText)
+            setSelection(currentText.length)
+            hint = "表示するテキストを入力してください"
+        }
+
+        AlertDialog.Builder(context)
+            .setTitle(pref.title)
+            .setView(editText)
+            .setPositiveButton("設定") { _, _ ->
+                val newText = editText.text.toString().trim()
+                saveSpecialKeyText(type, newText)
+                updateSpecialKeySummary(pref, type)
+            }
+            .setNegativeButton("キャンセル", null)
+            .show()
+    }
+
+    private fun saveSpecialKeyText(type: String, text: String) {
+        when (type) {
+            "mode_switch" -> {
+                appPreference.custom_text_mode_switch = text
+                appPreference.custom_icon_mode_switch_path = ""
+            }
+            "undo" -> {
+                appPreference.custom_text_undo = text
+                appPreference.custom_icon_undo_path = ""
+            }
+            "emoji" -> {
+                appPreference.custom_text_emoji = text
+                appPreference.custom_icon_emoji_path = ""
+            }
+            "delete" -> {
+                appPreference.custom_text_delete = text
+                appPreference.custom_icon_delete_path = ""
+            }
+            "enter" -> {
+                appPreference.custom_text_enter = text
+                appPreference.custom_icon_enter_path = ""
+            }
+            "space" -> {
+                appPreference.custom_text_space = text
+                appPreference.custom_icon_space_path = ""
+            }
+            "symbol" -> {
+                appPreference.custom_text_symbol = text
+            }
+            "123" -> {
+                appPreference.custom_text_123 = text
+            }
+        }
+    }
+
+    private fun resetSpecialKey(type: String) {
+        when (type) {
+            "mode_switch" -> {
+                appPreference.custom_text_mode_switch = ""
+                appPreference.custom_icon_mode_switch_path = ""
+            }
+            "undo" -> {
+                appPreference.custom_text_undo = ""
+                appPreference.custom_icon_undo_path = ""
+            }
+            "emoji" -> {
+                appPreference.custom_text_emoji = ""
+                appPreference.custom_icon_emoji_path = ""
+            }
+            "delete" -> {
+                appPreference.custom_text_delete = ""
+                appPreference.custom_icon_delete_path = ""
+            }
+            "enter" -> {
+                appPreference.custom_text_enter = ""
+                appPreference.custom_icon_enter_path = ""
+            }
+            "space" -> {
+                appPreference.custom_text_space = ""
+                appPreference.custom_icon_space_path = ""
+            }
+            "symbol" -> {
+                appPreference.custom_text_symbol = ""
+            }
+            "123" -> {
+                appPreference.custom_text_123 = ""
+            }
+            "left" -> {
+                appPreference.custom_icon_arrow_left_path = ""
+            }
+            "right" -> {
+                appPreference.custom_icon_arrow_right_path = ""
+            }
+        }
+    }
+
+    private fun updateSpecialKeySummary(pref: Preference, type: String) {
+        val hasImage = when (type) {
+            "enter" -> appPreference.custom_icon_enter_path.isNotEmpty()
+            "space" -> appPreference.custom_icon_space_path.isNotEmpty()
+            "left" -> appPreference.custom_icon_arrow_left_path.isNotEmpty()
+            "right" -> appPreference.custom_icon_arrow_right_path.isNotEmpty()
+            "mode_switch" -> appPreference.custom_icon_mode_switch_path.isNotEmpty()
+            "undo" -> appPreference.custom_icon_undo_path.isNotEmpty()
+            "emoji" -> appPreference.custom_icon_emoji_path.isNotEmpty()
+            "delete" -> appPreference.custom_icon_delete_path.isNotEmpty()
+            else -> false
+        }
+
+        val currentText = when (type) {
+            "mode_switch" -> appPreference.custom_text_mode_switch
+            "undo" -> appPreference.custom_text_undo
+            "emoji" -> appPreference.custom_text_emoji
+            "delete" -> appPreference.custom_text_delete
+            "enter" -> appPreference.custom_text_enter
+            "space" -> appPreference.custom_text_space
+            "symbol" -> appPreference.custom_text_symbol
+            "123" -> appPreference.custom_text_123
+            else -> ""
+        }
+
+        if (currentText.isNotEmpty()) {
+            pref.summary = "設定中: [テキスト] \"$currentText\""
+        } else if (hasImage) {
+            val path = when (type) {
+                "enter" -> appPreference.custom_icon_enter_path
+                "space" -> appPreference.custom_icon_space_path
+                "left" -> appPreference.custom_icon_arrow_left_path
+                "right" -> appPreference.custom_icon_arrow_right_path
+                "mode_switch" -> appPreference.custom_icon_mode_switch_path
+                "undo" -> appPreference.custom_icon_undo_path
+                "emoji" -> appPreference.custom_icon_emoji_path
+                "delete" -> appPreference.custom_icon_delete_path
+                else -> ""
+            }
+            pref.summary = "設定中: [画像] ${File(path).name} （※再起動後に適用）"
+        } else {
+            pref.summary = "デフォルト（未設定）"
+        }
+    }
+
+    private fun setupFontPreference(prefKey: String, destFileName: String) {
+        findPreference<Preference>(prefKey)?.apply {
+            setOnPreferenceClickListener {
+                val currentPath = when (prefKey) {
+                    "custom_font_key_select" -> appPreference.custom_font_key_path
+                    "custom_font_candidate_select" -> appPreference.custom_font_candidate_path
+                    else -> ""
+                }
+                val launcher = when (prefKey) {
+                    "custom_font_key_select" -> selectFontKeyLauncher
+                    "custom_font_candidate_select" -> selectFontCandidateLauncher
+                    else -> null
+                }
+                if (currentPath.isNotEmpty() && File(currentPath).exists()) {
+                    AlertDialog.Builder(requireContext())
+                        .setTitle(title)
+                        .setItems(arrayOf("新しいフォントに変更する", "デフォルトフォントに戻す")) { _, which ->
+                            when (which) {
+                                0 -> launcher?.launch("*/*")
+                                1 -> {
+                                    File(currentPath).delete()
+                                    when (prefKey) {
+                                        "custom_font_key_select" -> appPreference.custom_font_key_path = ""
+                                        "custom_font_candidate_select" -> appPreference.custom_font_candidate_path = ""
+                                    }
+                                    updateFontSummary(this, "")
+                                }
+                            }
+                        }
+                        .show()
+                } else {
+                    launcher?.launch("*/*")
+                }
+                true
+            }
+            val currentPath = when (prefKey) {
+                "custom_font_key_select" -> appPreference.custom_font_key_path
+                "custom_font_candidate_select" -> appPreference.custom_font_candidate_path
+                else -> ""
+            }
+            updateFontSummary(this, currentPath)
+        }
+    }
+
+    private fun updateFontSummary(pref: Preference, path: String) {
+        if (path.isNotEmpty() && File(path).exists()) {
+            pref.summary = "設定中: ${File(path).name}"
+        } else {
+            when (pref.key) {
+                "custom_font_key_select" -> pref.summary = "キーボード上の文字専用のフォントファイルを適用します"
+                "custom_font_candidate_select" -> pref.summary = "変換候補（サジェスト）専用のフォントファイルを適用します"
+            }
+        }
+    }
+
+    private fun handleFontSelected(uri: Uri, prefKey: String, destFileName: String) {
+        val path = copyFontUriToInternalStorage(uri, destFileName)
+        if (path != null) {
+            when (prefKey) {
+                "custom_font_key_select" -> appPreference.custom_font_key_path = path
+                "custom_font_candidate_select" -> appPreference.custom_font_candidate_path = path
+            }
+            findPreference<Preference>(prefKey)?.let { pref ->
+                updateFontSummary(pref, path)
+            }
+        } else {
+            Toast.makeText(context, "フォントのコピーに失敗しました", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyFontUriToInternalStorage(uri: Uri, destFileName: String): String? {
+        val context = context ?: return null
+        val fontsDir = File(context.filesDir, "fonts")
+        if (!fontsDir.exists()) {
+            fontsDir.mkdirs()
+        }
+        val extension = getExtension(uri) ?: "ttf"
+        val destFile = File(fontsDir, "$destFileName.$extension")
+
+        fontsDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith(destFileName)) {
+                file.delete()
+            }
+        }
+
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                FileOutputStream(destFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            destFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun handleImageSelected(uri: Uri, destFileName: String, type: String) {
+        val path = copyUriToInternalStorage(uri, destFileName)
+        if (path != null) {
+            when (type) {
+                "enter" -> appPreference.custom_icon_enter_path = path
+                "space" -> appPreference.custom_icon_space_path = path
+                "left" -> appPreference.custom_icon_arrow_left_path = path
+                "right" -> appPreference.custom_icon_arrow_right_path = path
+                "mode_switch" -> appPreference.custom_icon_mode_switch_path = path
+                "undo" -> appPreference.custom_icon_undo_path = path
+                "emoji" -> appPreference.custom_icon_emoji_path = path
+                "delete" -> appPreference.custom_icon_delete_path = path
+            }
+            findPreference<Preference>("custom_icon_${type}_select")?.let { pref ->
+                updateSpecialKeySummary(pref, type)
+            }
+        } else {
+            Toast.makeText(context, "画像のコピーに失敗しました", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun copyUriToInternalStorage(uri: Uri, destFileName: String): String? {
+        val context = context ?: return null
+        val iconsDir = File(context.filesDir, "icons")
+        if (!iconsDir.exists()) {
+            iconsDir.mkdirs()
+        }
+        val extension = getExtension(uri) ?: "png"
+        val destFile = File(iconsDir, "$destFileName.$extension")
+
+        iconsDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith(destFileName)) {
+                file.delete()
+            }
+        }
+
+        return try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                FileOutputStream(destFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            destFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun getExtension(uri: Uri): String? {
+        val context = context ?: return null
+        if (uri.scheme == android.content.ContentResolver.SCHEME_CONTENT) {
+            val mimeType = context.contentResolver.getType(uri)
+            if (mimeType != null) {
+                return MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType)
+            }
+        }
+        return MimeTypeMap.getFileExtensionFromUrl(uri.toString())
     }
 }
