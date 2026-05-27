@@ -81,6 +81,18 @@ class VariationsPopupView(context: Context) : View(context) {
         invalidate()
     }
 
+    fun setFlatColors(
+        @ColorInt bgColor: Int,
+        @ColorInt selectedColor: Int,
+        @ColorInt textColor: Int
+    ) {
+        currentStyle = PopupStyle.FLAT
+        flatBackgroundPaint.color = bgColor
+        flatSelectionPaint.color = selectedColor
+        flatTextPaint.color = textColor
+        invalidate()
+    }
+
     // ニューモーフィズム用メソッド
     fun setNeumorphicColors(
         @ColorInt bgColor: Int,

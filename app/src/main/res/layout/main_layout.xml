@@ -29,8 +29,8 @@
         android:id="@+id/suggestionView_parent"
         android:layout_width="match_parent"
         android:layout_height="40dp"
-        android:layout_marginBottom="@dimen/keyboard_height"
-        android:layout_gravity="bottom"
+        android:layout_marginBottom="0dp"
+        android:layout_gravity="top"
         android:background="@color/keyboard_bg">
 
         <ProgressBar
@@ -55,19 +55,19 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:focusable="true"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <!-- Container for Suggestion and Shortcut Toolbar -->
         <FrameLayout
             android:id="@+id/upper_area_content_container"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            app:layout_constraintStart_toEndOf="@+id/toolbar_toggle_button"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/suggestion_visibility"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent">
+            app:layout_constraintStart_toEndOf="@+id/toolbar_toggle_button"
+            app:layout_constraintTop_toTopOf="parent">
 
             <!-- RecyclerView for Suggestions -->
             <androidx.recyclerview.widget.RecyclerView
@@ -75,7 +75,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:visibility="visible" />
+                android:visibility="gone" />
 
             <!-- RecyclerView for Shortcut Toolbar -->
             <androidx.recyclerview.widget.RecyclerView
@@ -83,7 +83,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:visibility="gone" />
+                android:visibility="visible" />
 
         </FrameLayout>
 

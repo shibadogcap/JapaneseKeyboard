@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CombinedVibration
 import android.os.Handler
+import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -591,6 +592,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var functionKeyConversionSource: String? = null
     private var suppressedSelectionCleanupCount = 0
     private var preservePreEditOnNextSelectionUpdate: String? = null
+    private var suppressSelectionCleanupUntilMillis: Long = 0L
     private val _dakutenPressed = MutableStateFlow(false)
     private val _suggestionFlag = MutableSharedFlow<CandidateShowFlag>(replay = 0)
     private val suggestionFlag = _suggestionFlag.asSharedFlow()
@@ -667,10 +669,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var switchQWERTYPassword: Boolean? = false
     private var landscapeForceQwertyPreference: Boolean? = false
     private var landscapeForceQwertyRomajiPreference: Boolean? = false
-    private var shortcutTollbarVisibility: Boolean? = true
     private var clipboardPreviewVisibility: Boolean? = true
     private var clipboardPreviewTapToDelete: Boolean? = false
     private var isDeleteLeftFlickPreference: Boolean? = true
+    private var currentKeyTypeface: android.graphics.Typeface? = null
+    private var currentCandidateTypeface: android.graphics.Typeface? = null
     private var isDeleteUpFlickPreference: Boolean? = false
     private var isDeleteDownFlickPreference: Boolean? = false
 
@@ -858,7 +861,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         ContextCompat.getDrawable(applicationContext, com.kazumaproject.core.R.drawable.kana_small)
     }
     private val cachedHenkanDrawable: Drawable? by lazy {
-        ContextCompat.getDrawable(applicationContext, com.kazumaproject.core.R.drawable.henkan)
+        ContextCompat.getDrawable(applicationContext, com.kazumaproject.core.R.drawable.baseline_autorenew_24)
     }
 
     private val cachedNumberDrawable: Drawable? by lazy {
@@ -1173,7 +1176,19 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
         }
         suggestionAdapterFull = SuggestionAdapter()
-        shortcutAdapter = ShortcutAdapter()
+        shortcutAdapter = ShortcutAdapter().apply {
+            submitList(
+                listOf(
+                    ShortcutType.SETTINGS,
+                    ShortcutType.EMOJI,
+                    ShortcutType.TEMPLATE,
+                    ShortcutType.COPY,
+                    ShortcutType.PASTE,
+                    ShortcutType.KEYBOARD_PICKER,
+                    ShortcutType.CLIP_BOARD
+                )
+            )
+        }
         currentNightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         clipboardManager =
             applicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1465,7 +1480,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         switchQWERTYPassword = preferences.switchQWERTYPassword
         landscapeForceQwertyPreference = preferences.landscapeForceQwertyPreference
         landscapeForceQwertyRomajiPreference = preferences.landscapeForceQwertyRomajiPreference
-        shortcutTollbarVisibility = preferences.shortcutTollbarVisibility
         isDeleteLeftFlickPreference = preferences.isDeleteLeftFlickPreference
         isDeleteUpFlickPreference = preferences.isDeleteUpFlickPreference
         isDeleteDownFlickPreference = preferences.isDeleteDownFlickPreference
@@ -1619,6 +1633,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         } else {
             customTypeface
         }
+        currentKeyTypeface = customKeyTypeface
+        currentCandidateTypeface = customCandidateTypeface
 
         mainLayoutBinding?.keyboardView?.setCustomIcons(
             enterPath = customIconEnterPath,
@@ -1675,13 +1691,16 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             customText123 = preferences.customText123
         )
 
-        // Apply custom Typeface
-        mainLayoutBinding?.keyboardView?.setCustomTypeface(customKeyTypeface)
-        mainLayoutBinding?.qwertyView?.setCustomTypeface(customKeyTypeface)
-        mainLayoutBinding?.keyboardSymbolView?.setCustomTypeface(customKeyTypeface)
-        floatingKeyboardBinding?.keyboardViewFloating?.setCustomTypeface(customKeyTypeface)
-        suggestionAdapter?.setCustomTypeface(customCandidateTypeface)
-        suggestionAdapterFull?.setCustomTypeface(customCandidateTypeface)
+        applyCurrentTypefacesToViews()
+    }
+
+    private fun applyCurrentTypefacesToViews() {
+        mainLayoutBinding?.keyboardView?.setCustomTypeface(currentKeyTypeface)
+        mainLayoutBinding?.qwertyView?.setCustomTypeface(currentKeyTypeface)
+        mainLayoutBinding?.keyboardSymbolView?.setCustomTypeface(currentCandidateTypeface)
+        floatingKeyboardBinding?.keyboardViewFloating?.setCustomTypeface(currentKeyTypeface)
+        suggestionAdapter?.setCustomTypeface(currentCandidateTypeface)
+        suggestionAdapterFull?.setCustomTypeface(currentCandidateTypeface)
     }
 
     private fun initializeMozcDictionaries(@Suppress("UNUSED_PARAMETER") preferences: ImePreferencesSnapshot) {
@@ -2345,6 +2364,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
                     borderWidth = customKeyBorderWidth ?: 1
                 )
+                floatingKeyboardLayoutBinding.keyboardViewFloating.setPopupWindowAnchorProvider {
+                    floatingKeyboardLayoutBinding.root
+                }
                 floatingKeyboardLayoutBinding.keyboardViewFloating.setLongPressTimeout(
                     (longPressTimeoutPreferenceValue ?: 300).toLong()
                 )
@@ -2436,7 +2458,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     floatingKeyboardBinding?.let { applyFloatingKeyboardBackgroundIfNeeded(it) }
                 }
 
-                suggestionRecyclerView.isVisible = true
+                updateUpperAreaVisibility(mainView)
                 suggestionVisibility.isVisible = false
                 keyboardView.setFlickSensitivityValue(flickSensitivityPreferenceValue ?: 100)
                 keyboardView.setLongPressTimeout((longPressTimeoutPreferenceValue ?: 300).toLong())
@@ -2447,10 +2469,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     InputMode.ModeNumber -> 16f
                     else -> 17f
                 }
-                keyboardView.setKeyLetterSize(
-                    (appPreference.key_letter_size ?: 0.0f) + defaultLetterSize
-                )
-                keyboardView.setKeyLetterSizeDelta((appPreference.key_letter_size ?: 0.0f).toInt())
+                val keyLetterSizeDelta = (appPreference.key_letter_size ?: 0.0f)
+                    .coerceIn(12f - defaultLetterSize, 40f - defaultLetterSize)
+                keyboardView.setKeyLetterSize((defaultLetterSize + keyLetterSizeDelta).coerceIn(12f, 40f))
+                keyboardView.setKeyLetterSizeDelta(keyLetterSizeDelta.toInt())
                 keyboardView.setKeySizeScale(
                     appPreference.tenkey_key_width_scale_percent ?: 100,
                     appPreference.tenkey_key_height_scale_percent ?: 100
@@ -2522,7 +2544,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     candidatesRowView.adapter = suggestionAdapterFull
                 }
                 candidateTabLayout.visibility = View.INVISIBLE
-                shortcutToolbarRecyclerview.isVisible = shortcutTollbarVisibility == true
+                updateUpperAreaVisibility(mainView)
                 val currentKeyboardType = keyboardOrder.getOrNull(currentKeyboardOrder)
                 if (shouldSwitchTenkeyEnglishToQwerty() && currentInputModeForSession == InputMode.ModeEnglish && currentKeyboardType == KeyboardType.TENKEY) {
                     _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTY }
@@ -2661,7 +2683,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         switchQWERTYPassword = null
         landscapeForceQwertyPreference = null
         landscapeForceQwertyRomajiPreference = null
-        shortcutTollbarVisibility = null
         clipboardPreviewVisibility = null
         clipboardPreviewTapToDelete = null
         isDeleteLeftFlickPreference = null
@@ -3347,7 +3368,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
                     ViewCompat.setOnApplyWindowInsetsListener(mainView.root) { _, windowInsets ->
                         val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
-                        systemBottomInset = insets.bottom
+                        if (systemBottomInset != insets.bottom) {
+                            systemBottomInset = insets.bottom
+                            mainView.root.post {
+                                setKeyboardSizeSwitchKeyboard(mainView)
+                            }
+                        }
                         windowInsets
                     }
                     setCandidateTabLayout(mainView)
@@ -3365,6 +3391,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
                     setTenKeyListeners(mainView)
                     setKeyboardSizeSwitchKeyboard(mainView)
+                    applyCurrentTypefacesToViews()
                     updateClipboardPreview()
                     mainView.suggestionRecyclerView.isVisible = suggestionViewStatus.value
                     updateUpperAreaVisibility(mainView)
@@ -3386,6 +3413,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         )
         // Skip if composing text is active
         if (candidatesStart != -1 || candidatesEnd != -1) {
+            return
+        }
+
+        if (
+            SystemClock.uptimeMillis() < suppressSelectionCleanupUntilMillis &&
+            (inputString.value.isNotEmpty() || stringInTail.get().isNotEmpty())
+        ) {
+            Timber.d("onUpdateSelection ignored for internal preedit cursor move: [${inputString.value}] [${stringInTail.get()}]")
+            refreshReconversionUi()
             return
         }
 
@@ -3514,6 +3550,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
         }
         refreshReconversionUi()
+    }
+
+    private fun suppressSelectionCleanupForInternalPreEditMove() {
+        if (suppressedSelectionCleanupCount < 2) {
+            suppressedSelectionCleanupCount = 2
+        }
+        suppressSelectionCleanupUntilMillis = SystemClock.uptimeMillis() + 800L
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -5226,7 +5269,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             customLayoutDefault.isVisible = true
             qwertyView.setRomajiEnglishSwitchKeyVisibility(false)
             setNumberLayoutTo(customLayoutDefault)
-            suggestionRecyclerView.isVisible = true
+            updateUpperAreaVisibility(this)
         }
         syncFloatingKeyboardContentForMode(TenKeyQWERTYMode.Number)
         renderCurrentKeyboardStateOnActiveSurface()
@@ -5437,6 +5480,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
             borderWidth = customKeyBorderWidth ?: 1
         )
+        floatingKeyboardLayoutBinding.keyboardViewFloating.setPopupWindowAnchorProvider {
+            floatingKeyboardLayoutBinding.root
+        }
         floatingKeyboardLayoutBinding.keyboardViewFloating.setLongPressTimeout(
             (longPressTimeoutPreferenceValue ?: 300).toLong()
         )
@@ -5541,6 +5587,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
                 borderWidth = customKeyBorderWidth ?: 1
             )
+            setPopupWindowAnchorProvider { mainView.root }
             setOnFlickListener(object : FlickListener {
                 override fun onFlick(gestureType: GestureType, key: Key, char: Char?) {
                     Timber.d("Flick: $char $key $gestureType")
@@ -7784,7 +7831,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     keyboardView.isVisible = false
                 }
             }
-            suggestionRecyclerView.isVisible = true
+            updateUpperAreaVisibility(this)
             syncFloatingKeyboardContentForMode(qwertyMode.value)
             renderCurrentKeyboardStateOnActiveSurface()
             updateFloatingKeyboardSizeForMode(qwertyMode.value)
@@ -10434,11 +10481,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     if (candidateTabVisibility == true) {
                         mainView.candidateTabLayout.isVisible = true
                     }
-                    if (shortcutTollbarVisibility == true) {
-                        mainView.shortcutToolbarRecyclerview.isInvisible = true
-                    } else {
-                        mainView.shortcutToolbarRecyclerview.isVisible = false
-                    }
+                    updateUpperAreaVisibility(mainView)
                 }
                 when (currentFlag) {
                     CandidateShowFlag.Idle -> {
@@ -10480,8 +10523,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             mainView.candidateTabLayout.isVisible = false
                             val tab = mainView.candidateTabLayout.getTabAt(0)
                             tab?.let { mainView.candidateTabLayout.selectTab(it) }
-                            mainView.shortcutToolbarRecyclerview.isVisible =
-                                shortcutTollbarVisibility == true
+                            updateUpperAreaVisibility(mainView)
                         }
                         suggestionAdapter?.apply {
                             if (deletedBuffer.isEmpty()) {
@@ -10528,6 +10570,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 setPasteEnabled(false)
                             }
                         }
+                        updateUpperAreaVisibility(mainView)
                     }
 
                     CandidateShowFlag.Updating -> {
@@ -10564,8 +10607,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     setKeyboardSizeForHeightSymbol(mainView, isSymbolKeyboardShow.isShown)
                 }
                 mainView.apply {
-                    if (shortcutTollbarVisibility == true) {
-                        shortcutToolbarRecyclerview.isVisible = !isSymbolKeyboardShow.isShown
+                    if (isSymbolKeyboardShow.isShown) {
+                        shortcutToolbarRecyclerview.isVisible = false
+                    } else {
+                        updateUpperAreaVisibility(mainView)
                     }
                     if (isSymbolKeyboardShow.isShown) {
                         when {
@@ -10627,7 +10672,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
                         }
                         animateViewVisibility(keyboardSymbolView, false)
-                        suggestionRecyclerView.isVisible = true
+                        updateUpperAreaVisibility(mainView)
                         if (customLayoutDefault.isInvisible) customLayoutDefault.visibility =
                             View.VISIBLE
                     }
@@ -10861,7 +10906,23 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
         launch {
             shortCurRepository.enabledShortcutsFlow.collectLatest {
-                shortcutAdapter?.submitList(it)
+                val shortcuts = it.ifEmpty {
+                    listOf(
+                        ShortcutType.SETTINGS,
+                        ShortcutType.EMOJI,
+                        ShortcutType.TEMPLATE,
+                        ShortcutType.COPY,
+                        ShortcutType.PASTE,
+                        ShortcutType.KEYBOARD_PICKER,
+                        ShortcutType.CLIP_BOARD
+                    )
+                }
+                shortcutAdapter?.submitList(shortcuts) {
+                    mainLayoutBinding?.let { mainView ->
+                        distributeShortcutToolbarItems(mainView)
+                        updateUpperAreaVisibility(mainView)
+                    }
+                }
             }
         }
 
@@ -11589,12 +11650,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
         // 3. 最終的な高さ、幅、Gravity、マージンの決定
         val baseKeyboardHeight = if (isPortrait) {
-            heightPx + applicationContext.dpToPx(50)
+            heightPx + applicationContext.dpToPx(40)
         } else {
             heightPx + applicationContext.dpToPx(40)
         }
 
-        val finalKeyboardHeight = baseKeyboardHeight
+        val finalKeyboardHeight = baseKeyboardHeight + systemBottomInset
 
         val finalKeyboardWidth =
             if (qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTY || qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji) {
@@ -11648,6 +11709,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         (mainView.keyboardSymbolView.layoutParams as? FrameLayout.LayoutParams)?.let { param ->
             param.height = heightPx
             param.width = finalKeyboardWidth
+            param.topMargin = dpToPx(40)
+            param.bottomMargin = 0
+            param.gravity = Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
             mainView.keyboardSymbolView.layoutParams = param
         }
 
@@ -11670,30 +11734,62 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun updateUpperAreaVisibility(mainView: MainLayoutBinding) {
         val hasSuggestions = suggestionAdapter?.suggestions?.isNotEmpty() == true
         val hasInlineSuggestions = suggestionAdapter?.hasInlineSuggestions() == true
-        val hasClipboardSuggest = isClipboardHistoryFeatureEnabled && suggestionAdapter?.hasClipboardPreview() == true
-
         val hasCandidateSuggestions = hasSuggestions || hasInlineSuggestions
-        val showSuggestion = hasCandidateSuggestions
 
-        if (showSuggestion && !lastShowSuggestion) {
+        if (hasCandidateSuggestions && !lastShowSuggestion) {
             isToolbarForcedShow = false
         }
-        lastShowSuggestion = showSuggestion
+        lastShowSuggestion = hasCandidateSuggestions
+        val showSuggestion = hasCandidateSuggestions && !isToolbarForcedShow
 
-        mainView.suggestionViewParent.visibility = View.VISIBLE
+        fun applyUpperAreaState() {
+            mainView.suggestionViewParent.visibility = View.VISIBLE
+            mainView.toolbarToggleButton.visibility = View.VISIBLE
+            mainView.upperAreaContentContainer.visibility = View.VISIBLE
+            mainView.suggestionViewParent.clearAnimation()
+            mainView.shortcutToolbarRecyclerview.clearAnimation()
+            mainView.suggestionRecyclerView.clearAnimation()
+            mainView.toolbarToggleButton.clearAnimation()
+            mainView.suggestionViewParent.alpha = 1f
+            mainView.shortcutToolbarRecyclerview.alpha = 1f
+            mainView.suggestionRecyclerView.alpha = 1f
+            mainView.toolbarToggleButton.alpha = 1f
+            mainView.suggestionViewParent.elevation = 0f
+            mainView.suggestionViewParent.translationZ = 0f
+            mainView.suggestionViewParent.bringToFront()
+            mainView.upperAreaContentContainer.bringToFront()
+            mainView.toolbarToggleButton.bringToFront()
 
-        if (showSuggestion && !isToolbarForcedShow) {
-            mainView.suggestionRecyclerView.visibility = View.VISIBLE
-            mainView.shortcutToolbarRecyclerview.visibility = View.GONE
-            mainView.toolbarToggleButton.setImageResource(com.kazumaproject.core.R.drawable.baseline_menu_24)
-        } else {
-            mainView.suggestionRecyclerView.visibility = View.GONE
-            mainView.shortcutToolbarRecyclerview.visibility = View.VISIBLE
             if (showSuggestion) {
+                mainView.suggestionRecyclerView.visibility = View.VISIBLE
+                mainView.shortcutToolbarRecyclerview.visibility = View.GONE
                 mainView.toolbarToggleButton.setImageResource(com.kazumaproject.core.R.drawable.baseline_arrow_left_24)
             } else {
+                mainView.suggestionRecyclerView.visibility = View.GONE
+                mainView.shortcutToolbarRecyclerview.visibility = View.VISIBLE
                 mainView.toolbarToggleButton.setImageResource(com.kazumaproject.core.R.drawable.baseline_menu_24)
             }
+        }
+
+        applyUpperAreaState()
+
+        val targetHeight = dpToPx(40)
+        if (mainView.suggestionViewParent.layoutParams.height != targetHeight) {
+            mainView.suggestionViewParent.layoutParams = mainView.suggestionViewParent.layoutParams.apply {
+                height = targetHeight
+            }
+        }
+        (mainView.suggestionViewParent.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val horizontalGravity = params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+            val toolbarHorizontalGravity = horizontalGravity.takeIf { it != 0 } ?: Gravity.START
+            params.gravity = Gravity.TOP or toolbarHorizontalGravity
+            params.topMargin = 0
+            params.bottomMargin = 0
+            mainView.suggestionViewParent.layoutParams = params
+        }
+
+        mainView.root.post {
+            applyUpperAreaState()
         }
     }
 
@@ -11710,20 +11806,31 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         finalStartMargin: Int,
         finalEndMargin: Int
     ) {
+        val toolbarHeight = dpToPx(40)
+        val horizontalGravity = gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+        val toolbarHorizontalGravity = horizontalGravity.takeIf { it != 0 } ?: Gravity.START
+        val toolbarGravity = Gravity.TOP or toolbarHorizontalGravity
         listOf(
             mainView.suggestionViewParent,
             mainView.keyboardView,
+            mainView.tabletView,
             mainView.customLayoutDefault,
             mainView.qwertyView,
-            mainView.candidatesRowView
+            mainView.candidatesRowView,
+            mainView.keyboardSymbolView
         ).forEach { view ->
             (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
                 if (view != mainView.suggestionViewParent) {
                     params.height = heightPx
+                    params.topMargin = toolbarHeight
+                    params.bottomMargin = 0
+                    params.gravity = Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
                 } else {
-                    params.bottomMargin = heightPx
+                    params.height = toolbarHeight
+                    params.topMargin = 0
+                    params.bottomMargin = 0
+                    params.gravity = toolbarGravity
                 }
-                params.gravity = gravity
                 view.layoutParams = params
             }
         }
@@ -11736,6 +11843,27 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             params.rightMargin = finalEndMargin
             params.gravity = gravity
             mainView.root.layoutParams = params
+        } ?: run {
+            mainView.root.layoutParams = FrameLayout.LayoutParams(
+                finalKeyboardWidth,
+                finalKeyboardHeight,
+                gravity
+            ).apply {
+                bottomMargin = finalBottomMargin
+                leftMargin = finalStartMargin
+                rightMargin = finalEndMargin
+            }
+        }
+        mainView.root.minimumHeight = finalKeyboardHeight
+        keyboardContainer?.let { container ->
+            container.minimumHeight = finalKeyboardHeight
+            container.layoutParams = (container.layoutParams ?: ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                finalKeyboardHeight
+            )).apply {
+                width = ViewGroup.LayoutParams.MATCH_PARENT
+                height = finalKeyboardHeight
+            }
         }
 
         mainView.root.setPadding(0, 0, 0, systemBottomInset)
@@ -11851,7 +11979,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             keyboardHeight + mainView.candidateTabLayout.height
         } else {
             keyboardHeight
-        }
+        } + systemBottomInset
 
         val finalKeyboardWidth =
             if (qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTY || qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji) {
@@ -11929,7 +12057,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun setKeyboardHeightWithAdditional(mainView: MainLayoutBinding) {
         Timber.d("Keyboard Height: setKeyboardHeightWithAdditional called")
-        setKeyboardHeightWithAdditionalOriginal(mainView)
+        updateKeyboardLayout(mainView)
     }
 
     private fun setKeyboardHeightDefault(mainView: MainLayoutBinding) {
@@ -12023,6 +12151,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView.suggestionVisibility.apply {
             this.setImageDrawable(if (isVisible) cachedArrowDropDownDrawable else cachedArrowDropUpDrawable)
         }
+        updateUpperAreaVisibility(mainView)
     }
 
     private fun animateViewVisibility(
@@ -13750,6 +13879,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 LinearLayoutManager(this@IMEService, LinearLayoutManager.HORIZONTAL, false)
             adapter = shortcutAdapter
         }
+        distributeShortcutToolbarItems(mainView)
         when (keyboardThemeMode) {
             "custom" -> {
                 shortcutAdapter?.setIconColor(customThemeShortcutIconColor ?: Color.BLACK)
@@ -13804,8 +13934,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
                 ShortcutType.CLIP_BOARD -> {
                     vibrate()
+                    val isClipboardPanelShown =
+                        _keyboardSymbolViewState.value.isShown &&
+                            _keyboardSymbolViewState.value.mode == SymbolMode.CLIPBOARD
                     _keyboardSymbolViewState.value = SymbolKeyboardState(
-                        isShown = true,
+                        isShown = !isClipboardPanelShown,
                         mode = SymbolMode.CLIPBOARD
                     )
                     stringInTail.set("")
@@ -13813,6 +13946,22 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     setComposingText("", 0)
                 }
             }
+        }
+    }
+
+    private fun distributeShortcutToolbarItems(mainView: MainLayoutBinding) {
+        mainView.upperAreaContentContainer.post {
+            val count = shortcutAdapter?.currentList?.size?.takeIf { it > 0 }
+                ?: shortcutAdapter?.itemCount?.takeIf { it > 0 }
+                ?: return@post
+            val width = mainView.upperAreaContentContainer.width
+            if (width <= 0) return@post
+            val itemWidth = (width / count).coerceAtLeast(1)
+            val usedWidth = itemWidth * count
+            val sidePadding = ((width - usedWidth) / 2).coerceAtLeast(0)
+            mainView.shortcutToolbarRecyclerview.setPadding(sidePadding, 0, sidePadding, 0)
+            mainView.shortcutToolbarRecyclerview.clipToPadding = true
+            shortcutAdapter?.setItemWidth(itemWidth)
         }
     }
 
@@ -17783,8 +17932,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val tab = mainView.candidateTabLayout.getTabAt(0)
             tab?.let { mainView.candidateTabLayout.selectTab(it) }
         }
-        mainView.shortcutToolbarRecyclerview.isVisible =
-            shortcutTollbarVisibility == true
+        updateUpperAreaVisibility(mainView)
         setDrawableToEnterKeyCorrespondingToImeOptions(mainView)
     }
 
@@ -17806,8 +17954,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val tab = mainView.candidateTabLayout.getTabAt(0)
             tab?.let { mainView.candidateTabLayout.selectTab(it) }
         }
-        mainView.shortcutToolbarRecyclerview.isVisible =
-            shortcutTollbarVisibility == true
+        updateUpperAreaVisibility(mainView)
         setDrawableToEnterKeyCorrespondingToImeOptions(mainView)
     }
 
@@ -17930,6 +18077,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             if (insertString.isNotEmpty()) {
                 val tail = stringInTail.get()
                 val stringBuilder = StringBuilder(tail)
+                suppressSelectionCleanupForInternalPreEditMove()
                 if (insertString.length == 1) {
                     stringInTail.set(stringBuilder.insert(0, insertString.last()).toString())
                     _inputString.update { "" }
@@ -18038,6 +18186,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun updateLeftInputString(insertString: String) {
         if (insertString.isNotEmpty()) {
+            suppressSelectionCleanupForInternalPreEditMove()
             if (insertString.length == 1) {
                 stringInTail.set(insertString + stringInTail.get())
                 _inputString.update { "" }
@@ -18066,7 +18215,14 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (selectMode.value) {
             extendOrShrinkSelectionRight()
         } else {
-            handleEmptyInputString(gestureType)
+            if (gestureType == GestureType.Tap &&
+                insertString.isNotEmpty() &&
+                stringInTail.get().isNotEmpty()
+            ) {
+                handleNonHenkan(insertString)
+            } else {
+                handleEmptyInputString(gestureType)
+            }
         }
     }
 
@@ -18095,6 +18251,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sendDpadRightIfPossible()
             }
         } else {
+            suppressSelectionCleanupForInternalPreEditMove()
             val dropString = stringInTail.get().first()
             stringInTail.set(stringInTail.get().drop(1))
             _inputString.update { dropString.toString() }
@@ -18160,6 +18317,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 handleRightCursorMoveAction()
             }
         } else {
+            suppressSelectionCleanupForInternalPreEditMove()
             val dropString = stringInTail.get().first()
             stringInTail.set(stringInTail.get().drop(1))
             _inputString.update { dropString.toString() }
@@ -18172,6 +18330,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         isContinuousTapInputEnabled.set(true)
         suggestionClickNum = 0
         if (stringInTail.get().isNotEmpty()) {
+            suppressSelectionCleanupForInternalPreEditMove()
             _inputString.update { insertString + stringInTail.get().first() }
             stringInTail.set(stringInTail.get().drop(1))
         }
@@ -18184,6 +18343,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         isContinuousTapInputEnabled.set(true)
         suggestionClickNum = 0
         if (stringInTail.get().isNotEmpty()) {
+            suppressSelectionCleanupForInternalPreEditMove()
             _inputString.update { insertString + stringInTail.get()[0] }
             stringInTail.set(stringInTail.get().substring(1))
         }

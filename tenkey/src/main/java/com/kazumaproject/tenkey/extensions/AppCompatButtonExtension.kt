@@ -130,7 +130,7 @@ fun AppCompatButton.setTenKeyTextJapanese(
     this.setPadding(0, 0, 0, 0)
     androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
         this,
-        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
     )
     when (modeTheme) {
         "default" -> {
@@ -168,6 +168,12 @@ fun AppCompatButton.setTenKeyTextJapanese(
         R.id.key_11 -> context.getString(com.kazumaproject.core.R.string.string_わ)
         R.id.key_12 -> getSpannableStringForKigouButtonJapanese()
         else -> ""
+    }
+    if (keyId == R.id.key_12) {
+        this.isSingleLine = false
+        this.maxLines = 3
+        this.gravity = Gravity.CENTER
+        this.setLineSpacing(0f, 0.9f)
     }
 }
 
@@ -334,7 +340,7 @@ fun AppCompatButton.setTenKeyTextEnglish(
     this.setPadding(0, 0, 0, 0)
     androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
         this,
-        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
     )
 
     when (modeTheme) {
@@ -384,13 +390,14 @@ fun AppCompatButton.setTenKeyTextNumber(
     colorTextInt: Int
 ) {
     textSize = KEY_NUMBER_SIZE + delta
-    this.isSingleLine = true
-    this.maxLines = 1
+    val isSymbolClusterKey = keyId == R.id.key_12
+    this.isSingleLine = isSymbolClusterKey
+    this.maxLines = if (isSymbolClusterKey) 1 else 2
     this.gravity = Gravity.CENTER
     this.setPadding(0, 0, 0, 0)
     androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
         this,
-        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+        androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
     )
 
     when (modeTheme) {

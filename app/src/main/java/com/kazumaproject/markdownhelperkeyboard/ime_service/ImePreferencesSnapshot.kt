@@ -91,7 +91,6 @@ data class ImePreferencesSnapshot(
     val switchQWERTYPassword: Boolean,
     val landscapeForceQwertyPreference: Boolean,
     val landscapeForceQwertyRomajiPreference: Boolean,
-    val shortcutTollbarVisibility: Boolean,
     val isDeleteLeftFlickPreference: Boolean,
     val isDeleteUpFlickPreference: Boolean,
     val isDeleteDownFlickPreference: Boolean,
@@ -220,6 +219,18 @@ data class ImePreferencesSnapshot(
                     null -> legacyValue ?: false
                 }
             }
+            val tenkeyHeight = appPreference.keyboard_height ?: 220
+            val tenkeyLandscapeHeight = appPreference.keyboard_height_landscape ?: 220
+            val qwertyHeight = if (appPreference.sync_qwerty_tenkey_height) {
+                tenkeyHeight
+            } else {
+                appPreference.qwerty_keyboard_height ?: 220
+            }
+            val qwertyLandscapeHeight = if (appPreference.sync_qwerty_tenkey_height) {
+                tenkeyLandscapeHeight
+            } else {
+                appPreference.qwerty_keyboard_height_landscape ?: 220
+            }
             return ImePreferencesSnapshot(
                 keyboardOrder = appPreference.keyboard_order,
                 candidateTabOrder = appPreference.candidate_tab_order,
@@ -347,8 +358,6 @@ data class ImePreferencesSnapshot(
                     appPreference.landscape_force_qwerty_preference,
                 landscapeForceQwertyRomajiPreference =
                     appPreference.landscape_force_qwerty_romaji_preference,
-                shortcutTollbarVisibility =
-                    appPreference.shortcut_toolbar_visibility_preference,
                 isDeleteLeftFlickPreference = appPreference.delete_key_left_flick_preference,
                 isDeleteUpFlickPreference = appPreference.delete_key_up_flick_preference,
                 isDeleteDownFlickPreference = appPreference.delete_key_down_flick_preference,
@@ -362,9 +371,9 @@ data class ImePreferencesSnapshot(
                     appPreference.zenz_maximum_thread_size_preference ?: 4,
                 clipboardPreviewVisibility = appPreference.clipboard_preview_preference,
                 clipboardPreviewTapToDelete = appPreference.clipboard_preview_tap_delete_preference,
-                tenkeyHeightPreferenceValue = appPreference.keyboard_height ?: 280,
+                tenkeyHeightPreferenceValue = tenkeyHeight,
                 tenkeyWidthPreferenceValue = appPreference.keyboard_width ?: 100,
-                qwertyHeightPreferenceValue = appPreference.qwerty_keyboard_height ?: 280,
+                qwertyHeightPreferenceValue = qwertyHeight,
                 qwertyWidthPreferenceValue = appPreference.qwerty_keyboard_width ?: 100,
                 candidateViewHeightPreferenceValue = appPreference.candidate_view_height_dp ?: 110,
                 candidateViewHeightEmptyPreferenceValue =
@@ -395,12 +404,10 @@ data class ImePreferencesSnapshot(
                     appPreference.save_last_used_keyboard_enable_preference,
                 lastSavedKeyboardPosition =
                     appPreference.save_last_used_keyboard_position_preference,
-                tenkeyHeightLandscapePreferenceValue =
-                    appPreference.keyboard_height_landscape ?: 280,
+                tenkeyHeightLandscapePreferenceValue = tenkeyLandscapeHeight,
                 tenkeyWidthLandscapePreferenceValue =
                     appPreference.keyboard_width_landscape ?: 100,
-                qwertyHeightLandscapePreferenceValue =
-                    appPreference.qwerty_keyboard_height_landscape ?: 280,
+                qwertyHeightLandscapePreferenceValue = qwertyLandscapeHeight,
                 qwertyWidthLandscapePreferenceValue =
                     appPreference.qwerty_keyboard_width_landscape ?: 100,
                 candidateViewLandscapeHeightPreferenceValue =

@@ -18,17 +18,21 @@ android {
 
     signingConfigs {
         release {
-            if (localProperties['KEYSTORE_FILE']) {
-                storeFile file(localProperties['KEYSTORE_FILE'])
-                storePassword localProperties['KEYSTORE_PASSWORD']
-                keyAlias localProperties['KEY_ALIAS']
-                keyPassword localProperties['KEY_PASSWORD']
+            def keystoreFile = localProperties['KEYSTORE_FILE'] ?: System.getenv('HIMAWARI_KEYSTORE_FILE')
+            def keystorePassword = localProperties['KEYSTORE_PASSWORD'] ?: System.getenv('HIMAWARI_KEYSTORE_PASSWORD')
+            def keyAliasValue = localProperties['KEY_ALIAS'] ?: System.getenv('HIMAWARI_KEY_ALIAS')
+            def keyPasswordValue = localProperties['KEY_PASSWORD'] ?: System.getenv('HIMAWARI_KEY_PASSWORD')
+            if (keystoreFile) {
+                storeFile file(keystoreFile)
+                storePassword keystorePassword
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
             }
         }
     }
 
     defaultConfig {
-        applicationId "com.kazumaproject.markdownhelperkeyboard"
+        applicationId "com.shibadogcap.himawarikeyboard"
         minSdk 24
         targetSdk 36
         versionCode 764

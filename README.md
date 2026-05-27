@@ -321,9 +321,9 @@ zenzModelAssetName=ggml-model-Q5_K_M.gguf
 
 各バリアントの `applicationId` は次の通りです。
 
-- `fullStandard`: `com.kazumaproject.markdownhelperkeyboard`
-- `liteStandard`: `com.kazumaproject.markdownhelperkeyboard.lite`
-- `liteFdroid`: `com.kazumaproject.markdownhelperkeyboard.lite.fdroid`
+- `fullStandard`: `com.shibadogcap.himawarikeyboard`
+- `liteStandard`: `com.shibadogcap.himawarikeyboard.lite`
+- `liteFdroid`: `com.shibadogcap.himawarikeyboard.lite.fdroid`
 
 ローカルで unsigned release APK を作る場合は次を使います。
 
@@ -334,6 +334,17 @@ zenzModelAssetName=ggml-model-Q5_K_M.gguf
 ```
 
 署名付き release APK を作る場合は `local.properties` に署名情報を設定したうえで次を使います。
+
+```properties
+KEYSTORE_FILE=keystores/himawari-release.jks
+KEYSTORE_PASSWORD=your-store-password
+KEY_ALIAS=himawari
+KEY_PASSWORD=your-key-password
+```
+
+CI などでは同じ値を環境変数 `HIMAWARI_KEYSTORE_FILE`,
+`HIMAWARI_KEYSTORE_PASSWORD`, `HIMAWARI_KEY_ALIAS`, `HIMAWARI_KEY_PASSWORD`
+から渡すこともできます。
 
 ```bash
 ./gradlew assembleFullStandardRelease

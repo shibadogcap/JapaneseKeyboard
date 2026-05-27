@@ -928,9 +928,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private fun updateSymbolsForCategory(index: Int) {
         if (currentMode == SymbolMode.CLIPBOARD) {
             clipboardControlLayout?.visibility = View.VISIBLE
+            categoryTab.visibility = View.GONE
         } else {
             clipboardControlLayout?.visibility = View.GONE
             clipboardSearchView?.setQuery("", false)
+            categoryTab.visibility = View.VISIBLE
         }
 
         skinTonePopup?.dismiss()
@@ -1318,12 +1320,28 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         
         symbolAdapter.setCustomTypeface(typeface)
         clipboardAdapter.setCustomTypeface(typeface)
+        applyTypefaceToSearchView(typeface)
         
         emojiKitchenPreviewLabel?.typeface = typeface
         emojiKitchenResetButton?.typeface = typeface
         
         applyTypefaceToTabLayout(categoryTab, typeface)
         applyTypefaceToTabLayout(modeTab, typeface)
+    }
+
+    private fun applyTypefaceToSearchView(typeface: android.graphics.Typeface?) {
+        val searchView = clipboardSearchView ?: return
+        fun applyToChildren(view: View) {
+            if (view is TextView) {
+                view.typeface = typeface
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    applyToChildren(view.getChildAt(i))
+                }
+            }
+        }
+        searchView.post { applyToChildren(searchView) }
     }
 
     private fun applyTypefaceToTabLayout(tabLayout: TabLayout, typeface: android.graphics.Typeface?) {

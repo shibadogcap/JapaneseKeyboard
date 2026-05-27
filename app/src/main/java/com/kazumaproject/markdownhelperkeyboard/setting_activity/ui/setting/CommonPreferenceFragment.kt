@@ -243,13 +243,13 @@ class CommonPreferenceFragment : PreferenceFragmentCompat() {
         }
 
         findPreference<Preference>("pref_backup_export")?.setOnPreferenceClickListener {
-            val fileName = "sumire_prefs_backup_${System.currentTimeMillis()}.json"
+            val fileName = "himawari_prefs_backup_${System.currentTimeMillis()}.json"
             exportLauncher.launch(fileName)
             true
         }
 
         findPreference<Preference>("pref_backup_import")?.setOnPreferenceClickListener {
-            importLauncher.launch(arrayOf("application/json", "text/*"))
+            importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
             true
         }
 

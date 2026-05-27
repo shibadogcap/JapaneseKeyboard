@@ -2,6 +2,12 @@ package com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.keyboard_th
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
@@ -890,24 +896,46 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             else -> ""
         }
 
+        val imagePath = when (type) {
+            "enter" -> appPreference.custom_icon_enter_path
+            "space" -> appPreference.custom_icon_space_path
+            "left" -> appPreference.custom_icon_arrow_left_path
+            "right" -> appPreference.custom_icon_arrow_right_path
+            "mode_switch" -> appPreference.custom_icon_mode_switch_path
+            "undo" -> appPreference.custom_icon_undo_path
+            "emoji" -> appPreference.custom_icon_emoji_path
+            "delete" -> appPreference.custom_icon_delete_path
+            else -> ""
+        }
+
+        pref.icon = when {
+            currentText.isNotEmpty() -> createTextPreviewIcon(currentText)
+            hasImage -> Drawable.createFromPath(imagePath)
+            else -> null
+        }
+
         if (currentText.isNotEmpty()) {
             pref.summary = "設定中: [テキスト] \"$currentText\""
         } else if (hasImage) {
-            val path = when (type) {
-                "enter" -> appPreference.custom_icon_enter_path
-                "space" -> appPreference.custom_icon_space_path
-                "left" -> appPreference.custom_icon_arrow_left_path
-                "right" -> appPreference.custom_icon_arrow_right_path
-                "mode_switch" -> appPreference.custom_icon_mode_switch_path
-                "undo" -> appPreference.custom_icon_undo_path
-                "emoji" -> appPreference.custom_icon_emoji_path
-                "delete" -> appPreference.custom_icon_delete_path
-                else -> ""
-            }
-            pref.summary = "設定中: [画像] ${File(path).name} （※再起動後に適用）"
+            pref.summary = "設定中: [画像] ${File(imagePath).name}"
         } else {
             pref.summary = "デフォルト（未設定）"
         }
+    }
+
+    private fun createTextPreviewIcon(text: String): Drawable {
+        val size = (40 * resources.displayMetrics.density).toInt().coerceAtLeast(40)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = ContextCompat.getColor(requireContext(), com.kazumaproject.core.R.color.keyboard_icon_color)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = size * if (text.length <= 2) 0.44f else 0.32f
+        }
+        val baseline = size / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text.take(4), size / 2f, baseline, paint)
+        return BitmapDrawable(resources, bitmap)
     }
 
     private fun setupFontPreference(prefKey: String, destFileName: String) {
@@ -1021,7 +1049,10 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
                 "emoji" -> appPreference.custom_icon_emoji_path = path
                 "delete" -> appPreference.custom_icon_delete_path = path
             }
-            findPreference<Preference>("custom_icon_${type}_select")?.let { pref ->
+            (
+                findPreference<Preference>("custom_key_appearance_$type")
+                    ?: findPreference<Preference>("custom_icon_${type}_select")
+                )?.let { pref ->
                 updateSpecialKeySummary(pref, type)
             }
         } else {

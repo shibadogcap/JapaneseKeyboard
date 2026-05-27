@@ -4,19 +4,23 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.SystemClock
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.Spanned
 import android.text.style.RelativeSizeSpan
+import android.text.style.ReplacementSpan
 import android.text.style.StyleSpan
 import android.util.AttributeSet
 import android.util.Log
@@ -368,19 +372,19 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         applyRomajiModeLabels(romajiModeState.value)
         updateCapsLockUI(capsLockState.value)
         renderShiftKeyDrawable()
-        binding.keyReturn.text = enterKeyText
-        binding.keySpace.text = spaceKeyText
+        setReturnKeyText(enterKeyText?.toString().orEmpty())
+        setSpaceKeyText(spaceKeyText?.toString().orEmpty())
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
 
     private fun applyRomajiModeLabels(romajiMode: Boolean) {
         binding.apply {
             if (romajiMode) {
-                keySpace.text = "日本語"
+                setSpaceKeyText("日本語")
                 keyKuten.text = "。"
                 keyTouten.text = "、"
             } else {
-                keySpace.text = resources.getString(com.kazumaproject.core.R.string.space_english)
+                setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_english))
                 keyKuten.text = "."
                 keyTouten.text = ","
             }
@@ -391,6 +395,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
     private var hasCustomEnterIcon = false
     private var hasCustomSpaceIcon = false
+    private var hasCustomLeftArrowIcon = false
+    private var hasCustomRightArrowIcon = false
 
     private var customEnterDrawable: Drawable? = null
     private var customSpaceDrawable: Drawable? = null
@@ -409,6 +415,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private var customTextSpaceStr: String = ""
     private var customTextSymbolStr: String = ""
     private var customText123Str: String = ""
+    private var currentReturnKeyText: String = ""
+    private var currentSpaceKeyText: String = ""
 
     private val cachedDeleteDrawable: Drawable? by lazy {
         androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_backspace_24)
@@ -421,6 +429,21 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     }
     private val cachedArrowRightAltDrawable: Drawable? by lazy {
         androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_arrow_right_alt_24)
+    }
+    private val cachedArrowLeftDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_arrow_left_24)
+    }
+    private val cachedArrowRightDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_arrow_right_24)
+    }
+    private val cachedReturnDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_keyboard_return_24)
+    }
+    private val cachedSearchDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_search_24)
+    }
+    private val cachedCheckDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_check_24)
     }
     private val cachedSpaceDrawable: Drawable? by lazy {
         androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_space_bar_24)
@@ -451,6 +474,66 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         return drawable
     }
 
+    private class CenteredDrawableSpan(private val drawable: Drawable) : ReplacementSpan() {
+        override fun getSize(
+            paint: Paint,
+            text: CharSequence?,
+            start: Int,
+            end: Int,
+            fm: Paint.FontMetricsInt?
+        ): Int {
+            val rect = drawable.bounds
+            fm?.let {
+                val fontMetrics = paint.fontMetricsInt
+                it.ascent = fontMetrics.ascent
+                it.descent = fontMetrics.descent
+                it.top = fontMetrics.top
+                it.bottom = fontMetrics.bottom
+            }
+            return rect.width()
+        }
+
+        override fun draw(
+            canvas: Canvas,
+            text: CharSequence?,
+            start: Int,
+            end: Int,
+            x: Float,
+            top: Int,
+            y: Int,
+            bottom: Int,
+            paint: Paint
+        ) {
+            val rect = drawable.bounds
+            canvas.save()
+            val transY = top + (bottom - top - rect.height()) / 2
+            drawable.draw(canvas.apply { translate(x, transY.toFloat()) })
+            canvas.restore()
+        }
+    }
+
+    private fun setCenteredIcon(button: AppCompatButton, drawable: Drawable?) {
+        button.setCompoundDrawables(null, null, null, null)
+        button.gravity = android.view.Gravity.CENTER
+        button.includeFontPadding = false
+        button.setPadding(0, 0, 0, 0)
+        button.isSingleLine = true
+        button.maxLines = 1
+        if (drawable == null) {
+            button.text = ""
+            return
+        }
+        val spanText = SpannableString(" ")
+        val fittedDrawable = fitDrawable(drawable) ?: return
+        spanText.setSpan(
+            CenteredDrawableSpan(fittedDrawable),
+            0,
+            1,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        button.text = spanText
+    }
+
     private fun setButtonImageOrText(
         button: androidx.appcompat.widget.AppCompatButton,
         defaultDrawable: Drawable?,
@@ -464,6 +547,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             button.setPadding(0, 0, 0, 0)
             button.isSingleLine = true
             button.maxLines = 1
+            customTypeface?.let { button.typeface = it }
             androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
                 button,
                 androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
@@ -475,12 +559,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             )
             button.setPadding(0, 0, 0, 0)
             if (customDrawable != null) {
-                button.text = ""
-                button.setCompoundDrawables(fitDrawable(customDrawable), null, null, null)
+                setCenteredIcon(button, customDrawable)
             } else {
                 if (defaultDrawable != null) {
-                    button.text = ""
-                    button.setCompoundDrawables(fitDrawable(defaultDrawable), null, null, null)
+                    setCenteredIcon(button, defaultDrawable)
                 } else {
                     button.text = ""
                     button.setCompoundDrawables(null, null, null, null)
@@ -492,9 +574,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     fun applySpecialKeyCustomizations() {
         setButtonImageOrText(
             binding.keySwitchDefault,
-            cachedSwitchDefaultDrawable,
-            customModeSwitchDrawable,
-            customText123Str.ifEmpty { customTextModeSwitchStr }
+            null,
+            null,
+            customText123Str.ifEmpty { customTextModeSwitchStr.ifEmpty { "あa1" } }
         )
         setButtonImageOrText(
             binding.keyEmoji,
@@ -508,18 +590,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             customDeleteDrawable,
             customTextDeleteStr
         )
-        setButtonImageOrText(
-            binding.keySpace,
-            cachedSpaceDrawable,
-            customSpaceDrawable,
-            customTextSpaceStr
-        )
-        setButtonImageOrText(
-            binding.keyReturn,
-            cachedArrowRightAltDrawable,
-            customEnterDrawable,
-            customTextEnterStr
-        )
+        setSpaceKeyText(binding.keySpace.text?.toString().orEmpty())
+        setReturnKeyText(binding.keyReturn.text?.toString().orEmpty())
     }
 
     fun setCustomIcons(
@@ -542,21 +614,30 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     ) {
         val enterDrawable = loadCustomIcon(enterPath)
         customEnterDrawable = enterDrawable?.let { fitDrawable(it) }
+        hasCustomEnterIcon = customEnterDrawable != null || customTextEnter.isNotEmpty()
 
         val spaceDrawable = loadCustomIcon(spacePath)
         customSpaceDrawable = spaceDrawable?.let { fitDrawable(it) }
+        hasCustomSpaceIcon = customSpaceDrawable != null || customTextSpace.isNotEmpty()
 
         val leftDrawable = loadCustomIcon(leftArrowPath)
         if (leftDrawable != null) {
+            hasCustomLeftArrowIcon = true
             binding.cursorLeft.setImageDrawable(fitDrawable(leftDrawable))
             androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorLeft, null)
+        } else {
+            hasCustomLeftArrowIcon = false
         }
 
         val rightDrawable = loadCustomIcon(rightArrowPath)
         if (rightDrawable != null) {
+            hasCustomRightArrowIcon = true
             binding.cursorRight.setImageDrawable(fitDrawable(rightDrawable))
             androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorRight, null)
+        } else {
+            hasCustomRightArrowIcon = false
         }
+        applyCursorArrowDrawables()
 
         customModeSwitchDrawable = loadCustomIcon(modeSwitchPath)
         customUndoDrawable = loadCustomIcon(undoPath)
@@ -574,6 +655,37 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         customText123Str = customText123
 
         applySpecialKeyCustomizations()
+    }
+
+    private fun applyCursorArrowDrawables() {
+        val tint = ColorStateList.valueOf(customSpecialKeyTextColor)
+        if (!hasCustomLeftArrowIcon) {
+            val drawable = customTypeface?.let { createTextIconDrawable("◀", it) } ?: fitDrawable(cachedArrowLeftDrawable)
+            binding.cursorLeft.setImageDrawable(drawable)
+            androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorLeft, tint)
+        }
+        if (!hasCustomRightArrowIcon) {
+            val drawable = customTypeface?.let { createTextIconDrawable("▶", it) } ?: fitDrawable(cachedArrowRightDrawable)
+            binding.cursorRight.setImageDrawable(drawable)
+            androidx.core.widget.ImageViewCompat.setImageTintList(binding.cursorRight, tint)
+        }
+    }
+
+    private fun createTextIconDrawable(text: String, typeface: Typeface): Drawable {
+        val size = (24 * resources.displayMetrics.density).toInt().coerceAtLeast(24)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = customSpecialKeyTextColor
+            textAlign = Paint.Align.CENTER
+            this.typeface = typeface
+            textSize = size * 0.72f
+        }
+        val baseline = size / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(text, size / 2f, baseline, paint)
+        return BitmapDrawable(resources, bitmap).apply {
+            setBounds(0, 0, size, size)
+        }
     }
 
     private fun loadCustomIcon(path: String): Drawable? {
@@ -669,6 +781,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 setMaterialYouTheme(this.isNightMode, true)
             }
         }
+        applyCursorArrowDrawables()
     }
 
     /**
@@ -692,6 +805,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     ) {
         val density = context.resources.displayMetrics.density
         val radius = 8f * density // 角丸の半径 (8dp)
+        val enterRadius = 32f * density
 
         // 1. 全体の背景色を設定
         if (liquidGlassEnable) {
@@ -759,7 +873,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
             // 4. 確定キーへの適用 (enterKeyColorを使用)
             val enterDrawableState =
-                getDynamicNeumorphDrawable(enterKeyColor, radius).constantState
+                getDynamicNeumorphDrawable(enterKeyColor, enterRadius).constantState
 
             val enterColorStateList = ColorStateList.valueOf(enterKeyTextColor)
 
@@ -879,6 +993,27 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val g = (Color.green(color) * factor).toInt().coerceIn(0, 255)
         val b = (Color.blue(color) * factor).toInt().coerceIn(0, 255)
         return Color.argb(a, r, g, b)
+    }
+
+    private fun qwertyPopupBackgroundColor(): Int {
+        return if (themeMode == "custom") {
+            customBgColor
+        } else {
+            ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_bg)
+        }
+    }
+
+    private fun qwertyPopupTextColor(): Int {
+        return if (themeMode == "custom") {
+            customKeyTextColor
+        } else {
+            ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+        }
+    }
+
+    private fun qwertyPopupSelectedColor(): Int {
+        val bgColor = qwertyPopupBackgroundColor()
+        return manipulateColor(bgColor, if (isNightMode) 1.28f else 0.88f)
     }
 
     /**
@@ -1352,7 +1487,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             }
 
             listOf(
-                keyShift, keyDelete, keySwitchDefault, keyEmoji, keyReturn, key123,
+                keyShift, keyDelete, keySwitchDefault, keyEmoji, key123,
                 switchNumberLayout, cursorLeft, cursorRight, switchRomajiEnglish
             ).forEach {
                 it.setBackgroundDrawable(ContextCompat.getDrawable(context, bgSideRes))
@@ -1360,23 +1495,37 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
             }
+            keyReturn.setBackgroundResource(com.kazumaproject.core.R.drawable.enter_key_bg)
         }
     }
 
     fun setSpaceKeyText(text: String) {
-        if (hasCustomSpaceIcon) {
-            binding.keySpace.text = ""
-            return
+        currentSpaceKeyText = text
+        setButtonImageOrText(
+            binding.keySpace,
+            cachedSpaceDrawable,
+            customSpaceDrawable,
+            ""
+        )
+    }
+
+    private fun returnDrawableForText(text: String): Drawable? {
+        return when (text.lowercase()) {
+            "search", "検索" -> cachedSearchDrawable
+            "done", "確定" -> cachedCheckDrawable
+            "return", "改行" -> cachedReturnDrawable
+            else -> cachedArrowRightAltDrawable
         }
-        binding.keySpace.text = text
     }
 
     fun setReturnKeyText(text: String) {
-        if (hasCustomEnterIcon) {
-            binding.keyReturn.text = ""
-            return
-        }
-        binding.keyReturn.text = text
+        currentReturnKeyText = text
+        setButtonImageOrText(
+            binding.keyReturn,
+            returnDrawableForText(text),
+            customEnterDrawable,
+            ""
+        )
     }
 
     private val specialIconButtons: List<AppCompatImageButton> by lazy {
@@ -2126,7 +2275,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         _qwertyMode.update { QWERTYMode.Default }
         _romajiModeState.update { false }
         binding.apply {
-            keySpace.text = resources.getString(com.kazumaproject.core.R.string.space_english)
+            setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_english))
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
@@ -2137,8 +2286,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         _qwertyMode.update { QWERTYMode.Default }
         _romajiModeState.update { false }
         binding.apply {
-            keySpace.text = resources.getString(com.kazumaproject.core.R.string.space_english)
-            keyReturn.text = enterKyeText
+            setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_english))
+            setReturnKeyText(enterKyeText)
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
@@ -2149,8 +2298,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         _qwertyMode.update { QWERTYMode.Default }
         _romajiModeState.update { true }
         binding.apply {
-            keySpace.text = resources.getString(com.kazumaproject.core.R.string.space_japanese)
-            keyReturn.text = enterKeyText
+            setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_japanese))
+            setReturnKeyText(enterKeyText)
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
@@ -2166,8 +2315,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             qwertyMode = qwertyMode.value,
             capsLockState = capsLockState.value,
             romajiMode = romajiModeState.value,
-            enterKeyText = binding.keyReturn.text?.toString().orEmpty(),
-            spaceKeyText = binding.keySpace.text?.toString().orEmpty(),
+            enterKeyText = currentReturnKeyText,
+            spaceKeyText = currentSpaceKeyText,
             showRomajiEnglishSwitchKey = binding.switchRomajiEnglish.isVisible
         )
     }
@@ -2192,8 +2341,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         _capsLockState.value = state.capsLockState
 
         binding.apply {
-            keyReturn.text = state.enterKeyText
-            keySpace.text = state.spaceKeyText
+            setReturnKeyText(state.enterKeyText.toString())
+            setSpaceKeyText(state.spaceKeyText.toString())
             switchRomajiEnglish.isVisible = state.showRomajiEnglishSwitchKey
         }
 
@@ -2205,8 +2354,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         updateCapsLockUI(state.capsLockState)
         renderShiftKeyDrawable()
         binding.apply {
-            keyReturn.text = state.enterKeyText
-            keySpace.text = state.spaceKeyText
+            setReturnKeyText(state.enterKeyText.toString())
+            setSpaceKeyText(state.spaceKeyText.toString())
             switchRomajiEnglish.isVisible = state.showRomajiEnglishSwitchKey
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
@@ -2490,16 +2639,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             else -> if (isDynamicColorsEnable) com.kazumaproject.core.R.drawable.key_preview_bubble_material else com.kazumaproject.core.R.drawable.key_preview_bubble
         }
         iv.setBackgroundResource(drawableResIdForImageView)
-        when (themeMode) {
-            "custom" -> {
-                iv.setDrawableSolidColor(customSpecialKeyColor)
-                tv.setTextColor(customSpecialKeyTextColor)
-            }
-
-            else -> {
-
-            }
-        }
+        iv.setDrawableSolidColor(qwertyPopupBackgroundColor())
+        tv.setTextColor(qwertyPopupTextColor())
         popupView.rootView.layoutParams.height = previewHeight
 
         when (view) {
@@ -2739,17 +2880,17 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             setChars(variations)
         }
         when (themeMode) {
-            "custom" -> {
-                variationPopupView?.setNeumorphicColors(
-                    bgColor = customSpecialKeyColor,
-                    selectedColor = manipulateColor(customSpecialKeyColor, 1.2f),
-                    textColor = customSpecialKeyTextColor
-                )
-            }
+            "custom" -> variationPopupView?.setNeumorphicColors(
+                bgColor = qwertyPopupBackgroundColor(),
+                selectedColor = qwertyPopupSelectedColor(),
+                textColor = qwertyPopupTextColor()
+            )
 
-            else -> {
-
-            }
+            else -> variationPopupView?.setFlatColors(
+                bgColor = qwertyPopupBackgroundColor(),
+                selectedColor = qwertyPopupSelectedColor(),
+                textColor = qwertyPopupTextColor()
+            )
         }
         val maxColumns = 3
         val scale = variationPopupStyle.sizeScalePercent.coerceIn(50, 200) / 100f
@@ -2822,13 +2963,13 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             setKeysForCursorMoveMode()
         } else {
             applyContentForMode(qwertyMode.value)
-            if (_romajiModeState.value) {
-                binding.keySpace.text =
+            setSpaceKeyText(
+                if (_romajiModeState.value) {
                     resources.getString(com.kazumaproject.core.R.string.space_japanese)
-            } else {
-                binding.keySpace.text =
+                } else {
                     resources.getString(com.kazumaproject.core.R.string.space_english)
-            }
+                }
+            )
         }
     }
 
@@ -3038,27 +3179,15 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
     fun setCustomTypeface(typeface: android.graphics.Typeface?) {
         this.customTypeface = typeface
-        val views = listOf(
-            binding.keyA, binding.keyB, binding.keyC, binding.keyD, binding.keyE,
-            binding.keyF, binding.keyG, binding.keyH, binding.keyI, binding.keyJ,
-            binding.keyK, binding.keyL, binding.keyM, binding.keyN, binding.keyO,
-            binding.keyP, binding.keyQ, binding.keyR, binding.keyS, binding.keyT,
-            binding.keyU, binding.keyV, binding.keyW, binding.keyX, binding.keyY,
-            binding.keyZ, binding.keySpace, binding.keyReturn, binding.key123,
-            binding.keyKuten, binding.keyTouten, binding.switchRomajiEnglish,
-            binding.switchNumberLayout, binding.keySwitchDefault, binding.keyEmoji,
-            binding.keyDelete
-        )
-        views.forEach { view ->
-            when (view) {
-                is androidx.appcompat.widget.AppCompatButton -> {
-                    view.setTypeface(typeface)
-                }
-                is com.google.android.material.textview.MaterialTextView -> {
-                    view.setTypeface(typeface)
-                }
+        qwertyButtonMap.keys.forEach { view ->
+            if (view is TextView) {
+                view.typeface = typeface
+            }
+            if (view is QWERTYButton) {
+                view.setOverlayTypeface(typeface)
             }
         }
+        applyCursorArrowDrawables()
     }
 }
 

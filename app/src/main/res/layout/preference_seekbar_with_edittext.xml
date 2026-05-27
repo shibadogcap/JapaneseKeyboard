@@ -52,6 +52,12 @@
             android:paddingStart="0dp"
             android:paddingEnd="16dp" />
 
+        <TextView
+            android:id="@+id/seekbar_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+
         <EditText
             android:id="@+id/seekbar_value_edittext"
             android:layout_width="70dp"

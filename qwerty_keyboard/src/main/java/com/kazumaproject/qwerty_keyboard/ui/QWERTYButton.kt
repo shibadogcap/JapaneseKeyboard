@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -53,6 +54,11 @@ class QWERTYButton @JvmOverloads constructor(
 
     init {
         isAllCaps = false
+    }
+
+    fun setOverlayTypeface(typeface: Typeface?) {
+        topRightPaint.typeface = typeface
+        invalidate()
     }
 
     @SuppressLint("ClickableViewAccessibility")

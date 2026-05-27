@@ -46,6 +46,12 @@
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
+            android:key="sync_qwerty_tenkey_height_preference"
+            android:summary="@string/sync_qwerty_tenkey_height_preference_summary"
+            android:title="@string/sync_qwerty_tenkey_height_preference_title" />
+
+        <SwitchPreferenceCompat
+            android:defaultValue="false"
             android:key="keyboard_floating_preference"
             android:summary="@string/keyboard_floating_preference_summary"
             android:title="@string/keyboard_floating_preference_title" />
@@ -177,12 +183,6 @@
             android:key="reconversion_preference"
             android:title="@string/reconversion_preference_title"
             app:summary="@string/reconversion_preference_summary" />
-
-        <SwitchPreferenceCompat
-            android:key="shortcut_toolbar_visibility_preference"
-            android:title="@string/shortcut_toolbar_title"
-            app:defaultValue="false"
-            app:summary="@string/shortcut_toolbar_summary" />
 
         <SwitchPreferenceCompat
             android:key="candidate_tab_visibility_preference"

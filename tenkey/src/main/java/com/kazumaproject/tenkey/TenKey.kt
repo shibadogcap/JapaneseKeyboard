@@ -4,14 +4,22 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.res.Configuration
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Build
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
+import android.text.style.ReplacementSpan
 import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -22,6 +30,7 @@ import androidx.appcompat.widget.AppCompatImageButton
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.setPadding
 import androidx.core.widget.ImageViewCompat
 import com.google.android.material.textview.MaterialTextView
@@ -116,6 +125,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     // For handling long-press detection
     private var longPressJob: Job? = null
     private var isLongPressed = false
+    private var touchSequenceActive = false
 
     // Track which key is currently pressed
     private lateinit var pressedKey: PressedKey
@@ -140,6 +150,13 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private lateinit var popupWindowActive: PopupWindow
     private lateinit var bubbleViewActive: KeyWindowLayout
     private lateinit var popTextActive: MaterialTextView
+    private var activePopupButtonId: Int = View.NO_ID
+    private var activePopupGestureType: GestureType = GestureType.Null
+    private var activePopupText: CharSequence = ""
+    private lateinit var screenshotPopupView: KeyWindowLayout
+    private lateinit var screenshotPopupText: MaterialTextView
+    private lateinit var screenshotPopupWindow: PopupWindow
+    private var popupWindowAnchorProvider: (() -> View?)? = null
 
     private lateinit var popupWindowLeft: PopupWindow
     private lateinit var bubbleViewLeft: KeyWindowLayout
@@ -221,7 +238,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     }
 
     private val cachedHenkanDrawable: Drawable? by lazy {
-        ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.henkan)
+        ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_autorenew_24)
     }
 
     private val cachedKanaDrawable: Drawable? by lazy {
@@ -304,6 +321,26 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         // Inflate the keyboard layout with ViewBinding (root is <merge>, so attachToParent = true)
         val inflater = LayoutInflater.from(context)
         binding = KeyboardLayoutBinding.inflate(inflater, this)
+        clipChildren = false
+        clipToPadding = false
+        val screenshotPopupBinding = PopupLayoutActiveBinding.inflate(inflater, null, false)
+        screenshotPopupView = screenshotPopupBinding.bubbleLayoutActive
+        screenshotPopupText = screenshotPopupBinding.popupTextActive
+        screenshotPopupView.visibility = View.GONE
+        screenshotPopupWindow = PopupWindow(
+            screenshotPopupView,
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT,
+            false
+        ).apply {
+            isTouchable = false
+            isFocusable = false
+            isClippingEnabled = false
+            elevation = 8f
+            animationStyle = 0
+            enterTransition = null
+            exitTransition = null
+        }
         // Initialize keyMap
         keyMap = KeyMap()
 
@@ -355,6 +392,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 // Whenever inputMode changes, update all keys and switch UI
                 handleCurrentInputModeSwitch(inputMode)
                 binding.keySwitchKeyMode.setInputMode(inputMode, false)
+                applyModeSwitchCustomization()
             }
         }
     }
@@ -573,6 +611,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         }
         applyPopupTextSize()
         applyTypefaceToPopups()
+        applyScreenshotPopupAppearance()
+        disablePopupAnimations()
     }
 
     fun applyPopupViewStyle(style: PopupViewStyle) {
@@ -598,6 +638,20 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 popupViewStyle.textSizeSp.coerceIn(8f, 48f)
             )
         }
+    }
+
+    private fun disablePopupAnimations() {
+        if (::popupWindowActive.isInitialized) popupWindowActive.animationStyle = 0
+        if (::popupWindowLeft.isInitialized) popupWindowLeft.animationStyle = 0
+        if (::popupWindowTop.isInitialized) popupWindowTop.animationStyle = 0
+        if (::popupWindowRight.isInitialized) popupWindowRight.animationStyle = 0
+        if (::popupWindowBottom.isInitialized) popupWindowBottom.animationStyle = 0
+        if (::popupWindowCenter.isInitialized) popupWindowCenter.animationStyle = 0
+        if (::screenshotPopupWindow.isInitialized) screenshotPopupWindow.animationStyle = 0
+    }
+
+    fun setPopupWindowAnchorProvider(provider: (() -> View?)?) {
+        popupWindowAnchorProvider = provider
     }
 
     fun setLanguageEnableKeyState(state: Boolean) {
@@ -645,6 +699,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
      */
     fun setKeyLetterSizeDelta(delta: Int) {
         this.keySizeDelta = delta
+        handleCurrentInputModeSwitch(currentInputMode.value)
     }
 
     private fun captureBaseKeyMargins() {
@@ -734,8 +789,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 }
             }
 
-            keyEnter.background = ContextCompat
-                .getDrawable(context, roundRes)
+            keyEnter.background = insetEnterBackground(
+                ContextCompat.getDrawable(context, roundRes)
+            )
 
             keyEnter.setDrawableAlpha(liquidGlassKeyAlphaEnable)
 
@@ -823,39 +879,32 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     ) {
         val enterDrawable = loadCustomIcon(enterPath)
         customEnterDrawable = enterDrawable?.let { fitDrawable(it) }
+        hasCustomEnterIcon = customEnterDrawable != null || customTextEnter.isNotEmpty()
 
         val spaceDrawable = loadCustomIcon(spacePath)
         customSpaceDrawable = spaceDrawable?.let { fitDrawable(it) }
+        hasCustomSpaceIcon = customSpaceDrawable != null || customTextSpace.isNotEmpty()
 
         val leftDrawable = loadCustomIcon(leftArrowPath)
         if (leftDrawable != null) {
             customLeftDrawable = fitDrawable(leftDrawable)
-            binding.keySoftLeft.text = ""
-            binding.keySoftLeft.setCompoundDrawables(customLeftDrawable, null, null, null)
-            binding.keySoftLeft.gravity = android.view.Gravity.CENTER
             hasCustomLeftIcon = true
         } else {
             customLeftDrawable = null
             hasCustomLeftIcon = false
-            binding.keySoftLeft.text = "◀"
-            binding.keySoftLeft.setCompoundDrawables(null, null, null, null)
-            binding.keySoftLeft.gravity = android.view.Gravity.CENTER
         }
+        setCursorKeyIconOrText(binding.keySoftLeft, customLeftDrawable, "◀")
 
         val rightDrawable = loadCustomIcon(rightArrowPath)
         if (rightDrawable != null) {
             customRightDrawable = fitDrawable(rightDrawable)
-            binding.keyMoveCursorRight.text = ""
-            binding.keyMoveCursorRight.setCompoundDrawables(customRightDrawable, null, null, null)
-            binding.keyMoveCursorRight.gravity = android.view.Gravity.CENTER
             hasCustomRightIcon = true
         } else {
             customRightDrawable = null
             hasCustomRightIcon = false
-            binding.keyMoveCursorRight.text = "▶"
-            binding.keyMoveCursorRight.setCompoundDrawables(null, null, null, null)
-            binding.keyMoveCursorRight.gravity = android.view.Gravity.CENTER
         }
+        setCursorKeyIconOrText(binding.keyMoveCursorRight, customRightDrawable, "▶")
+        normalizeSpecialKeys()
 
         customModeSwitchDrawable = loadCustomIcon(modeSwitchPath)
         customUndoDrawable = loadCustomIcon(undoPath)
@@ -1048,6 +1097,56 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 setMaterialYouTheme(this.isNightMode, true)
             }
         }
+        applyScreenshotPopupAppearance()
+        disablePopupAnimations()
+    }
+
+    private fun applyScreenshotPopupAppearance() {
+        if (!::popTextActive.isInitialized) return
+        val (bubbleColor, strokeColor, textColor) = when {
+            themeMode == "custom" -> Triple(
+                customBgColor,
+                manipulateColor(customBgColor, if (isNightMode) 1.35f else 0.86f),
+                customKeyTextColor
+            )
+            isNightMode -> Triple(
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_bg),
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_boarder_color),
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+            )
+            else -> Triple(
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_bg),
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_boarder_color),
+                ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+            )
+        }
+        listOf(
+            bubbleViewActive,
+            bubbleViewLeft,
+            bubbleViewTop,
+            bubbleViewRight,
+            bubbleViewBottom,
+            bubbleViewCenter,
+            screenshotPopupView
+        ).forEach { bubble ->
+            bubble.setBubbleColor(bubbleColor)
+            bubble.setStrokeColor(strokeColor)
+            bubble.setStrokeWidth(context.resources.displayMetrics.density)
+            bubble.setCornersRadius(28f * context.resources.displayMetrics.density)
+        }
+        listOf(
+            popTextActive,
+            popTextLeft,
+            popTextTop,
+            popTextRight,
+            popTextBottom,
+            popTextCenter,
+            screenshotPopupText
+        ).forEach { textView ->
+            textView.setTextColor(textColor)
+            textView.includeFontPadding = false
+            textView.gravity = Gravity.CENTER
+        }
     }
 
     /**
@@ -1073,6 +1172,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     ) {
         val density = context.resources.displayMetrics.density
         val radius = 8f * density // 角丸の半径 (8dp)
+        val enterRadius = 1000f
 
         // 1. 全体の背景色を設定
         if (liquidGlassEnable) {
@@ -1147,7 +1247,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
             // 4. 確定キーへの適用 (enterKeyColorを使用)
             val enterDrawableState =
-                getDynamicNeumorphDrawable(enterKeyColor, radius).constantState
+                getDynamicNeumorphDrawable(enterKeyColor, enterRadius).constantState
 
             val enterColorStateList = ColorStateList.valueOf(enterKeyTextColor)
 
@@ -1156,7 +1256,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     view.setDrawableSolidColor(enterKeyColor)
                     view.setBorder(customBorderColor, borderWidth)
                 } else {
-                    view.background = enterDrawableState?.newDrawable()?.mutate()
+                    view.background = insetEnterBackground(enterDrawableState?.newDrawable()?.mutate())
                 }
                 if (view is MaterialTextView) view.setTextColor(enterColorStateList)
                 if (view is AppCompatButton) view.setTextColor(enterColorStateList)
@@ -1258,6 +1358,12 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         )
 
         return stateListDrawable
+    }
+
+    private fun insetEnterBackground(drawable: Drawable?): Drawable? {
+        if (drawable == null) return null
+        val verticalInset = (6 * context.resources.displayMetrics.density).toInt()
+        return InsetDrawable(drawable, 0, verticalInset, 0, verticalInset)
     }
 
     /**
@@ -1398,6 +1504,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         inputModeChangedListener = null
         longPressJob?.cancel()
         longPressJob = null
+        touchSequenceActive = false
+        hideAllPopWindow()
         isCursorMode = false
         // ← CANCEL the observing coroutine when the view is detached
         //scope.coroutineContext.cancelChildren()
@@ -1426,6 +1534,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             }
             when (event.action and MotionEvent.ACTION_MASK) {
                 MotionEvent.ACTION_DOWN -> {
+                    touchSequenceActive = true
                     val key = pressedKeyByMotionEvent(event, 0)
                     flickListener?.onFlick(GestureType.Down, key, null)
 
@@ -1452,9 +1561,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     }
 
                     setKeyPressed()
+                    showInitialFlickGuideIfNeeded()
                     longPressJob = CoroutineScope(Dispatchers.Main).launch {
                         delay(longPressTimeout)
-                        if (pressedKey.key != Key.NotSelected) {
+                        if (touchSequenceActive && pressedKey.key != Key.NotSelected) {
                             longPressListener?.onLongPress(pressedKey.key)
                             isLongPressed = true
                             onLongPressed()
@@ -1465,6 +1575,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
                 MotionEvent.ACTION_UP -> {
                     resetLongPressAction()
+                    touchSequenceActive = false
+                    hideAllPopWindow()
                     if (isCursorMode) {
                         val viewToRelease: View? = when (pressedKey.key) {
                             Key.SideKeySpace -> binding.keySpace
@@ -1480,11 +1592,27 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                         }
                         handleCurrentInputModeSwitch(currentInputMode.value)
                         isCursorMode = false
+                        pressedKey = pressedKey.copy(key = Key.NotSelected)
                         return false
                     }
 
                     if (pressedKey.pointer == event.getPointerId(event.actionIndex)) {
                         val gestureType = getGestureType(event)
+                        if (isSideKey(pressedKey.key)) {
+                            flickListener?.onFlick(
+                                gestureType = gestureType,
+                                key = pressedKey.key,
+                                char = null
+                            )
+                            if (pressedKey.key == Key.SideKeyInputMode && gestureType == GestureType.Tap) {
+                                handleClickInputModeSwitch()
+                            }
+                            resetAllKeys()
+                            hideAllPopWindow()
+                            restorePressedKeyContent()
+                            pressedKey = pressedKey.copy(key = Key.NotSelected)
+                            return false
+                        }
                         // ← READING the state flow's current value:
                         val keyInfo = currentInputMode.value
                             .next(keyMap = keyMap, key = pressedKey.key, isTablet = false)
@@ -1536,70 +1664,14 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     }
                     Log.d("TenKey: ACTION_UP out", "called $pressedKey")
                     resetAllKeys()
-                    popupWindowActive.hide()
+                    hideAllPopWindow()
                     val button = getButtonFromKey(pressedKey.key)
                     button?.let {
                         if (it is AppCompatButton) {
-                            if (it == binding.sideKeySymbol) return false
-                            
-                            // 特殊キーの復元ロジック
-                            when (it) {
-                                binding.keySpace -> {
-                                    setSideKeySpaceDrawable(null)
-                                }
-                                binding.keySmallLetter -> {
-                                    it.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-                                    when (currentInputMode.value) {
-                                        InputMode.ModeJapanese -> {
-                                            it.text = if (isLanguageIconEnabled) "🌐" else "ﾞ ﾟ"
-                                        }
-                                        InputMode.ModeEnglish -> {
-                                            it.text = if (isLanguageIconEnabled) "🌐" else "a/A"
-                                        }
-                                        InputMode.ModeNumber -> {
-                                            it.text = "()"
-                                        }
-                                    }
-                                }
-                                binding.keySoftLeft -> {
-                                    if (hasCustomLeftIcon && customLeftDrawable != null) {
-                                        it.text = ""
-                                        it.setCompoundDrawablesWithIntrinsicBounds(customLeftDrawable, null, null, null)
-                                    } else {
-                                        it.text = "◀"
-                                        it.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-                                    }
-                                }
-                                binding.keyMoveCursorRight -> {
-                                    if (hasCustomRightIcon && customRightDrawable != null) {
-                                        it.text = ""
-                                        it.setCompoundDrawablesWithIntrinsicBounds(customRightDrawable, null, null, null)
-                                    } else {
-                                        it.text = "▶"
-                                        it.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-                                    }
-                                }
-                                else -> {
-                                    // 通常の文字キーの復元
-                                    when (currentInputMode.value) {
-                                        InputMode.ModeJapanese -> setJapaneseTextFor(it)
-                                        InputMode.ModeEnglish -> it.setTenKeyTextEnglish(
-                                            it.id,
-                                            delta = keySizeDelta,
-                                            modeTheme = themeMode,
-                                            colorTextInt = customKeyTextColor
-                                        )
-                                        InputMode.ModeNumber -> it.setTenKeyTextNumber(
-                                            it.id,
-                                            delta = keySizeDelta,
-                                            modeTheme = themeMode,
-                                            colorTextInt = customKeyTextColor
-                                        )
-                                    }
-                                }
-                            }
+                            restoreKeyContent(it)
                         }
                     }
+                    pressedKey = pressedKey.copy(key = Key.NotSelected)
                     return false
                 }
 
@@ -1659,6 +1731,11 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     } else {
                         getGestureType(event, pressedKey.pointer)
                     }
+                    if (isSideKey(pressedKey.key)) {
+                        (getButtonFromKey(pressedKey.key) as? View)?.isPressed = true
+                        hideAllPopWindow()
+                        return true
+                    }
                     when (gestureType) {
                         GestureType.Null -> {}
                         GestureType.Down -> {}
@@ -1671,11 +1748,12 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 }
 
                 MotionEvent.ACTION_POINTER_DOWN -> {
+                    touchSequenceActive = true
                     if (isLongPressed) {
                         hideAllPopWindow()
                         Blur.removeBlurEffect(this)
                     }
-                    popupWindowActive.hide()
+                    hideAllPopWindow()
                     longPressJob?.cancel()
                     if (isCursorMode) {
                         return true
@@ -1684,8 +1762,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                         "TenKey: ACTION_POINTER_DOWN",
                         "called $pressedKey ${binding.keySmallLetter.text == "🌐"}"
                     )
-                    if (pressedKey.key == Key.SideKeySymbol ||
-                        pressedKey.key == Key.SideKeyInputMode ||
+                    if (isSideKey(pressedKey.key) ||
                         (pressedKey.key == Key.KeyDakutenSmall && binding.keySmallLetter.text == "🌐")
                     ) {
                         return true
@@ -1698,7 +1775,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                             event, if (pointer == 0) 1 else 0
                         )
                         if (pressedKey.key == Key.KeyDakutenSmall && currentInputMode.value == InputMode.ModeNumber) {
-                            binding.keySmallLetter.text = "*,#"
+                            restoreSmallLetterKey()
                         }
                         val keyInfo = currentInputMode.value
                             .next(keyMap = keyMap, key = pressedKey.key, isTablet = false)
@@ -1719,29 +1796,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                                     val button = getButtonFromKey(pressedKey.key)
                                     button?.let {
                                         if (it is AppCompatButton) {
-                                            if (it == binding.sideKeySymbol) return false
-                                            when (currentInputMode.value) {
-                                                InputMode.ModeJapanese -> setJapaneseTextFor(
-                                                    it
-                                                )
-
-                                                InputMode.ModeEnglish -> it.setTenKeyTextEnglish(
-                                                    it.id,
-                                                    delta = keySizeDelta,
-                                                    modeTheme = themeMode,
-                                                    colorTextInt = customKeyTextColor
-                                                )
-
-                                                InputMode.ModeNumber -> it.setTenKeyTextNumber(
-                                                    it.id,
-                                                    delta = keySizeDelta,
-                                                    modeTheme = themeMode,
-                                                    colorTextInt = customKeyTextColor
-                                                )
-                                            }
-                                        }
-                                        if (it is AppCompatButton && currentInputMode.value == InputMode.ModeNumber && it == binding.keySmallLetter) {
-                                            it.text = "*,#"
+                                            restoreKeyContent(it)
                                         }
                                     }
                                 }
@@ -1779,9 +1834,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                             }
                         )
                         setKeyPressed()
+                        showInitialFlickGuideIfNeeded()
                         longPressJob = CoroutineScope(Dispatchers.Main).launch {
                             delay(longPressTimeout)
-                            if (pressedKey.key != Key.NotSelected) {
+                            if (touchSequenceActive && pressedKey.key != Key.NotSelected) {
                                 longPressListener?.onLongPress(pressedKey.key)
                                 isLongPressed = true
                                 onLongPressed()
@@ -1795,7 +1851,11 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     if (event.pointerCount == 2) {
                         if (pressedKey.pointer == event.getPointerId(event.actionIndex)) {
                             resetLongPressAction()
-                            if (isCursorMode) return true
+                            if (isCursorMode) {
+                                touchSequenceActive = false
+                                hideAllPopWindow()
+                                return true
+                            }
                             val gestureType = getGestureType(
                                 event, event.getPointerId(event.actionIndex)
                             )
@@ -1803,6 +1863,24 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                                 .next(keyMap = keyMap, key = pressedKey.key, isTablet = false)
 
                             Log.d("TenKey: ACTION_POINTER_UP", "called [${pressedKey.key}]")
+                            if (isSideKey(pressedKey.key)) {
+                                flickListener?.onFlick(
+                                    gestureType = gestureType,
+                                    key = pressedKey.key,
+                                    char = null
+                                )
+                                if (pressedKey.key == Key.SideKeyInputMode && gestureType == GestureType.Tap) {
+                                    handleClickInputModeSwitch()
+                                }
+                                (getButtonFromKey(pressedKey.key) as? AppCompatButton)?.let {
+                                    it.isPressed = false
+                                    restoreKeyContent(it)
+                                }
+                                pressedKey = pressedKey.copy(key = Key.NotSelected)
+                                touchSequenceActive = false
+                                hideAllPopWindow()
+                                return false
+                            }
                             if (keyInfo == KeyInfo.Null) {
                                 flickListener?.onFlick(
                                     gestureType = gestureType, key = pressedKey.key, char = null
@@ -1850,34 +1928,26 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                             val button = getButtonFromKey(pressedKey.key)
                             button?.let {
                                 if (it is AppCompatButton) {
-                                    if (it == binding.sideKeySymbol) return false
                                     it.isPressed = false
-                                    when (currentInputMode.value) {
-                                        InputMode.ModeJapanese -> setJapaneseTextFor(
-                                            it
-                                        )
-
-                                        InputMode.ModeEnglish -> it.setTenKeyTextEnglish(
-                                            it.id,
-                                            delta = keySizeDelta,
-                                            modeTheme = themeMode,
-                                            colorTextInt = customKeyTextColor
-                                        )
-
-                                        InputMode.ModeNumber -> it.setTenKeyTextNumber(
-                                            it.id,
-                                            delta = keySizeDelta,
-                                            modeTheme = themeMode,
-                                            colorTextInt = customKeyTextColor
-                                        )
-                                    }
+                                    restoreKeyContent(it)
                                 }
                             }
                             pressedKey = pressedKey.copy(key = Key.NotSelected)
-                            popupWindowActive.hide()
+                            touchSequenceActive = false
+                            hideAllPopWindow()
                         }
                         return false
                     }
+                    return false
+                }
+
+                MotionEvent.ACTION_CANCEL -> {
+                    touchSequenceActive = false
+                    resetLongPressAction()
+                    resetAllKeys()
+                    hideAllPopWindow()
+                    restorePressedKeyContent()
+                    pressedKey = pressedKey.copy(key = Key.NotSelected)
                     return false
                 }
 
@@ -2053,15 +2123,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             }
         }
 
-        // Otherwise return the nearest key by Euclidean distance
-        val nearest = keyRects.minByOrNull { rect ->
-            val centerX = (rect.left + rect.right) / 2
-            val centerY = (rect.top + rect.bottom) / 2
-            val dx = x - centerX
-            val dy = y - centerY
-            dx * dx + dy * dy
-        }
-        return nearest?.key ?: Key.NotSelected
+        return Key.NotSelected
     }
 
     /**
@@ -2146,6 +2208,265 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         }
     }
 
+    private fun isSideKey(key: Key): Boolean {
+        return key == Key.SideKeyPreviousChar ||
+            key == Key.SideKeySymbol ||
+            key == Key.SideKeyInputMode ||
+            key == Key.SideKeyDelete ||
+            key == Key.SideKeySpace ||
+            key == Key.SideKeyEnter ||
+            key == Key.SideKeyCursorLeft ||
+            key == Key.SideKeyCursorRight
+    }
+
+    private fun useScreenshotStyleFlickPopup(): Boolean = true
+
+    private fun showInitialFlickGuideIfNeeded() {
+        if (!useScreenshotStyleFlickPopup()) return
+        if (isSideKey(pressedKey.key)) return
+        if (!::popTextActive.isInitialized || !::popupWindowActive.isInitialized) return
+        val button = getButtonFromKey(pressedKey.key) as? AppCompatButton ?: return
+        button.isPressed = true
+        showActiveFlickPopup(button, GestureType.Tap)
+    }
+
+    private fun setFiveDirectionPopupTexts(button: AppCompatButton) {
+        when (currentInputMode.value) {
+            InputMode.ModeJapanese -> {
+                popTextCenter.setTextTapJapanese(button.id)
+                popTextTop.setTextFlickTopJapanese(button.id)
+                popTextLeft.setTextFlickLeftJapanese(button.id)
+                popTextBottom.setTextFlickBottomJapanese(button.id)
+                popTextRight.setTextFlickRightJapanese(button.id)
+            }
+
+            InputMode.ModeEnglish -> {
+                popTextCenter.setTextTapEnglish(button.id)
+                popTextTop.setTextFlickTopEnglish(button.id)
+                popTextLeft.setTextFlickLeftEnglish(button.id)
+                popTextBottom.setTextFlickBottomEnglish(button.id)
+                popTextRight.setTextFlickRightEnglish(button.id)
+            }
+
+            InputMode.ModeNumber -> {
+                popTextCenter.setTextTapNumber(button.id)
+                popTextTop.setTextFlickTopNumber(button.id)
+                popTextLeft.setTextFlickLeftNumber(button.id)
+                popTextBottom.setTextFlickBottomNumber(button.id)
+                popTextRight.setTextFlickRightNumber(button.id)
+            }
+        }
+    }
+
+    private fun setActivePopupTextForGesture(button: AppCompatButton, gestureType: GestureType) {
+        when (gestureType) {
+            GestureType.Tap -> when (currentInputMode.value) {
+                InputMode.ModeJapanese -> popTextActive.setTextTapJapanese(button.id)
+                InputMode.ModeEnglish -> popTextActive.setTextTapEnglish(button.id)
+                InputMode.ModeNumber -> popTextActive.setTextTapNumber(button.id)
+            }
+
+            GestureType.FlickLeft -> when (currentInputMode.value) {
+                InputMode.ModeJapanese -> popTextActive.setTextFlickLeftJapanese(button.id)
+                InputMode.ModeEnglish -> popTextActive.setTextFlickLeftEnglish(button.id)
+                InputMode.ModeNumber -> popTextActive.setTextFlickLeftNumber(button.id)
+            }
+
+            GestureType.FlickTop -> when (currentInputMode.value) {
+                InputMode.ModeJapanese -> popTextActive.setTextFlickTopJapanese(button.id)
+                InputMode.ModeEnglish -> popTextActive.setTextFlickTopEnglish(button.id)
+                InputMode.ModeNumber -> popTextActive.setTextFlickTopNumber(button.id)
+            }
+
+            GestureType.FlickRight -> when (currentInputMode.value) {
+                InputMode.ModeJapanese -> popTextActive.setTextFlickRightJapanese(button.id)
+                InputMode.ModeEnglish -> popTextActive.setTextFlickRightEnglish(button.id)
+                InputMode.ModeNumber -> popTextActive.setTextFlickRightNumber(button.id)
+            }
+
+            GestureType.FlickBottom -> when (currentInputMode.value) {
+                InputMode.ModeJapanese -> popTextActive.setTextFlickBottomJapanese(button.id)
+                InputMode.ModeEnglish -> popTextActive.setTextFlickBottomEnglish(button.id)
+                InputMode.ModeNumber -> popTextActive.setTextFlickBottomNumber(button.id)
+            }
+
+            GestureType.Down,
+            GestureType.Null -> popTextActive.text = ""
+        }
+    }
+
+    private fun fiveDirectionPopupText(button: AppCompatButton): CharSequence {
+        setFiveDirectionPopupTexts(button)
+        val center = popTextCenter.text
+        val top = popTextTop.text
+        val left = popTextLeft.text
+        val right = popTextRight.text
+        val bottom = popTextBottom.text
+        var centerStart = -1
+        var topStart = -1
+        var leftStart = -1
+        var rightStart = -1
+        var bottomStart = -1
+        val text = buildString {
+            topStart = length
+            append(top)
+            append('\n')
+            if (left.isNotEmpty()) append(left).append(' ')
+            leftStart = if (left.isNotEmpty()) top.length + 1 else -1
+            centerStart = length
+            append(center)
+            if (right.isNotEmpty()) {
+                append(' ')
+                rightStart = length
+                append(right)
+            }
+            append('\n')
+            bottomStart = length
+            append(bottom)
+        }
+        return SpannableString(text).apply {
+            fun setRelative(start: Int, part: CharSequence, scale: Float) {
+                if (start < 0 || part.isEmpty()) return
+                setSpan(
+                    RelativeSizeSpan(scale),
+                    start,
+                    (start + part.length).coerceAtMost(length),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            setRelative(topStart, top, 0.78f)
+            setRelative(leftStart, left, 0.78f)
+            setRelative(rightStart, right, 0.78f)
+            setRelative(bottomStart, bottom, 0.78f)
+            setRelative(centerStart, center, 1.35f)
+        }
+    }
+
+    private fun showActiveFlickPopup(button: AppCompatButton, gestureType: GestureType) {
+        var usingGuide = gestureType == GestureType.Tap && useScreenshotStyleFlickPopup()
+        var nextText = if (usingGuide) {
+            fiveDirectionPopupText(button)
+        } else {
+            setActivePopupTextForGesture(button, gestureType)
+            popTextActive.text
+        }
+        if (nextText.isEmpty() && useScreenshotStyleFlickPopup()) {
+            nextText = fiveDirectionPopupText(button)
+            usingGuide = true
+        }
+        if (nextText.isEmpty()) {
+            hideAllPopWindow()
+            return
+        }
+        val stateGestureType = if (usingGuide) GestureType.Tap else gestureType
+        val isSameAnchorShowing = if (useScreenshotStyleFlickPopup()) {
+            screenshotPopupWindow.isShowing && activePopupButtonId == button.id
+        } else {
+            popupWindowActive.isShowing && activePopupButtonId == button.id
+        }
+        if (
+            isSameAnchorShowing &&
+            activePopupGestureType == stateGestureType &&
+            activePopupText.toString() == nextText.toString()
+        ) {
+            return
+        }
+        if (!isSameAnchorShowing) {
+            hideAllPopWindow()
+        }
+        activePopupButtonId = button.id
+        activePopupGestureType = stateGestureType
+        activePopupText = nextText
+        val targetTextView = if (useScreenshotStyleFlickPopup()) screenshotPopupText else popTextActive
+        targetTextView.text = nextText
+        if (usingGuide) {
+            targetTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            targetTextView.setLineSpacing(0f, 0.86f)
+            targetTextView.maxLines = 3
+        } else {
+            targetTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
+            targetTextView.setLineSpacing(0f, 1f)
+            targetTextView.maxLines = 1
+        }
+        if (targetTextView.text.isEmpty()) return
+        val popupScalePercent = if (useScreenshotStyleFlickPopup()) {
+            popupViewStyle.sizeScalePercent.coerceAtLeast(120)
+        } else if (usingGuide) {
+            popupViewStyle.sizeScalePercent.coerceAtLeast(120)
+        } else {
+            popupViewStyle.sizeScalePercent
+        }
+        if (useScreenshotStyleFlickPopup()) {
+            showScreenshotFlickPopup(button, popupScalePercent)
+        } else if (isSameAnchorShowing) {
+            val popupWidth = button.width.scaledPopupSizeForActive(popupScalePercent)
+            val popupHeight = button.height.scaledPopupSizeForActive(popupScalePercent)
+            popupWindowActive.update(
+                button,
+                -((popupWidth - button.width) / 2),
+                -popupHeight - button.height,
+                popupWidth,
+                popupHeight
+            )
+        } else {
+            popupWindowActive.setPopUpWindowTop(context, bubbleViewActive, button, popupScalePercent)
+        }
+    }
+
+    private fun showScreenshotFlickPopup(button: AppCompatButton, popupScalePercent: Int) {
+        if (!touchSequenceActive) return
+        val popupWidth = button.width.scaledPopupSizeForActive(popupScalePercent)
+        val popupHeight = button.height.scaledPopupSizeForActive(popupScalePercent)
+        val windowAnchor = popupWindowAnchorProvider?.invoke() ?: button
+        if (!isPopupAnchorReady(button, windowAnchor)) return
+
+        val location = getLocationRelativeToWindowAnchor(button, windowAnchor)
+        val rawX = location[0] + (button.width - popupWidth) / 2
+        val rawY = location[1] - popupHeight - (6f * resources.displayMetrics.density).roundToInt()
+        val maxX = (windowAnchor.width - popupWidth).coerceAtLeast(0)
+        val popupX = rawX.coerceIn(0, maxX)
+        val popupY = rawY.coerceAtLeast(0)
+
+        screenshotPopupView.visibility = View.VISIBLE
+        screenshotPopupWindow.width = popupWidth
+        screenshotPopupWindow.height = popupHeight
+        if (screenshotPopupWindow.isShowing) {
+            screenshotPopupWindow.update(popupX, popupY, popupWidth, popupHeight)
+        } else {
+            screenshotPopupWindow.showAtLocation(windowAnchor, Gravity.NO_GRAVITY, popupX, popupY)
+        }
+    }
+
+    private fun getLocationRelativeToWindowAnchor(keyAnchor: View, windowAnchor: View): IntArray {
+        if (keyAnchor === windowAnchor) {
+            return IntArray(2).also { keyAnchor.getLocationInWindow(it) }
+        }
+
+        val keyLocation = IntArray(2)
+        val windowLocation = IntArray(2)
+        keyAnchor.getLocationOnScreen(keyLocation)
+        windowAnchor.getLocationOnScreen(windowLocation)
+        return intArrayOf(
+            keyLocation[0] - windowLocation[0],
+            keyLocation[1] - windowLocation[1]
+        )
+    }
+
+    private fun isPopupAnchorReady(keyAnchor: View, windowAnchor: View?): Boolean {
+        if (!keyAnchor.isAttachedToWindow) return false
+        if (windowAnchor == null) return false
+        if (!windowAnchor.isAttachedToWindow) return false
+        return windowAnchor.windowToken != null
+    }
+
+    private fun Int.scaledPopupSizeForActive(sizeScalePercent: Int): Int {
+        return (this * sizeScalePercent.coerceIn(50, 200) / 100f).roundToInt()
+    }
+
+    private fun restorePressedKeyContent() {
+        (getButtonFromKey(pressedKey.key) as? AppCompatButton)?.let { restoreKeyContent(it) }
+    }
+
     /** Cancel ongoing long‐press visuals and job **/
     private fun resetLongPressAction() {
         if (isLongPressed) {
@@ -2174,6 +2495,16 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     /** Called when a long‐press is detected; show all related popups **/
     private fun onLongPressed() {
+        if (isSideKey(pressedKey.key)) {
+            hideAllPopWindow()
+            return
+        }
+        if (useScreenshotStyleFlickPopup()) {
+            val activeButton = getButtonFromKey(pressedKey.key) as? AppCompatButton ?: return
+            activeButton.isPressed = true
+            showActiveFlickPopup(activeButton, GestureType.Tap)
+            return
+        }
         val button = getButtonFromKey(pressedKey.key)
         button?.let {
             if (it is AppCompatButton) {
@@ -2213,7 +2544,6 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     popupWindowRight.setPopUpWindowRight(context, bubbleViewRight, it, popupViewStyle.sizeScalePercent)
                 }
                 popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
-                Blur.applyBlurEffect(this, 8f)
             }
 
             if (it is AppCompatButton) {
@@ -2227,7 +2557,6 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     popupWindowBottom.setPopUpWindowBottom(context, bubbleViewBottom, it, popupViewStyle.sizeScalePercent)
                     popupWindowRight.setPopUpWindowRight(context, bubbleViewRight, it, popupViewStyle.sizeScalePercent)
                     popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
-                    Blur.applyBlurEffect(this, 8f)
                 }
             }
         }
@@ -2235,6 +2564,14 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     /** Hide every popup bubble **/
     private fun hideAllPopWindow() {
+        activePopupButtonId = View.NO_ID
+        activePopupGestureType = GestureType.Null
+        activePopupText = ""
+        if (::screenshotPopupView.isInitialized) {
+            screenshotPopupView.visibility = View.GONE
+            screenshotPopupText.text = ""
+        }
+        if (::screenshotPopupWindow.isInitialized) screenshotPopupWindow.hide()
         popupWindowActive.hide()
         popupWindowLeft.hide()
         popupWindowTop.hide()
@@ -2245,7 +2582,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     /** Called during a “tap” gesture in an ongoing move event **/
     private fun setTapInActionMove() {
-        if (!isLongPressed) popupWindowActive.hide()
+        val keepFlickGuide = useScreenshotStyleFlickPopup() && screenshotPopupWindow.isShowing
+        if (!isLongPressed && !keepFlickGuide) hideAllPopWindow()
         val button = getButtonFromKey(pressedKey.key)
         button?.let {
             if (it is AppCompatButton) {
@@ -2268,16 +2606,16 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                     }
                 }
 
-                if (isLongPressed) {
-                    popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
+                if (isLongPressed || keepFlickGuide) {
+                    showActiveFlickPopup(it, GestureType.Tap)
                 }
             }
             if (it is AppCompatButton && currentInputMode.value == InputMode.ModeNumber && it == binding.keySmallLetter) {
                 it.isPressed = true
                 it.text = "("
                 if (isLongPressed) popTextActive.setTextTapNumber(it.id)
-                if (isLongPressed) {
-                    popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
+                if (isLongPressed || keepFlickGuide) {
+                    showActiveFlickPopup(it, GestureType.Tap)
                 }
             }
         }
@@ -2291,6 +2629,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             if (it is AppCompatButton) {
                 if (it == binding.sideKeySymbol) return
                 it.isPressed = true
+                if (useScreenshotStyleFlickPopup()) {
+                    showActiveFlickPopup(it, gestureType)
+                    return
+                }
                 if (!isLongPressed) it.text = ""
                 when (gestureType) {
                     GestureType.FlickLeft -> {
@@ -2489,79 +2831,44 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             val button = getButtonFromKey(pressedKey.key)
             button?.let {
                 if (it is AppCompatButton) {
-                    if (it == binding.sideKeySymbol) return
-                    when (currentInputMode.value) {
-                        InputMode.ModeJapanese -> setJapaneseTextFor(
-                            it
-                        )
-
-                        InputMode.ModeEnglish -> it.setTenKeyTextEnglish(
-                            it.id,
-                            delta = keySizeDelta,
-                            modeTheme = themeMode,
-                            colorTextInt = customKeyTextColor
-                        )
-
-                        InputMode.ModeNumber -> it.setTenKeyTextNumber(
-                            it.id,
-                            delta = keySizeDelta,
-                            modeTheme = themeMode,
-                            colorTextInt = customKeyTextColor
-                        )
-                    }
+                    restoreKeyContent(it)
                 }
             }
         }
     }
 
     /** Set default drawable for the small/dakuten key **/
+    @Suppress("UNUSED_PARAMETER")
     fun setBackgroundSmallLetterKey(
         drawable: Drawable? = cachedLanguageDrawable
     ) {
-        if (drawable == null) {
-            binding.keySmallLetter.text = ""
-            return
+        binding.keySmallLetter.text = when (currentInputMode.value) {
+            InputMode.ModeJapanese -> "ﾞ ﾟ"
+            InputMode.ModeEnglish -> "a/A"
+            InputMode.ModeNumber -> "()"
         }
-        val state = drawable.constantState
-        when {
-            state == cachedLanguageDrawable?.constantState -> {
-                binding.keySmallLetter.text = "🌐"
-            }
-            state == cachedEnglishDrawable?.constantState -> {
-                binding.keySmallLetter.text = "a/A"
-            }
-            state == cachedKanaDrawable?.constantState -> {
-                binding.keySmallLetter.text = "ﾞ ﾟ"
-            }
-            state == cachedNumberSmallDrawable?.constantState -> {
-                binding.keySmallLetter.text = "*,#"
-            }
-            else -> {
-                binding.keySmallLetter.text = "ﾞ ﾟ"
-            }
-        }
+        prepareSpecialKeyButton(binding.keySmallLetter)
     }
 
     /** Set default drawable for the small/dakuten key **/
+    @Suppress("UNUSED_PARAMETER")
     fun setBackgroundSmallLetterKey(
         isLanguageEnable: Boolean,
         isEnglish: Boolean
     ) {
-        if (isLanguageEnable) {
-            binding.keySmallLetter.text = "🌐"
-        } else {
-            if (isEnglish) {
-                binding.keySmallLetter.text = "a/A"
-            } else {
-                binding.keySmallLetter.text = "ﾞ ﾟ"
-            }
+        binding.keySmallLetter.text = when (currentInputMode.value) {
+            InputMode.ModeJapanese -> "ﾞ ﾟ"
+            InputMode.ModeEnglish -> "a/A"
+            InputMode.ModeNumber -> "()"
         }
+        prepareSpecialKeyButton(binding.keySmallLetter)
     }
 
     /** Set custom drawable on the Enter key **/
     fun setSideKeyEnterDrawable(drawable: Drawable?) {
         if (hasCustomEnterIcon || customTextEnterStr.isNotEmpty()) return
-        binding.keyEnter.setCompoundDrawables(fitDrawable(drawable), null, null, null)
+        prepareSpecialKeyButton(binding.keyEnter)
+        setCenteredIcon(binding.keyEnter, drawable)
     }
 
     /** Retrieve current Enter key drawable **/
@@ -2570,18 +2877,30 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     }
 
     /** Set custom drawable on the Space key **/
+    @Suppress("UNUSED_PARAMETER")
     fun setSideKeySpaceDrawable(drawable: Drawable?) {
-        if (hasCustomSpaceIcon) return
-        if (drawable == null) {
-            binding.keySpace.text = ""
+        prepareSpecialKeyButton(binding.keySpace)
+        if (customTextSpaceStr.isNotEmpty()) {
+            binding.keySpace.setCompoundDrawables(null, null, null, null)
+            binding.keySpace.text = customTextSpaceStr
+            customTypeface?.let { binding.keySpace.typeface = it }
             return
         }
-        val isHenkan = drawable.constantState == cachedHenkanDrawable?.constantState
-        if (isHenkan) {
-            binding.keySpace.text = "⇄"
+        val defaultDrawable = if (
+            drawable != null &&
+            cachedHenkanDrawable?.constantState != null &&
+            drawable.constantState == cachedHenkanDrawable?.constantState
+        ) {
+            cachedHenkanDrawable
         } else {
-            binding.keySpace.text = "Space"
+            drawable ?: cachedSpaceDrawable
         }
+        if (customSpaceDrawable != null) {
+            setCenteredIcon(binding.keySpace, customSpaceDrawable)
+        } else {
+            setCenteredIcon(binding.keySpace, defaultDrawable, tintAsDefaultIcon = true)
+        }
+        customTypeface?.let { binding.keySpace.typeface = it }
     }
 
     /** Enable/disable the “previous character” key **/
@@ -2591,7 +2910,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     /** Enable/disable the “previous character” key **/
     fun setSideKeyPreviousDrawable(drawable: Drawable?) {
-        setButtonImageOrText(binding.keyReturn, drawable, customUndoDrawable, customTextUndoStr)
+        setButtonImageOrText(binding.keyReturn, drawable ?: cachedUndoDrawable, customUndoDrawable, customTextUndoStr)
     }
 
     /** Cycle through input modes when the switch key is clicked **/
@@ -2634,8 +2953,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             key12.text = ""
             keySmallLetter.text = ""
             keySmallLetter.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            keyReturn.text = ""
-            keyReturn.setCompoundDrawables(null, null, null, null)
+            setButtonImageOrText(keyReturn, cachedUndoDrawable, customUndoDrawable, customTextUndoStr)
             sideKeySymbol.text = ""
             sideKeySymbol.setCompoundDrawables(null, null, null, null)
             keyMoveCursorRight.text = ""
@@ -2723,29 +3041,17 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             key12.visibility = View.INVISIBLE
             keySmallLetter.visibility = View.INVISIBLE
 
-            keyReturn.text = ""
-            keyReturn.setCompoundDrawables(null, null, null, null)
+            setButtonImageOrText(keyReturn, cachedUndoDrawable, customUndoDrawable, customTextUndoStr)
             sideKeySymbol.text = ""
             sideKeySymbol.setCompoundDrawables(null, null, null, null)
             keySpace.apply {
                 text = "⟲"
                 setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
             }
-            if (hasCustomRightIcon && customRightDrawable != null) {
-                keyMoveCursorRight.text = ""
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(customRightDrawable, null, null, null)
-            } else {
-                keyMoveCursorRight.text = "▶"
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            if (hasCustomLeftIcon && customLeftDrawable != null) {
-                keySoftLeft.text = ""
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(customLeftDrawable, null, null, null)
-            } else {
-                keySoftLeft.text = "◀"
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
+            setCursorKeyIconOrText(keyMoveCursorRight, customRightDrawable.takeIf { hasCustomRightIcon }, "▶")
+            setCursorKeyIconOrText(keySoftLeft, customLeftDrawable.takeIf { hasCustomLeftIcon }, "◀")
             setButtonImageOrText(keyDelete, cachedBackSpaceDrawable, customDeleteDrawable, customTextDeleteStr)
+            normalizeSpecialKeys()
         }
     }
 
@@ -2775,28 +3081,13 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             }
             setJapaneseTextFor(key11)
             setJapaneseTextFor(key12)
-            if (isLanguageIconEnabled) {
-                keySmallLetter.text = "🌐"
-            } else {
-                keySmallLetter.text = "ﾞ ﾟ"
-            }
+            keySmallLetter.text = "ﾞ ﾟ"
             keySmallLetter.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
             resetFromSelectMode(binding)
-            if (hasCustomRightIcon && customRightDrawable != null) {
-                keyMoveCursorRight.text = ""
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(customRightDrawable, null, null, null)
-            } else {
-                keyMoveCursorRight.text = "▶"
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            if (hasCustomLeftIcon && customLeftDrawable != null) {
-                keySoftLeft.text = ""
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(customLeftDrawable, null, null, null)
-            } else {
-                keySoftLeft.text = "◀"
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
+            setCursorKeyIconOrText(keyMoveCursorRight, customRightDrawable.takeIf { hasCustomRightIcon }, "▶")
+            setCursorKeyIconOrText(keySoftLeft, customLeftDrawable.takeIf { hasCustomLeftIcon }, "◀")
             setButtonImageOrText(keyDelete, cachedBackSpaceDrawable, customDeleteDrawable, customTextDeleteStr)
+            normalizeSpecialKeys()
         }
     }
 
@@ -2864,27 +3155,12 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 colorTextInt = customKeyTextColor
             )
             resetFromSelectMode(binding)
-            if (hasCustomRightIcon && customRightDrawable != null) {
-                keyMoveCursorRight.text = ""
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(customRightDrawable, null, null, null)
-            } else {
-                keyMoveCursorRight.text = "▶"
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            if (hasCustomLeftIcon && customLeftDrawable != null) {
-                keySoftLeft.text = ""
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(customLeftDrawable, null, null, null)
-            } else {
-                keySoftLeft.text = "◀"
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            if (isLanguageIconEnabled) {
-                keySmallLetter.text = "🌐"
-            } else {
-                keySmallLetter.text = "a/A"
-            }
+            setCursorKeyIconOrText(keyMoveCursorRight, customRightDrawable.takeIf { hasCustomRightIcon }, "▶")
+            setCursorKeyIconOrText(keySoftLeft, customLeftDrawable.takeIf { hasCustomLeftIcon }, "◀")
+            keySmallLetter.text = "a/A"
             keySmallLetter.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
             setButtonImageOrText(keyDelete, cachedBackSpaceDrawable, customDeleteDrawable, customTextDeleteStr)
+            normalizeSpecialKeys()
         }
     }
 
@@ -2949,23 +3225,12 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             )
 
             resetFromSelectMode(binding)
-            if (hasCustomRightIcon && customRightDrawable != null) {
-                keyMoveCursorRight.text = ""
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(customRightDrawable, null, null, null)
-            } else {
-                keyMoveCursorRight.text = "▶"
-                keyMoveCursorRight.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            if (hasCustomLeftIcon && customLeftDrawable != null) {
-                keySoftLeft.text = ""
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(customLeftDrawable, null, null, null)
-            } else {
-                keySoftLeft.text = "◀"
-                keySoftLeft.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
-            }
-            keySmallLetter.text = "()"
+            setCursorKeyIconOrText(keyMoveCursorRight, customRightDrawable.takeIf { hasCustomRightIcon }, "▶")
+            setCursorKeyIconOrText(keySoftLeft, customLeftDrawable.takeIf { hasCustomLeftIcon }, "◀")
+            keySmallLetter.text = "()[]"
             keySmallLetter.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
             setButtonImageOrText(keyDelete, cachedBackSpaceDrawable, customDeleteDrawable, customTextDeleteStr)
+            normalizeSpecialKeys()
         }
     }
 
@@ -2981,14 +3246,14 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             }
             keySpace.apply {
                 visibility = View.VISIBLE
-                text = " "
-                setCompoundDrawablesWithIntrinsicBounds(null, null, null, null)
+                setSideKeySpaceDrawable(null)
             }
             keyEnter.visibility = View.VISIBLE
             keySwitchKeyMode.visibility = View.VISIBLE
             key11.visibility = View.VISIBLE
             key12.visibility = View.VISIBLE
             keySmallLetter.visibility = View.VISIBLE
+            normalizeSpecialKeys()
         }
     }
 
@@ -3061,6 +3326,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private var customTextSymbolStr: String = ""
     private var customText123Str: String = ""
 
+    private val specialKeyTextSizeSp = 18f
+    private val specialKeyAutoSizeMinSp = 7
+    private val specialKeyIconSizeDp = 24
+
     private fun fitDrawable(drawable: Drawable?, targetDp: Int = 24): Drawable? {
         if (drawable == null) return null
         val density = resources.displayMetrics.density
@@ -3086,38 +3355,255 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         return drawable
     }
 
-    private fun setButtonImageOrText(
-        button: androidx.appcompat.widget.AppCompatButton,
-        defaultDrawable: Drawable?,
-        customDrawable: Drawable?,
-        customText: String
+    private fun tintDefaultSpecialKeyDrawable(drawable: Drawable?): Drawable? {
+        if (drawable == null) return null
+        val wrapped = DrawableCompat.wrap(drawable.mutate())
+        val tintColor = if (themeMode == "custom") {
+            customSpecialKeyTextColor
+        } else {
+            ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+        }
+        DrawableCompat.setTint(wrapped, tintColor)
+        return wrapped
+    }
+
+    private class CenteredDrawableSpan(
+        private val drawable: Drawable
+    ) : ReplacementSpan() {
+        override fun getSize(
+            paint: Paint,
+            text: CharSequence?,
+            start: Int,
+            end: Int,
+            fm: Paint.FontMetricsInt?
+        ): Int {
+            val rect = drawable.bounds
+            fm?.let {
+                val fontMetrics = paint.fontMetricsInt
+                val fontHeight = fontMetrics.descent - fontMetrics.ascent
+                val drawableHeight = rect.height()
+                val centerY = fontMetrics.ascent + fontHeight / 2
+                it.ascent = centerY - drawableHeight / 2
+                it.descent = centerY + drawableHeight / 2
+                it.top = it.ascent
+                it.bottom = it.descent
+            }
+            return rect.width()
+        }
+
+        override fun draw(
+            canvas: Canvas,
+            text: CharSequence?,
+            start: Int,
+            end: Int,
+            x: Float,
+            top: Int,
+            y: Int,
+            bottom: Int,
+            paint: Paint
+        ) {
+            val rect = drawable.bounds
+            val transY = top + (bottom - top - rect.height()) / 2
+            canvas.save()
+            canvas.translate(x, transY.toFloat())
+            drawable.draw(canvas)
+            canvas.restore()
+        }
+    }
+
+    private fun setCenteredIcon(
+        button: AppCompatButton,
+        drawable: Drawable?,
+        tintAsDefaultIcon: Boolean = false
     ) {
-        button.gravity = android.view.Gravity.CENTER
-        if (customText.isNotEmpty()) {
-            button.text = customText
+        val iconDrawable = if (tintAsDefaultIcon) tintDefaultSpecialKeyDrawable(drawable) else drawable
+        val fittedDrawable = fitDrawable(iconDrawable, specialKeyIconSizeDp)
+        button.setCompoundDrawables(null, null, null, null)
+        if (fittedDrawable == null) {
+            button.text = ""
+            return
+        }
+        val text = SpannableString(" ")
+        text.setSpan(
+            CenteredDrawableSpan(fittedDrawable),
+            0,
+            text.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        button.text = text
+    }
+
+    private fun setCursorKeyIconOrText(
+        button: AppCompatButton,
+        customDrawable: Drawable?,
+        fallbackText: String
+    ) {
+        prepareSpecialKeyButton(button)
+        if (customDrawable != null) {
+            setCenteredIcon(button, customDrawable)
+        } else {
             button.setCompoundDrawables(null, null, null, null)
-            button.setPadding(0, 0, 0, 0)
-            button.isSingleLine = true
-            button.maxLines = 1
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
+            button.text = fallbackText
+            customTypeface?.let { button.typeface = it }
+        }
+    }
+
+    private fun restoreSmallLetterKey() {
+        binding.keySmallLetter.setCompoundDrawables(null, null, null, null)
+        binding.keySmallLetter.text = when (currentInputMode.value) {
+            InputMode.ModeJapanese -> "ﾞ ﾟ"
+            InputMode.ModeEnglish -> "a/A"
+            InputMode.ModeNumber -> "()[]"
+        }
+        prepareSpecialKeyButton(binding.keySmallLetter)
+    }
+
+    private fun restoreKeyContent(button: AppCompatButton) {
+        when (button) {
+            binding.keySpace -> setSideKeySpaceDrawable(null)
+            binding.keySmallLetter -> restoreSmallLetterKey()
+            binding.keySoftLeft -> setCursorKeyIconOrText(
                 button,
-                androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_UNIFORM
+                customLeftDrawable.takeIf { hasCustomLeftIcon },
+                "◀"
+            )
+            binding.keyMoveCursorRight -> setCursorKeyIconOrText(
+                button,
+                customRightDrawable.takeIf { hasCustomRightIcon },
+                "▶"
+            )
+            binding.keyReturn -> setButtonImageOrText(
+                button,
+                cachedUndoDrawable,
+                customUndoDrawable,
+                customTextUndoStr
+            )
+            binding.sideKeySymbol -> setButtonImageOrText(
+                button,
+                cachedSymbolDrawable,
+                customEmojiDrawable,
+                customTextSymbolStr.ifEmpty { customTextEmojiStr }
+            )
+            binding.keyDelete -> setButtonImageOrText(
+                button,
+                cachedBackSpaceDrawable,
+                customDeleteDrawable,
+                customTextDeleteStr
+            )
+            binding.keyEnter -> setButtonImageOrText(
+                button,
+                cachedArrowRightAltDrawable,
+                customEnterDrawable,
+                customTextEnterStr
+            )
+            binding.keySwitchKeyMode -> {
+                binding.keySwitchKeyMode.setInputMode(currentInputMode.value, false)
+                applyModeSwitchCustomization()
+            }
+            else -> {
+                when (currentInputMode.value) {
+                    InputMode.ModeJapanese -> setJapaneseTextFor(button)
+                    InputMode.ModeEnglish -> button.setTenKeyTextEnglish(
+                        button.id,
+                        delta = keySizeDelta,
+                        modeTheme = themeMode,
+                        colorTextInt = customKeyTextColor
+                    )
+                    InputMode.ModeNumber -> button.setTenKeyTextNumber(
+                        button.id,
+                        delta = keySizeDelta,
+                        modeTheme = themeMode,
+                        colorTextInt = customKeyTextColor
+                    )
+                }
+            }
+        }
+        customTypeface?.let { button.typeface = it }
+    }
+
+    private fun prepareSpecialKeyButton(
+        button: AppCompatButton,
+        autoSizeText: Boolean = false
+    ) {
+        button.gravity = Gravity.CENTER
+        button.includeFontPadding = false
+        button.minWidth = 0
+        button.minHeight = 0
+        button.minimumWidth = 0
+        button.minimumHeight = 0
+        button.setPadding(0, 0, 0, 0)
+        button.compoundDrawablePadding = 0
+        button.isSingleLine = true
+        button.maxLines = 1
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, specialKeyTextSizeSp)
+        if (autoSizeText) {
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(
+                button,
+                specialKeyAutoSizeMinSp,
+                specialKeyTextSizeSp.toInt(),
+                1,
+                TypedValue.COMPLEX_UNIT_SP
             )
         } else {
             androidx.core.widget.TextViewCompat.setAutoSizeTextTypeWithDefaults(
                 button,
                 androidx.core.widget.TextViewCompat.AUTO_SIZE_TEXT_TYPE_NONE
             )
-            button.setPadding(0, 0, 0, 0)
+        }
+    }
+
+    private fun normalizeSpecialKeys() {
+        binding.apply {
+            listOf(
+                keyReturn,
+                keySoftLeft,
+                sideKeySymbol,
+                keyDelete,
+                keyMoveCursorRight,
+                keySpace,
+                keyEnter,
+                keySmallLetter
+            ).forEach { prepareSpecialKeyButton(it, autoSizeText = it != keySmallLetter && it.text.length > 3) }
+        }
+    }
+
+    private fun applyModeSwitchCustomization() {
+        val customText = customText123Str.ifEmpty { customTextModeSwitchStr }
+        if (customText.isEmpty() && customModeSwitchDrawable == null) {
+            binding.keySwitchKeyMode.setInputMode(currentInputMode.value, false)
+        } else {
+            setButtonImageOrText(
+                binding.keySwitchKeyMode,
+                cachedLanguageDrawable,
+                customModeSwitchDrawable,
+                customText
+            )
+        }
+        binding.keySwitchKeyMode.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        customTypeface?.let { binding.keySwitchKeyMode.typeface = it }
+    }
+
+    private fun setButtonImageOrText(
+        button: AppCompatButton,
+        defaultDrawable: Drawable?,
+        customDrawable: Drawable?,
+        customText: String
+    ) {
+        if (customText.isNotEmpty()) {
+            prepareSpecialKeyButton(button, autoSizeText = customText.length > 3)
+            button.text = customText
+            button.setCompoundDrawables(null, null, null, null)
+        } else {
+            prepareSpecialKeyButton(button)
             if (customDrawable != null) {
                 button.text = ""
-                button.setCompoundDrawables(fitDrawable(customDrawable), null, null, null)
+                setCenteredIcon(button, customDrawable)
             } else {
                 if (defaultDrawable != null) {
                     button.text = ""
-                    button.setCompoundDrawables(fitDrawable(defaultDrawable), null, null, null)
+                    setCenteredIcon(button, defaultDrawable, tintAsDefaultIcon = true)
                 } else {
-                    button.text = ""
+                    button.text = if (button == binding.keyReturn) "↶" else ""
                     button.setCompoundDrawables(null, null, null, null)
                 }
             }
@@ -3125,12 +3611,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     }
 
     fun applySpecialKeyCustomizations() {
-        setButtonImageOrText(
-            binding.keySwitchKeyMode,
-            cachedLanguageDrawable,
-            customModeSwitchDrawable,
-            customText123Str.ifEmpty { customTextModeSwitchStr }
-        )
+        applyModeSwitchCustomization()
         setButtonImageOrText(
             binding.keyReturn,
             cachedUndoDrawable,
@@ -3149,18 +3630,15 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             customDeleteDrawable,
             customTextDeleteStr
         )
-        setButtonImageOrText(
-            binding.keySpace,
-            cachedSpaceDrawable,
-            customSpaceDrawable,
-            customTextSpaceStr
-        )
+        setSideKeySpaceDrawable(null)
         setButtonImageOrText(
             binding.keyEnter,
             cachedArrowRightAltDrawable,
             customEnterDrawable,
             customTextEnterStr
         )
+        normalizeSpecialKeys()
+        customTypeface?.let { setCustomTypeface(it) }
     }
 
     private var customTypeface: android.graphics.Typeface? = null

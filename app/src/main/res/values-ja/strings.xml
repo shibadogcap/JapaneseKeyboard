@@ -111,6 +111,8 @@
     <string name="keyboard_screen_size_preference_title">位置とサイズの設定(縦画面)</string>
     <string name="keyboard_screen_landscape_size_preference_title">位置とサイズの設定(横画面)</string>
     <string name="keyboard_screen_preference_summary">キーボードの位置とサイズの設定を変更できます</string>
+    <string name="sync_qwerty_tenkey_height_preference_title">QWERTY の高さをテンキーに合わせる</string>
+    <string name="sync_qwerty_tenkey_height_preference_summary">縦画面・横画面とも、テンキーの高さ設定を QWERTY にも使用します。</string>
     <string name="keyboard_corner_radius_dp_preference_title">キーボードの角丸半径</string>
     <string name="keyboard_corner_radius_dp_preference_summary">キーボード背景の角丸の大きさを調整します。</string>
     <string name="keyboard_corner_top_left_preference_title">左上を角丸にする</string>

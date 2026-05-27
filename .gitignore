@@ -16,9 +16,13 @@
 .externalNativeBuild
 .cxx
 local.properties
+*.jks
+*.keystore
+/keystores/
 app/release
 .gradle-user-home
 .idea/copilot.data.migration.ask2agent.xml
 app/fullStandard/
 app/liteFdroid/
 app/liteStandard
+MEDIA/

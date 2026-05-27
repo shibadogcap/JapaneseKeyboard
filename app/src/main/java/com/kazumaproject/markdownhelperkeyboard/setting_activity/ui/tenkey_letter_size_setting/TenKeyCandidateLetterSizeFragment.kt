@@ -88,8 +88,8 @@ class TenKeyCandidateLetterSizeFragment : Fragment() {
     }
 
     private fun setKeyboardSize() {
-        val heightPref = appPreference.keyboard_height ?: 280
-        val widthPref = appPreference.keyboard_width ?: 280
+        val heightPref = appPreference.keyboard_height ?: 220
+        val widthPref = appPreference.keyboard_width ?: 100
         val density = resources.displayMetrics.density
         val isPortrait = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
         val screenWidth = resources.displayMetrics.widthPixels
@@ -158,8 +158,7 @@ class TenKeyCandidateLetterSizeFragment : Fragment() {
             SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    val newSize =
-                        minKeyTextSize + (progress.toFloat() / 100f) * (maxKeyTextSize - minKeyTextSize)
+                    val newSize = progressToKeyTextSize(progress)
                     binding.tenkeyLetterSizePreview.setKeyLetterSize(newSize)
                 }
             }
@@ -168,8 +167,7 @@ class TenKeyCandidateLetterSizeFragment : Fragment() {
 
             override fun onStopTrackingTouch(seekBar: SeekBar?) {
                 seekBar?.let {
-                    val newSize =
-                        minKeyTextSize + (it.progress.toFloat() / 100f) * (maxKeyTextSize - minKeyTextSize)
+                    val newSize = progressToKeyTextSize(it.progress)
 
                     // デフォルトサイズとの差分を保存するロジック (KeyCandidateLetterSizeFragmentのロジックを踏襲)
                     val sizeDelta = newSize - defaultKeyTextSize
@@ -182,10 +180,8 @@ class TenKeyCandidateLetterSizeFragment : Fragment() {
 
         // 保存された設定を読み込む
         val savedDelta = appPreference.key_letter_size ?: 0.0f
-        val actualSize = defaultKeyTextSize + savedDelta
-
-        val keyProgress =
-            (100 * (actualSize - minKeyTextSize) / (maxKeyTextSize - minKeyTextSize)).toInt()
+        val actualSize = (defaultKeyTextSize + savedDelta).coerceIn(minKeyTextSize, maxKeyTextSize)
+        val keyProgress = keyTextSizeToProgress(actualSize)
 
         binding.keyLetterSizeSeekbar.progress = keyProgress
 
@@ -193,6 +189,18 @@ class TenKeyCandidateLetterSizeFragment : Fragment() {
         binding.tenkeyLetterSizePreview.post {
             binding.tenkeyLetterSizePreview.setKeyLetterSize(actualSize)
         }
+    }
+
+    private fun progressToKeyTextSize(progress: Int): Float {
+        val coercedProgress = progress.coerceIn(0, 100)
+        return minKeyTextSize + (coercedProgress.toFloat() / 100f) *
+                (maxKeyTextSize - minKeyTextSize)
+    }
+
+    private fun keyTextSizeToProgress(size: Float): Int {
+        val coercedSize = size.coerceIn(minKeyTextSize, maxKeyTextSize)
+        return (100 * (coercedSize - minKeyTextSize) /
+                (maxKeyTextSize - minKeyTextSize)).toInt().coerceIn(0, 100)
     }
 
     private fun setupKeyWidthSeekBar() {

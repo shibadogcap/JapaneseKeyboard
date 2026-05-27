@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting
 
 import android.content.ContentResolver
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.MimeTypeMap
@@ -195,7 +196,9 @@ class CustomKeyboardPreferenceFragment : PreferenceFragmentCompat() {
     private fun updateSummary(pref: Preference, path: String) {
         if (path.isNotEmpty() && File(path).exists()) {
             pref.summary = "設定中: ${File(path).name}"
+            pref.icon = Drawable.createFromPath(path)
         } else {
+            pref.icon = null
             when (pref.key) {
                 "custom_icon_enter_select" -> pref.summary = "確定キー（エンターキー）のカスタム画像（PNG, JPG, SVG）を設定します"
                 "custom_icon_space_select" -> pref.summary = "変換キー（スペースキー）のカスタム画像（PNG, JPG, SVG）を設定します"
@@ -358,4 +361,3 @@ class CustomKeyboardPreferenceFragment : PreferenceFragmentCompat() {
         return MimeTypeMap.getFileExtensionFromUrl(uri.toString())
     }
 }
-

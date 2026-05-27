@@ -161,6 +161,8 @@ object AppPreference {
     private val KEYBOARD_FLOATING_PREFERENCE = Pair("keyboard_floating_preference", false)
     private val QWERTY_KEYBOARD_HEIGHT = Pair("qwerty_keyboard_height_preference", 220)
     private val QWERTY_KEYBOARD_WIDTH = Pair("qwerty_keyboard_width_preference", 100)
+    private val SYNC_QWERTY_TENKEY_HEIGHT =
+        Pair("sync_qwerty_tenkey_height_preference", false)
     private val QWERTY_KEYBOARD_VERTICAL_MARGIN_BOTTOM =
         Pair("qwerty_keyboard_vertical_margin_bottom_preference", 0)
     private val QWERTY_KEYBOARD_POSITION = Pair("qwerty_keyboard_position_preference", true)
@@ -250,7 +252,7 @@ object AppPreference {
     private val CANDIDATE_TAB_PREFERENCE = Pair("candidate_tab_visibility_preference", false)
 
     private val SHORTCUT_TOOLBAR_VISIBILITY_PREFERENCE =
-        Pair("shortcut_toolbar_visibility_preference", false)
+        Pair("shortcut_toolbar_visibility_preference", true)
 
     private val APP_THEME_SEED_COLOR = Pair("app_theme_seed_color_preference", 0x00000000)
 
@@ -1091,7 +1093,7 @@ object AppPreference {
             KEYBOARD_HEIGHT.first, KEYBOARD_HEIGHT.second
         )
         set(value) = preferences.edit {
-            it.putInt(KEYBOARD_HEIGHT.first, value ?: 280)
+            it.putInt(KEYBOARD_HEIGHT.first, value ?: KEYBOARD_HEIGHT.second)
         }
 
     var keyboard_width: Int?
@@ -1116,6 +1118,15 @@ object AppPreference {
         )
         set(value) = preferences.edit {
             it.putInt(QWERTY_KEYBOARD_WIDTH.first, value ?: 100)
+        }
+
+    var sync_qwerty_tenkey_height: Boolean
+        get() = preferences.getBoolean(
+            SYNC_QWERTY_TENKEY_HEIGHT.first,
+            SYNC_QWERTY_TENKEY_HEIGHT.second
+        )
+        set(value) = preferences.edit {
+            it.putBoolean(SYNC_QWERTY_TENKEY_HEIGHT.first, value)
         }
 
     var qwerty_keyboard_vertical_margin_bottom: Int?
@@ -1463,12 +1474,9 @@ object AppPreference {
         }
 
     var shortcut_toolbar_visibility_preference: Boolean
-        get() = preferences.getBoolean(
-            SHORTCUT_TOOLBAR_VISIBILITY_PREFERENCE.first,
-            SHORTCUT_TOOLBAR_VISIBILITY_PREFERENCE.second
-        )
+        get() = true
         set(value) = preferences.edit {
-            it.putBoolean(SHORTCUT_TOOLBAR_VISIBILITY_PREFERENCE.first, value)
+            it.putBoolean(SHORTCUT_TOOLBAR_VISIBILITY_PREFERENCE.first, true)
         }
 
     var seedColor: Int
@@ -2896,27 +2904,45 @@ object AppPreference {
             throw IllegalArgumentException("Invalid backup json", e)
         }
 
-        preferences.edit { editor ->
-            if (replaceAll) editor.clear()
+        fun Any?.asNumberOrNull(): Number? = when (this) {
+            is Number -> this
+            is String -> this.toDoubleOrNull()
+            else -> null
+        }
 
-            backup.entries.forEach { e ->
-                when (e.type) {
-                    "null" -> editor.remove(e.key)
-                    "boolean" -> editor.putBoolean(e.key, (e.value as Boolean))
-                    "int" -> editor.putInt(e.key, (e.value as Number).toInt())
-                    "long" -> editor.putLong(e.key, (e.value as Number).toLong())
-                    "float" -> editor.putFloat(e.key, (e.value as Number).toFloat())
-                    "string" -> editor.putString(e.key, e.value as String)
-                    "string_set" -> {
-                        val list = (e.value as List<*>).filterIsInstance<String>()
-                        editor.putStringSet(e.key, list.toSet())
-                    }
+        fun Any?.asBooleanOrNull(): Boolean? = when (this) {
+            is Boolean -> this
+            is String -> this.toBooleanStrictOrNull()
+            else -> null
+        }
 
-                    else -> {
-                        // unknown type は無視（将来バージョン差分で落ちないように）
-                    }
+        val editor = preferences.edit()
+        if (replaceAll) editor.clear()
+
+        backup.entries.forEach { e ->
+            when (e.type) {
+                "null" -> editor.remove(e.key)
+                "boolean" -> e.value.asBooleanOrNull()?.let { editor.putBoolean(e.key, it) }
+                "int" -> e.value.asNumberOrNull()?.let { editor.putInt(e.key, it.toInt()) }
+                "long" -> e.value.asNumberOrNull()?.let { editor.putLong(e.key, it.toLong()) }
+                "float" -> e.value.asNumberOrNull()?.let { editor.putFloat(e.key, it.toFloat()) }
+                "string" -> editor.putString(e.key, e.value?.toString().orEmpty())
+                "string_set" -> {
+                    val list = when (val value = e.value) {
+                        is List<*> -> value
+                        is Set<*> -> value.toList()
+                        else -> emptyList<Any?>()
+                    }.mapNotNull { it?.toString() }
+                    editor.putStringSet(e.key, list.toSet())
+                }
+
+                else -> {
+                    // unknown type は無視（将来バージョン差分で落ちないように）
                 }
             }
+        }
+        if (!editor.commit()) {
+            throw IllegalStateException("Failed to save imported preferences")
         }
     }
 

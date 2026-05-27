@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Sumire Japanese Keyboard</string>
+    <string name="app_name">Himawari Japanese Keyboard</string>
 
     <string name="string_あ">あ</string>
     <string name="string_い">い</string>
@@ -88,9 +88,9 @@
     <string name="string_key9_number">"9\n^ | \\"</string>
     <string name="string_key10_number">"0\n~…@"</string>
     <string name="string_key11_number">"()[]"</string>
-    <string name="string_key12_number">"   .,-/   "</string>
+    <string name="string_key12_number">".,-/"</string>
     <string name="md">記</string>
-    <string name="title_activity_main">Sumire Japanese Keyboard</string>
+    <string name="title_activity_main">Himawari Japanese Keyboard</string>
     <string name="title_learn_dictionary">Learning</string>
     <string name="title_dashboard">Settings</string>
     <string name="title_notifications">Notifications</string>

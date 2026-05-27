@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.adapters
 
 import android.graphics.PorterDuff
+import androidx.core.content.ContextCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,6 +32,7 @@ class ShortcutAdapter : ListAdapter<ShortcutType, ShortcutAdapter.ViewHolder>(Di
     var onItemClicked: ((ShortcutType) -> Unit)? = null
 
     private val iconColorState = ShortcutIconColorState()
+    private var itemWidthPx: Int? = null
 
     /**
      * ViewHolder now captures clicks and calls the adapter's listener.
@@ -57,19 +59,32 @@ class ShortcutAdapter : ListAdapter<ShortcutType, ShortcutAdapter.ViewHolder>(Di
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
+        itemWidthPx?.let { width ->
+            holder.itemView.layoutParams = holder.itemView.layoutParams.apply {
+                this.width = width
+            }
+            (holder.itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.setMargins(0, 0, 0, 0)
+            val iconPadding = (holder.imageView.resources.displayMetrics.density * 8f).toInt()
+            holder.imageView.setPadding(iconPadding, iconPadding, iconPadding, iconPadding)
+        }
         holder.imageView.setImageResource(item.iconResId) // Enumからアイコン取得
 
         // ★追加: 色が設定されていれば適用し、なければ解除する
-        iconColorState.iconColor?.let { color ->
-            holder.imageView.setColorFilter(color, PorterDuff.Mode.SRC_IN)
-        } ?: run {
-            holder.imageView.clearColorFilter()
-        }
+        val iconColor = iconColorState.iconColor
+            ?: ContextCompat.getColor(holder.imageView.context, com.kazumaproject.core.R.color.keyboard_icon_color)
+        holder.imageView.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
     }
 
     // ★追加: 外部から色を設定するメソッド
     fun setIconColor(color: Int) {
         if (!iconColorState.setIconColor(color)) return
+        notifyItemRangeChanged(0, itemCount)
+    }
+
+    fun setItemWidth(widthPx: Int) {
+        val normalizedWidth = widthPx.coerceAtLeast(1)
+        if (itemWidthPx == normalizedWidth) return
+        itemWidthPx = normalizedWidth
         notifyItemRangeChanged(0, itemCount)
     }
 
