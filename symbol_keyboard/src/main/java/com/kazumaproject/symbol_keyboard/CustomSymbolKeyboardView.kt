@@ -309,19 +309,29 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 buildCategoryTabs()
                 categoryTab.getTabAt(0)?.select()
                 updateSymbolsForCategory(0)
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
             }
 
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+            }
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+            }
         })
 
         categoryTab.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 updateSymbolsForCategory(tab?.position ?: 0)
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
             }
 
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+            }
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+            }
         })
     }
 
@@ -1019,9 +1029,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         }
 
                         when (currentMode) {
-                            SymbolMode.EMOTICON -> symbolAdapter.setItemMargins(10, 8, context)
-                            SymbolMode.SYMBOL -> symbolAdapter.setItemMargins(14, 8, context)
-                            else -> symbolAdapter.setItemMargins(4, 3, context)
+                            SymbolMode.EMOJI,
+                            SymbolMode.EMOJI_KITCHEN -> symbolAdapter.setItemMargins(2, 1, context)
+                            SymbolMode.EMOTICON -> symbolAdapter.setItemMargins(6, 5, context)
+                            SymbolMode.SYMBOL -> symbolAdapter.setItemMargins(8, 5, context)
+                            else -> symbolAdapter.setItemMargins(3, 2, context)
                         }
 
                         symbolAdapter.showSkinToneIndicators =
@@ -1029,11 +1041,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
                         symbolAdapter.symbolTextSize = when (currentMode) {
                             SymbolMode.EMOJI -> {
-                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
+                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 31f else 27f
                             }
 
                             SymbolMode.EMOJI_KITCHEN -> {
-                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
+                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 31f else 27f
                             }
 
                             SymbolMode.EMOTICON -> 14f
@@ -1042,10 +1054,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         }
 
                         gridLM.spanCount = when (currentMode) {
-                            SymbolMode.EMOJI -> 7
-                            SymbolMode.EMOTICON -> 3
-                            SymbolMode.SYMBOL -> 5
-                            else -> 5
+                            SymbolMode.EMOJI,
+                            SymbolMode.EMOJI_KITCHEN -> adaptiveGridSpan(targetCellDp = 43, min = 8, max = 14)
+                            SymbolMode.EMOTICON -> adaptiveGridSpan(targetCellDp = 100, min = 3, max = 6)
+                            SymbolMode.SYMBOL -> adaptiveGridSpan(targetCellDp = 58, min = 6, max = 10)
+                            else -> adaptiveGridSpan(targetCellDp = 64, min = 5, max = 9)
                         }
                         gridLM.orientation = RecyclerView.VERTICAL
 
@@ -1194,6 +1207,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             dp.toFloat(),
             resources.displayMetrics
         ).toInt()
+    }
+
+    private fun adaptiveGridSpan(targetCellDp: Int, min: Int, max: Int): Int {
+        val availableWidthPx = recycler.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val availableWidthDp = availableWidthPx / resources.displayMetrics.density
+        return (availableWidthDp / targetCellDp).toInt().coerceIn(min, max)
     }
 
     private val categoryIconRes = mapOf(
@@ -1345,18 +1364,29 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     }
 
     private fun applyTypefaceToTabLayout(tabLayout: TabLayout, typeface: android.graphics.Typeface?) {
-        tabLayout.post {
-            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@post
-            for (i in 0 until slidingTabStrip.childCount) {
-                val tabView = slidingTabStrip.getChildAt(i) as? ViewGroup ?: continue
-                for (j in 0 until tabView.childCount) {
-                    val child = tabView.getChildAt(j)
-                    if (child is TextView) {
-                        child.typeface = typeface
-                    }
+        fun applyToChildren(view: View) {
+            if (view is TextView) {
+                view.typeface = typeface
+                view.includeFontPadding = false
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    applyToChildren(view.getChildAt(i))
                 }
             }
         }
+        tabLayout.post {
+            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@post
+            for (i in 0 until slidingTabStrip.childCount) {
+                applyToChildren(slidingTabStrip.getChildAt(i))
+            }
+        }
+        tabLayout.postDelayed({
+            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@postDelayed
+            for (i in 0 until slidingTabStrip.childCount) {
+                applyToChildren(slidingTabStrip.getChildAt(i))
+            }
+        }, 32L)
     }
 
 }

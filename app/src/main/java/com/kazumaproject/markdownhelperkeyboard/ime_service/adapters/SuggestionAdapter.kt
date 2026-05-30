@@ -7,6 +7,7 @@ import android.graphics.drawable.StateListDrawable
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.RelativeSizeSpan
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -410,6 +411,8 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     override fun getItemCount(): Int {
         val baseCount = if (suggestions.isNotEmpty()) {
             suggestions.size
+        } else if (inlineCount > 0) {
+            0
         } else {
             if (currentMode is TenKeyQWERTYMode.Custom && customLayouts.isNotEmpty()) {
                 customLayouts.size
@@ -456,7 +459,7 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             VIEW_TYPE_INLINE_SUGGESTION -> {
                 val container = FrameLayout(parent.context).apply {
                     layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                 }
@@ -491,14 +494,21 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             val suggestion = inlineSuggestions[position]
             holder.container.removeAllViews()
 
-            val width = ViewGroup.LayoutParams.WRAP_CONTENT
-            val height = ViewGroup.LayoutParams.MATCH_PARENT
-            val size = Size(width, height)
+            val size = Size(
+                holder.itemView.width.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(160f),
+                holder.itemView.height.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(40f)
+            )
 
             suggestion.inflate(holder.itemView.context, size, holder.itemView.context.mainExecutor) { view ->
                 if (view != null) {
                     holder.container.removeAllViews()
-                    holder.container.addView(view)
+                    holder.container.addView(
+                        view,
+                        FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    )
                 }
             }
         }
@@ -543,6 +553,24 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                 isEnabled = isPasteEnabled
                 visibility = if (isPasteEnabled) View.VISIBLE else View.INVISIBLE
                 isFocusable = false
+                val hasLeadingHelper =
+                    incognitoIconDrawable != null || isUndoEnabled || isRedoEnabled || isReconvertEnabled
+                (layoutParams as? ConstraintLayout.LayoutParams)?.let { params ->
+                    if (hasLeadingHelper) {
+                        params.startToStart = ConstraintLayout.LayoutParams.UNSET
+                        params.startToEnd = R.id.reconvert_icon_parent
+                        params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                        params.horizontalBias = 1f
+                        params.marginStart = context.dpToPxInt(16f)
+                    } else {
+                        params.startToEnd = ConstraintLayout.LayoutParams.UNSET
+                        params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
+                        params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
+                        params.horizontalBias = 0.5f
+                        params.marginStart = 0
+                    }
+                    layoutParams = params
+                }
 
                 candidateEmptyDrawableColor?.let {
                     this.setDrawableSolidColor(it)
@@ -939,6 +967,14 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     private fun Candidate.isSelectedTextGemmaActionCandidate(): Boolean {
         return type == GemmaTranslationManager.SELECTION_TRANSLATE_ACTION_CANDIDATE_TYPE.toByte() ||
             type == GemmaTranslationManager.SELECTION_PROMPT_ACTION_CANDIDATE_TYPE.toByte()
+    }
+
+    private fun android.content.Context.dpToPxInt(dp: Float): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            resources.displayMetrics
+        ).toInt()
     }
 
 }

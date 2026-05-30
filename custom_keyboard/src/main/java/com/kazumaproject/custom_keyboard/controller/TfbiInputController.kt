@@ -2,6 +2,7 @@ package com.kazumaproject.custom_keyboard.view
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -76,6 +77,7 @@ class TfbiInputController(
     private var popupHighlightedColor: Int? = null
     private var popupTextColor: Int? = null
     private var popupStyle = PopupViewStyle(100, 20f)
+    private var customTypeface: Typeface? = null
 
     // ▼▼▼ 追加: 色を設定するメソッド ▼▼▼
     fun setPopupColors(backgroundColor: Int, highlightedColor: Int, textColor: Int) {
@@ -90,6 +92,11 @@ class TfbiInputController(
             textSizeSp = style.textSizeSp.coerceIn(8f, 48f)
         )
         popupView?.applyPopupViewStyle(popupStyle)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        customTypeface = typeface
+        popupView?.setCustomTypeface(typeface)
     }
 
     fun setLongPressTimeout(timeoutMillis: Long) {
@@ -270,6 +277,7 @@ class TfbiInputController(
                 setColors(popupBackgroundColor!!, popupHighlightedColor!!, popupTextColor!!)
             }
             applyPopupViewStyle(popupStyle)
+            setCustomTypeface(customTypeface)
 
             setCharacters(tapCharacter, petalChars)
             highlightDirection(TfbiFlickDirection.TAP)

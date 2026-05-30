@@ -23,7 +23,8 @@ android {
             def keyAliasValue = localProperties['KEY_ALIAS'] ?: System.getenv('HIMAWARI_KEY_ALIAS')
             def keyPasswordValue = localProperties['KEY_PASSWORD'] ?: System.getenv('HIMAWARI_KEY_PASSWORD')
             if (keystoreFile) {
-                storeFile file(keystoreFile)
+                def keystorePath = new File(keystoreFile)
+                storeFile keystorePath.isAbsolute() ? keystorePath : rootProject.file(keystoreFile)
                 storePassword keystorePassword
                 keyAlias keyAliasValue
                 keyPassword keyPasswordValue

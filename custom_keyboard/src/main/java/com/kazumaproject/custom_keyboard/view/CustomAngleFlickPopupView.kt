@@ -94,6 +94,11 @@ class CustomAngleFlickPopupView @JvmOverloads constructor(
         updateSizesAndRequestLayout()
     }
 
+    fun setCustomTypeface(typeface: Typeface?) {
+        textPaint.typeface = typeface ?: Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        invalidate()
+    }
+
     // ... (setCustomRanges, setShapeType, setColors などは変更なし) ...
 
     fun setCustomRanges(ranges: Map<CircularFlickDirection, Pair<Float, Float>>) {

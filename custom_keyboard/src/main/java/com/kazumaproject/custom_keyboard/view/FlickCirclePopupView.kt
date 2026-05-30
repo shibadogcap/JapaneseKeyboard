@@ -113,6 +113,11 @@ class FlickCirclePopupView @JvmOverloads constructor(
         updateSizesAndRequestLayout()
     }
 
+    fun setCustomTypeface(typeface: Typeface?) {
+        textPaint.typeface = typeface ?: Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        invalidate()
+    }
+
     fun updateFlickDirection(direction: FlickDirection) {
         if (currentFlickDirection != direction) {
             currentFlickDirection = direction

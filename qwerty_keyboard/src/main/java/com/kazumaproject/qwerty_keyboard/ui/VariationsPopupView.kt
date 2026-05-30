@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
 import androidx.annotation.ColorInt
@@ -34,6 +35,7 @@ class VariationsPopupView(context: Context) : View(context) {
     private var itemHeight = 0f
     private var numColumns = 1
     private var numRows = 1
+    private val textBounds = android.graphics.Rect()
 
     // ■■■ FLATモード用 (元のコードの変数) ■■■
     private val flatTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -78,6 +80,12 @@ class VariationsPopupView(context: Context) : View(context) {
         )
         flatTextPaint.textSize = textSizePx
         neuTextPaint.textSize = textSizePx
+        invalidate()
+    }
+
+    fun setTypeface(typeface: Typeface?) {
+        flatTextPaint.typeface = typeface
+        neuTextPaint.typeface = typeface
         invalidate()
     }
 
@@ -178,9 +186,27 @@ class VariationsPopupView(context: Context) : View(context) {
             val targetPaint =
                 if (currentStyle == PopupStyle.NEUMORPHISM) neuTextPaint else flatTextPaint
             val cx = left + itemWidth / 2f
+            val originalTextSize = targetPaint.textSize
+            targetPaint.textSize = fittedTextSize(targetPaint, char.toString(), itemWidth, itemHeight)
             val cy = top + (itemHeight / 2f) - ((targetPaint.descent() + targetPaint.ascent()) / 2f)
             canvas.drawText(char.toString(), cx, cy, targetPaint)
+            targetPaint.textSize = originalTextSize
         }
+    }
+
+    private fun fittedTextSize(paint: Paint, text: String, cellWidth: Float, cellHeight: Float): Float {
+        val maxWidth = cellWidth * 0.62f
+        val maxHeight = cellHeight * 0.56f
+        var size = paint.textSize.coerceAtMost(maxHeight)
+        while (size > 10f) {
+            paint.textSize = size
+            paint.getTextBounds(text, 0, text.length, textBounds)
+            if (textBounds.width() <= maxWidth && textBounds.height() <= maxHeight) {
+                return size
+            }
+            size -= 1.5f
+        }
+        return size
     }
 
     // ニューモーフィズムの凹み描画ロジックを分離

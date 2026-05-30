@@ -3,14 +3,16 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:layout_gravity="center"
-    android:minWidth="32dp"
-    android:minHeight="32dp">
+    android:minWidth="28dp"
+    android:minHeight="28dp">
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/symbol_text"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
         android:textAlignment="center"
         android:textColor="@color/symbol_text_color"
         android:textSize="16sp"

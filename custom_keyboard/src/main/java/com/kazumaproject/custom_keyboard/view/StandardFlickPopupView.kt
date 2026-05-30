@@ -118,6 +118,10 @@ class StandardFlickPopupView(context: Context) : AppCompatTextView(context) {
         colorTheme?.let { applyTheme(it, direction) }
     }
 
+    fun setCustomTypeface(typeface: Typeface?) {
+        this.typeface = typeface ?: Typeface.DEFAULT
+    }
+
     fun updateText(text: String?) {
         if (text.isNullOrEmpty()) {
             this.text = ""

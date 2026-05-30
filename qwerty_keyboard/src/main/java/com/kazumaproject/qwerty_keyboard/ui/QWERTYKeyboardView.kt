@@ -95,6 +95,11 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : ConstraintLayout(context, attrs, defStyleAttr) {
 
+    private companion object {
+        private val EN_NUMBER_ROW_SHIFT_CHARS = charArrayOf('!', '@', '#', '$', '%', '^', '&', '*', '(', ')')
+        private val JP_NUMBER_ROW_SHIFT_CHARS = charArrayOf('！', '@', '#', '￥', '%', '^', '&', '*', '（', '）')
+    }
+
     private val binding: QwertyLayoutBinding
 
     // --- Dynamic Margin Variables (in dp) ---
@@ -397,9 +402,15 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private var hasCustomSpaceIcon = false
     private var hasCustomLeftArrowIcon = false
     private var hasCustomRightArrowIcon = false
+    private var hasCustomShiftOffIcon = false
+    private var hasCustomShiftOnIcon = false
+    private var hasCustomShiftLockIcon = false
 
     private var customEnterDrawable: Drawable? = null
     private var customSpaceDrawable: Drawable? = null
+    private var customShiftOffDrawable: Drawable? = null
+    private var customShiftOnDrawable: Drawable? = null
+    private var customShiftLockDrawable: Drawable? = null
 
     private var customModeSwitchDrawable: Drawable? = null
     private var customUndoDrawable: Drawable? = null
@@ -534,6 +545,13 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         button.text = spanText
     }
 
+    private fun tintedDefaultDrawableFor(button: AppCompatButton, drawable: Drawable?): Drawable? {
+        val source = drawable?.constantState?.newDrawable()?.mutate() ?: drawable?.mutate() ?: return null
+        val tint = if (button.id == binding.keyReturn.id) customEnterKeyTextColor else customSpecialKeyTextColor
+        source.setTint(tint)
+        return source
+    }
+
     private fun setButtonImageOrText(
         button: androidx.appcompat.widget.AppCompatButton,
         defaultDrawable: Drawable?,
@@ -562,7 +580,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 setCenteredIcon(button, customDrawable)
             } else {
                 if (defaultDrawable != null) {
-                    setCenteredIcon(button, defaultDrawable)
+                    setCenteredIcon(button, tintedDefaultDrawableFor(button, defaultDrawable))
                 } else {
                     button.text = ""
                     button.setCompoundDrawables(null, null, null, null)
@@ -610,7 +628,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         customTextEnter: String = "",
         customTextSpace: String = "",
         customTextSymbol: String = "",
-        customText123: String = ""
+        customText123: String = "",
+        shiftOffPath: String = "",
+        shiftOnPath: String = "",
+        shiftLockPath: String = ""
     ) {
         val enterDrawable = loadCustomIcon(enterPath)
         customEnterDrawable = enterDrawable?.let { fitDrawable(it) }
@@ -654,7 +675,15 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         customTextSymbolStr = customTextSymbol
         customText123Str = customText123
 
+        customShiftOffDrawable = loadCustomIcon(shiftOffPath)?.let { fitDrawable(it) }
+        customShiftOnDrawable = loadCustomIcon(shiftOnPath)?.let { fitDrawable(it) }
+        customShiftLockDrawable = loadCustomIcon(shiftLockPath)?.let { fitDrawable(it) }
+        hasCustomShiftOffIcon = customShiftOffDrawable != null
+        hasCustomShiftOnIcon = customShiftOnDrawable != null
+        hasCustomShiftLockIcon = customShiftLockDrawable != null
+
         applySpecialKeyCustomizations()
+        renderShiftKeyDrawable()
     }
 
     private fun applyCursorArrowDrawables() {
@@ -845,6 +874,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     view.background = normalDrawableState?.newDrawable()?.mutate()
                 }
                 view.setTextColor(normalColorStateList)
+                if (view is QWERTYButton) {
+                    view.setOverlayTextColor(normalKeyTextColor)
+                }
                 view.setDrawableAlpha(liquidGlassKeyAlphaEnable)
             }
 
@@ -863,7 +895,12 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 }
 
                 if (view is MaterialTextView) view.setTextColor(specialColorStateList)
-                if (view is AppCompatButton) view.setTextColor(specialColorStateList)
+                if (view is AppCompatButton) {
+                    view.setTextColor(specialColorStateList)
+                    if (view is QWERTYButton) {
+                        view.setOverlayTextColor(specialKeyTextColor)
+                    }
+                }
 
                 if (view is AppCompatImageButton) {
                     ImageViewCompat.setImageTintList(view, specialColorStateList)
@@ -1284,6 +1321,25 @@ class QWERTYKeyboardView @JvmOverloads constructor(
      * Default mode の場合のみ CapsLock / Shift の状態に応じた drawable を選択する。
      */
     private fun renderShiftKeyDrawable() {
+        val customDrawable = when (qwertyMode.value) {
+            QWERTYMode.Number -> null
+            QWERTYMode.Symbol -> null
+            QWERTYMode.Default -> {
+                val state = capsLockState.value
+                when {
+                    state.capsLockOn -> customShiftLockDrawable
+                    state.shiftOn -> customShiftOnDrawable
+                    else -> customShiftOffDrawable
+                }
+            }
+        }
+        if (customDrawable != null) {
+            binding.keyShift.setImageDrawable(customDrawable)
+            ImageViewCompat.setImageTintList(binding.keyShift, null)
+            refreshSpecialKeyIconSizesWhenLaidOut()
+            return
+        }
+
         val drawableRes = when (qwertyMode.value) {
             QWERTYMode.Number -> com.kazumaproject.core.R.drawable.qwerty_symbol
             QWERTYMode.Symbol -> com.kazumaproject.core.R.drawable.qwerty_number
@@ -1297,6 +1353,8 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             }
         }
         binding.keyShift.setImageResource(drawableRes)
+        ImageViewCompat.setImageTintList(binding.keyShift, ColorStateList.valueOf(customSpecialKeyTextColor))
+        refreshSpecialKeyIconSizesWhenLaidOut()
     }
 
     // CapsLock UI update extraction
@@ -1306,8 +1364,19 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         qwertyButtonMap.keys.forEach { button ->
             if (button is AppCompatButton) button.isAllCaps = allCaps
         }
+        updateNumberRowShiftState(allCaps)
         // Shift キーの drawable は renderShiftKeyDrawable() に集約。
         renderShiftKeyDrawable()
+    }
+
+    private fun updateNumberRowShiftState(allCaps: Boolean) {
+        if (!isNumberKeysShow || qwertyMode.value != QWERTYMode.Default) return
+        val shifted = if (romajiModeState.value) JP_NUMBER_ROW_SHIFT_CHARS else EN_NUMBER_ROW_SHIFT_CHARS
+        numberRowButtons.forEachIndexed { index, button ->
+            button.text = if (allCaps) shifted[index].toString() else ('1' + index).let {
+                if (index == 9) "0" else it.toString()
+            }
+        }
     }
 
     private fun updateTopRightCharsForDefaultMode() {
@@ -1671,6 +1740,13 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         )
     }
 
+    private val numberRowButtons: Array<QWERTYButton> by lazy {
+        arrayOf(
+            binding.key1, binding.key2, binding.key3, binding.key4, binding.key5,
+            binding.key6, binding.key7, binding.key8, binding.key9, binding.key0
+        )
+    }
+
     private fun attachDefaultKeyLabels() {
         val chars =
             if (romajiModeState.value) QWERTYKeys.DEFAULT_KEYS_JP else QWERTYKeys.DEFAULT_KEYS
@@ -1678,6 +1754,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         for (i in buttons.indices) {
             buttons[i].text = chars[i].toString()
         }
+        updateNumberRowShiftState(capsLockState.value.shiftOn || capsLockState.value.capsLockOn)
     }
 
     private fun attachNumberKeyLabels(isSymbol: Boolean) {
@@ -1689,6 +1766,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val buttons = numberQWERTYButtons
         for (i in buttons.indices) {
             buttons[i].text = chars[i].toString()
+        }
+        numberRowButtons.forEachIndexed { index, button ->
+            button.text = chars.getOrNull(index)?.toString().orEmpty()
         }
     }
 
@@ -2797,6 +2877,14 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             }
             return
         }
+        shiftedNumberRowChar(key)?.let { char ->
+            qwertyKeyListener?.onReleasedQWERTYKey(
+                qwertyKey = key,
+                tap = char,
+                variations = null
+            )
+            return
+        }
         val info = getVariationInfo(key)
         info?.apply {
             val outChar =
@@ -2807,6 +2895,15 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 variations = variations
             )
         }
+    }
+
+    private fun shiftedNumberRowChar(key: QWERTYKey): Char? {
+        if (qwertyMode.value != QWERTYMode.Default) return null
+        if (!isNumberKeysShow) return null
+        if (!capsLockState.value.shiftOn && !capsLockState.value.capsLockOn) return null
+        val index = numberRowButtons.indexOfFirst { qwertyButtonMap[it] == key }
+        if (index !in 0..9) return null
+        return if (romajiModeState.value) JP_NUMBER_ROW_SHIFT_CHARS[index] else EN_NUMBER_ROW_SHIFT_CHARS[index]
     }
 
     private fun getVariationInfo(key: QWERTYKey): VariationInfo? {
@@ -2877,6 +2974,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val context = this.context
         variationPopupView = VariationsPopupView(context).apply {
             applyPopupViewStyle(variationPopupStyle)
+            setTypeface(customTypeface)
             setChars(variations)
         }
         when (themeMode) {
@@ -2894,11 +2992,11 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         }
         val maxColumns = 3
         val scale = variationPopupStyle.sizeScalePercent.coerceIn(50, 200) / 100f
-        val itemSize = (100 * scale).toInt().coerceAtLeast(1)
+        val itemSize = (anchorView.height * 1.28f * scale).toInt().coerceAtLeast(context.dpToPx(40f))
         val cols = if (variations.size < maxColumns) variations.size else maxColumns
         val rows = kotlin.math.ceil(variations.size.toFloat() / maxColumns).toInt()
         val popupWidth = itemSize * cols
-        val popupHeight = ((150 * rows) * scale).toInt().coerceAtLeast(1)
+        val popupHeight = itemSize * rows
         val popup = PopupWindow(variationPopupView, popupWidth, popupHeight, false).apply {
             isTouchable = false
         }

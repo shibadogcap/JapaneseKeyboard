@@ -3,6 +3,7 @@ package com.kazumaproject.custom_keyboard.controller
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -69,6 +70,10 @@ class StandardFlickInputController(context: Context) {
             textSizeSp = style.textSizeSp.coerceIn(8f, 48f)
         )
         popupView.applyPopupViewStyle(popupStyle)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        popupView.setCustomTypeface(typeface)
     }
 
     fun setPopupWindowAnchorProvider(provider: (() -> View?)?) {

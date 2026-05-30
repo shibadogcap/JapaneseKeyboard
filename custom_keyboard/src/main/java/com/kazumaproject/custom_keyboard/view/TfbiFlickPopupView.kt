@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
 import androidx.core.content.ContextCompat
@@ -86,6 +87,11 @@ class TfbiFlickPopupView(context: Context) : View(context) {
 
     fun applyPopupViewStyle(style: PopupViewStyle) {
         textPaint.textSize = spToPx(style.textSizeSp.coerceIn(8f, 48f))
+        invalidate()
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        textPaint.typeface = typeface
         invalidate()
     }
 

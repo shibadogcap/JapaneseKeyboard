@@ -52,6 +52,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
     private val selectRightLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageSelected(it, "custom_right_arrow_icon", "right") }
     }
+    private val selectShiftOffLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_shift_off_icon", "shift_off") }
+    }
+    private val selectShiftOnLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_shift_on_icon", "shift_on") }
+    }
+    private val selectShiftLockLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_shift_lock_icon", "shift_lock") }
+    }
     private val selectModeSwitchLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageSelected(it, "custom_mode_switch_icon", "mode_switch") }
     }
@@ -562,6 +571,39 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         }
         iconCategory.addPreference(iconRightPref)
 
+        val shiftOffPref = Preference(context).apply {
+            key = "custom_key_appearance_shift_off"
+            title = "QWERTY Shift 通常時の画像"
+            updateSpecialKeySummary(this, "shift_off")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "shift_off", selectShiftOffLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(shiftOffPref)
+
+        val shiftOnPref = Preference(context).apply {
+            key = "custom_key_appearance_shift_on"
+            title = "QWERTY Shift 有効時の画像"
+            updateSpecialKeySummary(this, "shift_on")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "shift_on", selectShiftOnLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(shiftOnPref)
+
+        val shiftLockPref = Preference(context).apply {
+            key = "custom_key_appearance_shift_lock"
+            title = "QWERTY Shift Lock 時の画像"
+            updateSpecialKeySummary(this, "shift_lock")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "shift_lock", selectShiftLockLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(shiftLockPref)
+
         preferenceScreen = screen
 
         setupFontPreference("custom_font_key_select", "custom_font_key")
@@ -746,7 +788,7 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         }
 
         val options = mutableListOf<String>()
-        val supportsText = type != "left" && type != "right"
+        val supportsText = type !in setOf("left", "right", "shift_off", "shift_on", "shift_lock")
         if (supportsText) {
             options.add("カスタムテキストを設定する")
         }
@@ -868,6 +910,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             "right" -> {
                 appPreference.custom_icon_arrow_right_path = ""
             }
+            "shift_off" -> {
+                appPreference.custom_icon_shift_off_path = ""
+            }
+            "shift_on" -> {
+                appPreference.custom_icon_shift_on_path = ""
+            }
+            "shift_lock" -> {
+                appPreference.custom_icon_shift_lock_path = ""
+            }
         }
     }
 
@@ -881,6 +932,9 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             "undo" -> appPreference.custom_icon_undo_path.isNotEmpty()
             "emoji" -> appPreference.custom_icon_emoji_path.isNotEmpty()
             "delete" -> appPreference.custom_icon_delete_path.isNotEmpty()
+            "shift_off" -> appPreference.custom_icon_shift_off_path.isNotEmpty()
+            "shift_on" -> appPreference.custom_icon_shift_on_path.isNotEmpty()
+            "shift_lock" -> appPreference.custom_icon_shift_lock_path.isNotEmpty()
             else -> false
         }
 
@@ -905,6 +959,9 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             "undo" -> appPreference.custom_icon_undo_path
             "emoji" -> appPreference.custom_icon_emoji_path
             "delete" -> appPreference.custom_icon_delete_path
+            "shift_off" -> appPreference.custom_icon_shift_off_path
+            "shift_on" -> appPreference.custom_icon_shift_on_path
+            "shift_lock" -> appPreference.custom_icon_shift_lock_path
             else -> ""
         }
 
@@ -1044,6 +1101,9 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
                 "space" -> appPreference.custom_icon_space_path = path
                 "left" -> appPreference.custom_icon_arrow_left_path = path
                 "right" -> appPreference.custom_icon_arrow_right_path = path
+                "shift_off" -> appPreference.custom_icon_shift_off_path = path
+                "shift_on" -> appPreference.custom_icon_shift_on_path = path
+                "shift_lock" -> appPreference.custom_icon_shift_lock_path = path
                 "mode_switch" -> appPreference.custom_icon_mode_switch_path = path
                 "undo" -> appPreference.custom_icon_undo_path = path
                 "emoji" -> appPreference.custom_icon_emoji_path = path

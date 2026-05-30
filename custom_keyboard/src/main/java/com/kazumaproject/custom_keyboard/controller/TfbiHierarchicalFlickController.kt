@@ -2,6 +2,7 @@ package com.kazumaproject.custom_keyboard.controller
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Typeface
 import android.util.Log
 import android.view.GestureDetector
 import android.view.Gravity
@@ -83,6 +84,7 @@ class TfbiHierarchicalFlickController(
     private var popupWindow: PopupWindow? = null
     private lateinit var gestureDetector: GestureDetector
     private var popupStyle = PopupViewStyle(100, 20f)
+    private var customTypeface: Typeface? = null
 
     private var popupWindowAnchorProvider: (() -> View?)? = null
 
@@ -106,6 +108,11 @@ class TfbiHierarchicalFlickController(
             textSizeSp = style.textSizeSp.coerceIn(8f, 48f)
         )
         popupView?.applyPopupViewStyle(popupStyle)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        customTypeface = typeface
+        popupView?.setCustomTypeface(typeface)
     }
 
     fun setPopupWindowAnchorProvider(provider: (() -> View?)?) {
@@ -487,6 +494,7 @@ class TfbiHierarchicalFlickController(
                 setColors(popupBackgroundColor!!, popupHighlightedColor!!, popupTextColor!!)
             }
             applyPopupViewStyle(popupStyle)
+            setCustomTypeface(customTypeface)
             setCharacters(tapCharacter, petalChars)
             highlightDirection(TfbiFlickDirection.TAP)
         }

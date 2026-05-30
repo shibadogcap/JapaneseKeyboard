@@ -2976,6 +2976,9 @@ object AppPreference {
     private val CUSTOM_ICON_SPACE_PATH = Pair("custom_icon_space_path", "")
     private val CUSTOM_ICON_ARROW_LEFT_PATH = Pair("custom_icon_arrow_left_path", "")
     private val CUSTOM_ICON_ARROW_RIGHT_PATH = Pair("custom_icon_arrow_right_path", "")
+    private val CUSTOM_ICON_SHIFT_OFF_PATH = Pair("custom_icon_shift_off_path", "")
+    private val CUSTOM_ICON_SHIFT_ON_PATH = Pair("custom_icon_shift_on_path", "")
+    private val CUSTOM_ICON_SHIFT_LOCK_PATH = Pair("custom_icon_shift_lock_path", "")
 
     private val CUSTOM_FONT_KEY_PATH = Pair("custom_font_key_path", "")
     private val CUSTOM_FONT_CANDIDATE_PATH = Pair("custom_font_candidate_path", "")
@@ -3019,6 +3022,24 @@ object AppPreference {
         get() = preferences.getString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, CUSTOM_ICON_ARROW_RIGHT_PATH.second) ?: ""
         set(value) = preferences.edit {
             it.putString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, value)
+        }
+
+    var custom_icon_shift_off_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_OFF_PATH.first, CUSTOM_ICON_SHIFT_OFF_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_OFF_PATH.first, value)
+        }
+
+    var custom_icon_shift_on_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_ON_PATH.first, CUSTOM_ICON_SHIFT_ON_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_ON_PATH.first, value)
+        }
+
+    var custom_icon_shift_lock_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_LOCK_PATH.first, CUSTOM_ICON_SHIFT_LOCK_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_LOCK_PATH.first, value)
         }
 
     var custom_font_key_path: String

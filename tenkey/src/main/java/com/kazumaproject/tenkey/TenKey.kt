@@ -2221,9 +2221,15 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     private fun useScreenshotStyleFlickPopup(): Boolean = true
 
+    private fun shouldShowScreenshotFlickPopupFor(key: Key): Boolean {
+        if (isSideKey(key)) return false
+        if (key == Key.KeyDakutenSmall && currentInputMode.value != InputMode.ModeNumber) return false
+        return true
+    }
+
     private fun showInitialFlickGuideIfNeeded() {
         if (!useScreenshotStyleFlickPopup()) return
-        if (isSideKey(pressedKey.key)) return
+        if (!shouldShowScreenshotFlickPopupFor(pressedKey.key)) return
         if (!::popTextActive.isInitialized || !::popupWindowActive.isInitialized) return
         val button = getButtonFromKey(pressedKey.key) as? AppCompatButton ?: return
         button.isPressed = true
@@ -2343,6 +2349,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     }
 
     private fun showActiveFlickPopup(button: AppCompatButton, gestureType: GestureType) {
+        if (!shouldShowScreenshotFlickPopupFor(pressedKey.key)) {
+            hideAllPopWindow()
+            return
+        }
         var usingGuide = gestureType == GestureType.Tap && useScreenshotStyleFlickPopup()
         var nextText = if (usingGuide) {
             fiveDirectionPopupText(button)
@@ -2381,7 +2391,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         targetTextView.text = nextText
         if (usingGuide) {
             targetTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            targetTextView.setLineSpacing(0f, 0.86f)
+            targetTextView.setLineSpacing(0f, 0.95f)
             targetTextView.maxLines = 3
         } else {
             targetTextView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
@@ -2390,9 +2400,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         }
         if (targetTextView.text.isEmpty()) return
         val popupScalePercent = if (useScreenshotStyleFlickPopup()) {
-            popupViewStyle.sizeScalePercent.coerceAtLeast(120)
+            popupViewStyle.sizeScalePercent
         } else if (usingGuide) {
-            popupViewStyle.sizeScalePercent.coerceAtLeast(120)
+            popupViewStyle.sizeScalePercent
         } else {
             popupViewStyle.sizeScalePercent
         }
@@ -3651,6 +3661,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         if (::popTextRight.isInitialized) popTextRight.typeface = type
         if (::popTextBottom.isInitialized) popTextBottom.typeface = type
         if (::popTextCenter.isInitialized) popTextCenter.typeface = type
+        if (::screenshotPopupText.isInitialized) screenshotPopupText.typeface = type
     }
 
     fun setCustomTypeface(typeface: android.graphics.Typeface?) {
