@@ -13,7 +13,15 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.FrameLayout
+import android.content.Context
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.os.Build
+import android.util.AttributeSet
 import android.util.Size
+import android.view.SurfaceView
+import android.view.ViewTreeObserver
+import android.widget.inline.InlineContentView
 import android.view.inputmethod.InlineSuggestion
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -156,8 +164,20 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     fun setInlineSuggestions(suggestions: List<InlineSuggestion>) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (this.inlineSuggestions == suggestions) return
+            val previousCount = inlineCount
             this.inlineSuggestions = suggestions
-            notifyDataSetChanged()
+            val newCount = inlineCount
+            when {
+                previousCount == 0 && newCount > 0 -> notifyItemRangeInserted(0, newCount)
+                previousCount > 0 && newCount == 0 -> notifyItemRangeRemoved(0, previousCount)
+                previousCount == newCount -> notifyItemRangeChanged(0, newCount)
+                else -> {
+                    notifyItemRangeRemoved(0, previousCount)
+                    notifyItemRangeInserted(0, newCount)
+                }
+            }
+            onListUpdated?.invoke()
         }
     }
 
@@ -457,11 +477,12 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             }
 
             VIEW_TYPE_INLINE_SUGGESTION -> {
-                val container = FrameLayout(parent.context).apply {
+                val container = InlineSuggestionClipContainer(parent.context).apply {
                     layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    minimumWidth = parent.context.dpToPxInt(100f)
                 }
                 InlineSuggestionViewHolder(container)
             }
@@ -491,24 +512,43 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private fun onBindInlineSuggestionViewHolder(holder: InlineSuggestionViewHolder, position: Int) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val suggestion = inlineSuggestions[position]
-            holder.container.removeAllViews()
+            holder.itemView.post {
+                try {
+                    if (position >= 0 && position < inlineSuggestions.size) {
+                        val suggestion = inlineSuggestions[position]
+                        val clipContainer = holder.itemView as? InlineSuggestionClipContainer
+                        val targetContainer = clipContainer?.getContainer() ?: holder.container
+                        targetContainer.removeAllViews()
 
-            val size = Size(
-                holder.itemView.width.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(160f),
-                holder.itemView.height.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(40f)
-            )
-
-            suggestion.inflate(holder.itemView.context, size, holder.itemView.context.mainExecutor) { view ->
-                if (view != null) {
-                    holder.container.removeAllViews()
-                    holder.container.addView(
-                        view,
-                        FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
+                        val size = Size(
+                            holder.itemView.width.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(160f),
+                            holder.itemView.height.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(40f)
                         )
-                    )
+
+                        Timber.d("Inflating inline suggestion position=$position size=${size.width}x${size.height}")
+                        suggestion.inflate(holder.itemView.context, size, holder.itemView.context.mainExecutor) { view ->
+                            holder.itemView.post {
+                                try {
+                                    if (view != null) {
+                                        targetContainer.removeAllViews()
+                                        targetContainer.addView(
+                                            view,
+                                            FrameLayout.LayoutParams(
+                                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                                FrameLayout.LayoutParams.MATCH_PARENT
+                                            )
+                                        )
+                                    } else {
+                                        Timber.w("Inline suggestion inflated null view position=$position")
+                                    }
+                                } catch (e: Exception) {
+                                    Timber.e(e, "Error adding inline suggestion view in post")
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Timber.e(e, "Error during onBindInlineSuggestionViewHolder")
                 }
             }
         }
@@ -562,12 +602,14 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
                         params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
                         params.horizontalBias = 1f
                         params.marginStart = context.dpToPxInt(16f)
+                        params.marginEnd = 0
                     } else {
                         params.startToEnd = ConstraintLayout.LayoutParams.UNSET
                         params.startToStart = ConstraintLayout.LayoutParams.PARENT_ID
                         params.endToEnd = ConstraintLayout.LayoutParams.PARENT_ID
                         params.horizontalBias = 0.5f
                         params.marginStart = 0
+                        params.marginEnd = context.dpToPxInt(40f)
                     }
                     layoutParams = params
                 }
@@ -891,6 +933,13 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
             holder.actionText.setTextColor(color)
             holder.badgeText.setTextColor(color)
         }
+        candidateItemColorState.backgroundColor?.let { color ->
+            holder.badgeText.background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = holder.itemView.context.dpToPxInt(10f).toFloat()
+                setColor(color)
+            }
+        }
 
         holder.itemView.isPressed = position == highlightedPosition
         holder.itemView.setOnClickListener {
@@ -977,4 +1026,65 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         ).toInt()
     }
 
+}
+
+class InlineSuggestionClipContainer @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : FrameLayout(context, attrs, defStyleAttr) {
+    private val mOnDrawListener = ViewTreeObserver.OnDrawListener {
+        clipDescendantInlineContentViews()
+    }
+    private val mParentBounds = Rect()
+    private val mContentBounds = Rect()
+    private val mContentContainer: FrameLayout
+
+    init {
+        val mBackgroundView = SurfaceView(context)
+        mBackgroundView.setZOrderOnTop(true)
+        mBackgroundView.holder.setFormat(PixelFormat.TRANSPARENT)
+        addView(mBackgroundView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+
+        mContentContainer = FrameLayout(context)
+        addView(mContentContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnDrawListener(mOnDrawListener)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        viewTreeObserver.removeOnDrawListener(mOnDrawListener)
+    }
+
+    private fun clipDescendantInlineContentViews() {
+        mParentBounds.set(0, 0, width, height)
+        clipDescendantInlineContentViews(this)
+    }
+
+    private fun clipDescendantInlineContentViews(root: View?) {
+        if (root == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (root is InlineContentView) {
+                mContentBounds.set(mParentBounds)
+                offsetRectIntoDescendantCoords(root, mContentBounds)
+                root.clipBounds = mContentBounds
+                return
+            }
+        }
+        if (root is ViewGroup) {
+            val childCount = root.childCount
+            for (i in 0 until childCount) {
+                val child = root.getChildAt(i)
+                clipDescendantInlineContentViews(child)
+            }
+        }
+    }
+
+    fun getContainer(): FrameLayout {
+        return mContentContainer
+    }
 }

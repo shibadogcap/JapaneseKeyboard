@@ -154,7 +154,7 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/paste_icon_patent"
         android:layout_width="0dp"
-        android:layout_height="40dp"
+        android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         app:layout_constrainedWidth="true"
         app:layout_constraintWidth_max="160dp"
@@ -162,6 +162,7 @@
         android:background="@drawable/ten_keys_center_bg"
         android:paddingStart="0dp"
         android:paddingEnd="8dp"
+        android:paddingVertical="4dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -182,32 +183,31 @@
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/clipboard_text_preview"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:gravity="center_vertical"
+            android:gravity="start|center_vertical"
             android:includeFontPadding="false"
             android:maxLines="1"
             android:textColor="@color/keyboard_icon_color"
-            android:textSize="14sp"
-            app:layout_constraintBottom_toBottomOf="parent"
+            android:textSize="12sp"
+            app:layout_constraintBottom_toTopOf="@+id/clipboard_preview_text_description"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintStart_toEndOf="@id/paste_icon"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.0" />
+            app:layout_constraintVertical_chainStyle="packed" />
+
+        <com.google.android.material.textview.MaterialTextView
+            android:id="@+id/clipboard_preview_text_description"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/delete_in_long_press"
+            android:textColor="@color/keyboard_icon_color"
+            android:textSize="7sp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="@+id/clipboard_text_preview"
+            app:layout_constraintTop_toBottomOf="@+id/clipboard_text_preview" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
-    <com.google.android.material.textview.MaterialTextView
-        android:id="@+id/clipboard_preview_text_description"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="4dp"
-        android:text="@string/delete_in_long_press"
-        android:textColor="@color/keyboard_icon_color"
-        android:textSize="8sp"
-        android:visibility="gone"
-        app:layout_constraintStart_toEndOf="@+id/paste_icon_patent"
-        app:layout_constraintTop_toTopOf="@+id/paste_icon_patent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -8,7 +8,9 @@ data class Candidate(
     val type: Byte,
     val length: UByte,
     val score: Int,
+    val value: AzooKeyPValue = score.toFloat(),
     val yomi: String? = null,
     val leftId: Short? = null,
-    val rightId: Short? = null
+    val rightId: Short? = null,
+    val isLearningTarget: Boolean = true,
 )

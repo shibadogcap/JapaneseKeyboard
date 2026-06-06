@@ -10,7 +10,7 @@
     app:bl_arrowPosition="16dp"
     app:bl_arrowWidth="0dp"
     app:bl_bubbleColor="#FFFFFF"
-    app:bl_cornersRadius="28dp"
+    app:bl_cornersRadius="14dp"
     app:bl_strokeColor="#DADCE0"
     app:bl_strokeWidth="1dp">
 

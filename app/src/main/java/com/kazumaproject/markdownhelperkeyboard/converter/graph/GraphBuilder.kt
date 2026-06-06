@@ -4,10 +4,14 @@ import com.kazumaproject.Louds.LOUDS
 import com.kazumaproject.Louds.with_term_id.LOUDSWithTermId
 import com.kazumaproject.core.domain.extensions.hasNConsecutiveChars
 import com.kazumaproject.dictionary.TokenArray
+import com.kazumaproject.dictionary.models.TokenEntryConverted
 import com.kazumaproject.graph.Node
 import com.kazumaproject.hiraToKata
 import com.kazumaproject.markdownhelperkeyboard.converter.Other.BOS
 import com.kazumaproject.markdownhelperkeyboard.converter.bitset.SuccinctBitVector
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryConnectionIdPolicies
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntryMapper
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryNodeMapper
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isAllHalfWidthAscii
 import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
 import com.kazumaproject.markdownhelperkeyboard.repository.UserDictionaryRepository
@@ -74,6 +78,31 @@ class GraphBuilder {
             // 新しい単語、または、同じ単語だが品詞が異なる場合は、単純に追加する
             nodes.add(newNode)
         }
+    }
+
+    private fun tokenToAzooKeyNode(
+        token: com.kazumaproject.dictionary.models.TokenEntry,
+        leftIds: List<Short>,
+        rightIds: List<Short>,
+        tango: String,
+        yomi: String,
+        startPosition: Int,
+        scoreOffset: Int = 0,
+    ): Node {
+        return AzooKeyDictionaryNodeMapper.toNode(
+            entry = AzooKeyDictionaryEntryMapper.tokenEntryConverted(
+                reading = yomi,
+                tokenEntry = TokenEntryConverted(
+                    leftId = leftIds[token.posTableIndex.toInt()],
+                    rightId = rightIds[token.posTableIndex.toInt()],
+                    wordCost = token.wordCost,
+                    tango = tango,
+                    yomiLength = yomi.length.toShort(),
+                ),
+            ),
+            startPosition = startPosition,
+            scoreOffset = scoreOffset,
+        )
     }
 
     suspend fun constructGraph(
@@ -146,16 +175,15 @@ class GraphBuilder {
             userWords.forEach { userWord ->
                 val endIndex = i + userWord.reading.length
                 val contextId = PosMapper.getContextIdForPos(userWord.posIndex)
-                val node = Node(
-                    l = contextId,
-                    r = contextId,
-                    score = userWord.posScore,
-                    f = userWord.posScore,
-                    g = userWord.posScore,
-                    tango = userWord.word,
-                    yomiUsed = userWord.reading,
-                    len = userWord.reading.length.toShort(),
-                    sPos = i
+                val node = AzooKeyDictionaryNodeMapper.toNode(
+                    entry = AzooKeyDictionaryEntryMapper.userDictionaryWithContextId(
+                        surface = userWord.word,
+                        reading = userWord.reading,
+                        score = userWord.posScore,
+                        contextId = contextId.toInt(),
+                        legacyPosIndex = userWord.posIndex,
+                    ),
+                    startPosition = i,
                 )
                 addOrUpdateNode(graph, endIndex, node)
             }
@@ -165,16 +193,16 @@ class GraphBuilder {
             if (learnedWords.isNotEmpty()) foundInAnyDictionary = true
             learnedWords.forEach { learnedWord ->
                 val endIndex = i + learnedWord.input.length
-                val node = Node(
-                    l = learnedWord.leftId ?: 1851,
-                    r = learnedWord.rightId ?: 1851,
-                    score = learnedWord.score.toInt(),
-                    f = learnedWord.score.toInt(),
-                    g = learnedWord.score.toInt(),
-                    tango = learnedWord.out,
-                    yomiUsed = learnedWord.input,
-                    len = learnedWord.input.length.toShort(),
-                    sPos = i
+                val node = AzooKeyDictionaryNodeMapper.toNode(
+                    entry = AzooKeyDictionaryEntryMapper.learned(
+                        surface = learnedWord.out,
+                        reading = learnedWord.input,
+                        score = learnedWord.score.toInt(),
+                        leftId = learnedWord.leftId?.toInt(),
+                        rightId = learnedWord.rightId?.toInt(),
+                    ),
+                    startPosition = i,
+                    connectionIdResolver = AzooKeyDictionaryConnectionIdPolicies.LearnedGraph,
                 )
                 addOrUpdateNode(graph, endIndex, node)
             }
@@ -222,16 +250,13 @@ class GraphBuilder {
                         addOrUpdateNode(
                             graph,
                             endIndex,
-                            Node(
-                                l = localSystemUserTokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = localSystemUserTokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt(),
-                                f = token.wordCost.toInt(),
-                                g = token.wordCost.toInt(),
+                            tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = localSystemUserTokenArray.leftIds,
+                                rightIds = localSystemUserTokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i,
+                                yomi = yomiStr,
+                                startPosition = i,
                             ),
                         )
                     }
@@ -280,20 +305,17 @@ class GraphBuilder {
                                         succinctBitVector = localSystemUserTangoLBS,
                                     )
                                 }
-                                val cost = token.wordCost.toInt() + penalty
                                 addOrUpdateNode(
                                     graph,
                                     endIndex,
-                                    Node(
-                                        l = localSystemUserTokenArray.leftIds[token.posTableIndex.toInt()],
-                                        r = localSystemUserTokenArray.rightIds[token.posTableIndex.toInt()],
-                                        score = cost,
-                                        f = cost,
-                                        g = cost,
+                                    tokenToAzooKeyNode(
+                                        token = token,
+                                        leftIds = localSystemUserTokenArray.leftIds,
+                                        rightIds = localSystemUserTokenArray.rightIds,
                                         tango = tango,
-                                        yomiUsed = yomiStr,
-                                        len = yomiStr.length.toShort(),
-                                        sPos = i,
+                                        yomi = yomiStr,
+                                        startPosition = i,
+                                        scoreOffset = penalty,
                                     ),
                                 )
                             }
@@ -337,16 +359,14 @@ class GraphBuilder {
                             addOrUpdateNode(
                                 graph,
                                 endIndex,
-                                Node(
-                                    l = localSystemUserTokenArray.leftIds[token.posTableIndex.toInt()],
-                                    r = localSystemUserTokenArray.rightIds[token.posTableIndex.toInt()],
-                                    score = token.wordCost.toInt() + scoreOffset,
-                                    f = token.wordCost.toInt() + scoreOffset,
-                                    g = token.wordCost.toInt() + scoreOffset,
+                                tokenToAzooKeyNode(
+                                    token = token,
+                                    leftIds = localSystemUserTokenArray.leftIds,
+                                    rightIds = localSystemUserTokenArray.rightIds,
                                     tango = tango,
-                                    yomiUsed = yomiStr,
-                                    len = yomiStr.length.toShort(),
-                                    sPos = i,
+                                    yomi = yomiStr,
+                                    startPosition = i,
+                                    scoreOffset = scoreOffset,
                                 ),
                             )
                         }
@@ -378,16 +398,13 @@ class GraphBuilder {
                                 succinctBitVector = succinctBitVectorTangoLBS
                             )
                         }
-                        val node = Node(
-                            l = tokenArray.leftIds[token.posTableIndex.toInt()],
-                            r = tokenArray.rightIds[token.posTableIndex.toInt()],
-                            score = token.wordCost.toInt(),
-                            f = token.wordCost.toInt(),
-                            g = token.wordCost.toInt(),
+                        val node = tokenToAzooKeyNode(
+                            token = token,
+                            leftIds = tokenArray.leftIds,
+                            rightIds = tokenArray.rightIds,
                             tango = tango,
-                            yomiUsed = yomiStr,
-                            len = yomiStr.length.toShort(),
-                            sPos = i
+                            yomi = yomiStr,
+                            startPosition = i,
                         )
                         addOrUpdateNode(graph, endIndex, node)
                     }
@@ -433,21 +450,17 @@ class GraphBuilder {
                                 else -> tangoTrie.getLetter(token.nodeId, succinctBitVectorTangoLBS)
                             }
 
-                            val cost = token.wordCost.toInt() + penalty
-
                             addOrUpdateNode(
                                 graph,
                                 endIndex,
-                                Node(
-                                    l = tokenArray.leftIds[token.posTableIndex.toInt()],
-                                    r = tokenArray.rightIds[token.posTableIndex.toInt()],
-                                    score = cost,
-                                    f = cost,
-                                    g = cost,
+                                tokenToAzooKeyNode(
+                                    token = token,
+                                    leftIds = tokenArray.leftIds,
+                                    rightIds = tokenArray.rightIds,
                                     tango = tango,
-                                    yomiUsed = yomiStr,
-                                    len = yomiStr.length.toShort(),
-                                    sPos = i,
+                                    yomi = yomiStr,
+                                    startPosition = i,
+                                    scoreOffset = penalty,
                                 )
                             )
                         }
@@ -483,16 +496,14 @@ class GraphBuilder {
                                 )
                             }
                             val scoreOffset = if (didOmit) omissionSearchOffSetScore else 0
-                            val node = Node(
-                                l = tokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = tokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt() + scoreOffset,
-                                f = token.wordCost.toInt() + scoreOffset,
-                                g = token.wordCost.toInt() + scoreOffset,
+                            val node = tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = tokenArray.leftIds,
+                                rightIds = tokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i
+                                yomi = yomiStr,
+                                startPosition = i,
+                                scoreOffset = scoreOffset,
                             )
                             addOrUpdateNode(graph, endIndex, node)
                         }
@@ -529,16 +540,13 @@ class GraphBuilder {
                                     succinctBitVector = succinctBitVectorWikiTangoLBS
                                 )
                             }
-                            val node = Node(
-                                l = wikiTokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = wikiTokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt(),
-                                f = token.wordCost.toInt(),
-                                g = token.wordCost.toInt(),
+                            val node = tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = wikiTokenArray.leftIds,
+                                rightIds = wikiTokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i
+                                yomi = yomiStr,
+                                startPosition = i,
                             )
                             addOrUpdateNode(graph, endIndex, node)
                         }
@@ -575,16 +583,13 @@ class GraphBuilder {
                                     succinctBitVector = succinctBitVectorwebTangoLBS
                                 )
                             }
-                            val node = Node(
-                                l = webTokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = webTokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt(),
-                                f = token.wordCost.toInt(),
-                                g = token.wordCost.toInt(),
+                            val node = tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = webTokenArray.leftIds,
+                                rightIds = webTokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i
+                                yomi = yomiStr,
+                                startPosition = i,
                             )
                             addOrUpdateNode(graph, endIndex, node)
                         }
@@ -622,16 +627,13 @@ class GraphBuilder {
                                     succinctBitVector = succinctBitVectorpersonTangoLBS
                                 )
                             }
-                            val node = Node(
-                                l = personTokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = personTokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt(),
-                                f = token.wordCost.toInt(),
-                                g = token.wordCost.toInt(),
+                            val node = tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = personTokenArray.leftIds,
+                                rightIds = personTokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i
+                                yomi = yomiStr,
+                                startPosition = i,
                             )
                             addOrUpdateNode(graph, endIndex, node)
                         }
@@ -669,16 +671,13 @@ class GraphBuilder {
                                     succinctBitVector = succinctBitVectorneologdTangoLBS
                                 )
                             }
-                            val node = Node(
-                                l = neologdTokenArray.leftIds[token.posTableIndex.toInt()],
-                                r = neologdTokenArray.rightIds[token.posTableIndex.toInt()],
-                                score = token.wordCost.toInt(),
-                                f = token.wordCost.toInt(),
-                                g = token.wordCost.toInt(),
+                            val node = tokenToAzooKeyNode(
+                                token = token,
+                                leftIds = neologdTokenArray.leftIds,
+                                rightIds = neologdTokenArray.rightIds,
                                 tango = tango,
-                                yomiUsed = yomiStr,
-                                len = yomiStr.length.toShort(),
-                                sPos = i
+                                yomi = yomiStr,
+                                startPosition = i,
                             )
                             addOrUpdateNode(graph, endIndex, node)
                         }

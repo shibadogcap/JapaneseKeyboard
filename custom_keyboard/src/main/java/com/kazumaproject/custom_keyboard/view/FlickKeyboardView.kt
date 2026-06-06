@@ -148,6 +148,8 @@ class FlickKeyboardView @JvmOverloads constructor(
     private var customSpecialKeyTextColor: Int = Color.BLACK
     private var customEnterKeyColor: Int = Color.BLUE
     private var customEnterKeyTextColor: Int = Color.WHITE
+    private var customPopupBgColor: Int = Color.WHITE
+    private var customPopupTextColor: Int = Color.BLACK
 
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
@@ -316,6 +318,8 @@ class FlickKeyboardView @JvmOverloads constructor(
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
         customEnterKeyTextColor: Int,
+        customPopupBgColor: Int,
+        customPopupTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
@@ -332,6 +336,8 @@ class FlickKeyboardView @JvmOverloads constructor(
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
         this.customEnterKeyTextColor = customEnterKeyTextColor
+        this.customPopupBgColor = customPopupBgColor
+        this.customPopupTextColor = customPopupTextColor
         this.liquidGlassEnable = liquidGlassEnable
         this.customBorderEnable = customBorderEnable
         this.customBorderColor = customBorderColor
@@ -1207,27 +1213,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customBgColor,
-                                segmentHighlightGradientStartColor = customBgColor,
-                                segmentHighlightGradientEndColor = customBgColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customKeyTextColor,
-                                textColor = customKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(
@@ -1448,27 +1454,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                         "custom" -> {
                             controller.setPopupColors(
                                 FlickPopupColorTheme(
-                                    segmentColor = customBgColor,
+                                    segmentColor = customPopupBgColor,
                                     segmentHighlightGradientStartColor = manipulateColor(
-                                        customBgColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
                                     segmentHighlightGradientEndColor = manipulateColor(
-                                        customBgColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
-                                    centerGradientStartColor = customBgColor,
-                                    centerGradientEndColor = customBgColor,
+                                    centerGradientStartColor = customPopupBgColor,
+                                    centerGradientEndColor = customPopupBgColor,
                                     centerHighlightGradientStartColor = manipulateColor(
-                                        customBgColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
                                     centerHighlightGradientEndColor = manipulateColor(
-                                        customBgColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
-                                    separatorColor = customKeyTextColor,
-                                    textColor = customKeyTextColor
+                                    separatorColor = customPopupTextColor,
+                                    textColor = customPopupTextColor
                                 )
                             )
                         }
@@ -1624,27 +1630,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customBgColor,
-                                segmentHighlightGradientStartColor = customBgColor,
-                                segmentHighlightGradientEndColor = customBgColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customKeyTextColor,
-                                textColor = customKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(
@@ -1710,27 +1716,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customBgColor,
-                                segmentHighlightGradientStartColor = customBgColor,
-                                segmentHighlightGradientEndColor = customBgColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customBgColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customKeyTextColor,
-                                textColor = customKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(

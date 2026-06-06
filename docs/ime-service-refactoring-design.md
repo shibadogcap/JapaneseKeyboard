@@ -2,7 +2,7 @@
 
 ## 目的
 
-`IMEService.kt` は現在 13,000 行を超えており、以下の責務が 1 クラスに集中している。
+`IMEService.kt` は現在約 19,218 行あり、以下の責務が 1 クラスに集中している。
 
 - IME のライフサイクル制御
 - 入力状態の保持
@@ -275,23 +275,13 @@ data class CandidateRequest(
 
 - 通常キーボード UI とフローティング UI の表示差分を吸収する
 
-インターフェース案:
+**実装済みサブセット（2026-06-05）:** `ImeKeyboardSurface`（TenKey モード参照）、`TapFlickInputBridge` + `TapFlickSurfaceActionsFactory`（サイドキー分岐）、`routeCandidateDisplay`（候補 main/floating）、henkan サイドキー UI（Phase 4a）。
+
+目標インターフェース案（未実装のメソッドは IME 残存）:
 
 ```kotlin
-interface KeyboardSurface {
-    fun showSuggestions(items: List<CandidateItem>)
-    fun hideSuggestions()
-    fun updateHenkanUi(input: String)
-    fun updateEnterKey(inputType: InputTypeForIME)
-    fun setKeyboardVisible(visible: Boolean)
-    fun setSymbolKeyboardVisible(visible: Boolean)
-}
+interface KeyboardSurface { /* showSuggestions, hideSuggestions, updateHenkanUi, ... */ }
 ```
-
-実装候補:
-
-- `MainKeyboardSurface`
-- `FloatingKeyboardSurface`
 
 ポイント:
 
@@ -466,68 +456,86 @@ InputActionDispatcher
 
 ### Phase 2. `CandidateService` 導入
 
+**進捗 (2026-06-05):** `CandidateService` / `DefaultCandidateService` / Hilt `CandidateModule` は導入済み。`getSuggestionList*` の convert/post-process は Service 経由。`ImeCandidateCoordinator` + `ImeSuggestionOrchestrator` で候補リクエストと `ComposingText` セッション同期を `IMEService` 外へ移し始めた。詳細は [azookey-candidate-service-boundary.md](azookey-candidate-service-boundary.md)。
+
+**進捗 (2026-06-05 続き):** `ImeComposingTextSession` / `ConversionSession.liveComposingText` — QWERTY Roman2Kana セッション保持。`ImeSuggestionOrchestrator` — `requestSuggestionResult` / `syncComposingSession` の第一段階抽出。
+
+**進捗 (2026-06-05 Track B/C):** `ImeSuggestionOrchestrator` に `suggestionList*` / `ImeZenzContextBuilder` を追加。`InputActionDispatcher`（Phase 6 スケルトン）、`EditorGateway`（Phase 3）、`HardwareKeyboardCoordinator`（Phase 5 スケルトン）を導入し `IMEService` から委譲開始。
+
+**進捗 (2026-06-05 Phase 2 部分完了):** `ImeCandidatePresentationCoordinator` — `applySuggestionResultToView` / `mergeBunsetsuAfterCandidateRequest` / 文節 split 状態（`computeBunsetsuUiState`）/ tail フィルタを集約。`setCandidates` / `setCandidatesOriginal` / WithoutPrediction / EnglishKana の表示は coordinator 経由。Zenz async emit は suggest **前**（legacy 順序）。単体: `ImeCandidatePresentationCoordinatorTest` / `ImeCandidateZenzContextTest`。
+
 やること:
 
-- `getSuggestionListOriginal`
-- `getSuggestionList`
-- `getSuggestionListWithoutPrediction`
-- `getSuggestionListEnglishKana`
-
-を新クラスへ移管する。
+- ライブ変換・Zenz rerank の host コールバックをさらに薄くする（任意）
 
 完了条件:
 
-- 候補生成の大半が `IMEService` 外にある
-- mode 切り替えで候補取得できる
+- [x] 候補生成の大半が `IMEService` 外にある
+- [~] 表示・文節 UI の責務がオーケストレータ／`ImeCandidatePresentationCoordinator` 境界で説明できる（候補タブ切替・一部 live 変換は IME 残存）
 
 ### Phase 3. `EditorGateway` 導入
 
-やること:
+**進捗 (2026-06-05):** `ime_service/editor/EditorGateway.kt` 導入。主要 `InputConnection` override（読み取り・書き込み・`sendKeyEvent`）、`clearSelection` / undo 用 delete、`getLeftContext` / `getRightContext` を gateway 経由に変更。
 
-- 入力先アプリへの書き込み API を gateway 化
-- 主要な commit / delete / selection 操作を移す
-
-完了条件:
-
-- `currentInputConnection` 直接参照箇所が大幅に減る
-
-### Phase 4. `KeyboardSurfaceCoordinator` 導入
+**進捗 (2026-06-05 Phase 3 完了):** `setComposingTextPreEdit` / `setComposingTextAfterEdit` を gateway に集約。`commitCompletion` / `commitCorrection` / `requestCursorUpdates` / `commitContent` 等の override とカーソル判定・Gemma・undo 経路を gateway 化。**`currentInputConnection` 直参照は 1 箇所**（`EditorGateway` の `connectionProvider` のみ）。単体: `EditorGatewayTest` 拡張。
 
 やること:
 
-- 通常 UI / Floating UI の共通操作を interface 化
-- `updateUIinHenkan*` などの重複関数を統合
+- Gemma / inline の残差分（任意）
 
 完了条件:
 
-- `Floating` サフィックス関数が減り始める
+- [x] `currentInputConnection` 直接参照箇所が大幅に減る（33 → 1）
+
+### Phase 4a. `KeyboardSurfaceCoordinator` — 変換サイドキー（部分）
+
+**進捗 (2026-06-05 Phase 4a):** `ime_service/ui/KeyboardSurfaceCoordinator.kt` — `updateUIinHenkan` / `updateUIinHenkanFloating` の**変換モード側キー**（henkan）描画のみ TenKey / Tablet 共通ロジックへ統合（タブレットは従来どおり小文字キー非更新）。`updateHenkanUi` が main + floating を一括更新。単体: `KeyboardSurfaceCoordinatorTest`。
+
+**進捗 (2026-06-05 Phase 4b 部分完了):** `ImeKeyboardSurface` / `TapFlickInputBridge` — `handleTapAndFlick` / `handleTapAndFlickFloating` の Enter・Space・Delete・文字キー分岐を共通化（公開 `handle*Floating` は薄ラッパー維持）。`KeyboardSurfaceCoordinator.routeCandidateDisplay` — 物理 KB 時 floating 候補バー振り分け。単体: `TapFlickInputBridgeTest` / `KeyboardSurfaceCandidateRoutingTest`。
+
+**未着手 (Phase 4b 残):** `handleTap` / `handleFlick` / `handleLongPress` 各 Floating ペア、QWERTY 系 space/enter、候補タブ visibility の surface API。
+
+やること:
+
+- 候補バー visibility 等の surface API 拡張（任意）
+
+完了条件:
+
+- [~] `Floating` サフィックス関数の**中身**が coordinator / bridge に移る（**henkan + tap/flick サイドキー本体（Enter/Space/Delete/文字）完了**；tap/flick 文字入力・long press 等は IME 残存。メソッド名は互換のため残存）
 
 ### Phase 5. `HardwareKeyboardCoordinator` 導入
 
+**進捗 (2026-06-05):** `HardwareKeyboardCoordinator` + `PhysicalKeyboardPresenceListener`。全 device コールバックと `onStartInputView` で `refreshPresence` → `checkForPhysicalKeyboard`。
+
+**進捗 (2026-06-05 Phase 5 部分完了):** `applyPresenceEffect` / `buildPresenceEffect` で floating dismiss・`_physicalKeyboardEnable`（接続 32ms 遅延 / 切断即時）・floating モード復帰を集約。Zenz キャッシュは HW **接続状態が変わったときのみ**クリア。`shouldRouteCandidatesToFloatingBar` / `shouldUseFloatingCandidateBar` で Flow 解釈を単一化。`resolveFloatingCandidateAnchor` + `onUpdateCursorAnchorInfo` 委譲。単体: `HardwareKeyboardCoordinatorTest`（副作用順序・emit タイミング）。
+
+**進捗 (2026-06-05 Phase 5 部分完了):** `PhysicalKeyboardUiEffectHandler` — `physicalKeyboardEnable.collect` UI 副作用と `requestCursorUpdates` ポリシーを IME から移管（host 経由で View 操作）。`HardwareKeyboardCoordinator.cursorUpdateFlagsForPhysicalKeyboardEnabled` 追加。単体: `PhysicalKeyboardUiEffectHandlerTest`。
+
 やること:
 
-- `isDevicePhysicalKeyboard()`
-- `checkForPhysicalKeyboard()`
-- `onInputDeviceAdded()` / `Changed()` / `Removed()`
-- `onUpdateCursorAnchorInfo()`
-
-周辺の責務を集約する。
+- dock / window insets の残差分（任意）
 
 完了条件:
 
-- 物理キーボード接続時の表示切り替えと候補追従の責務が `IMEService` 外へ移る
-- `physicalKeyboardEnable` の解釈が 1 箇所に集約される
+- [~] 物理キーボード接続時の表示切り替えと候補追従の責務が coordinator 境界で説明できる（**collect UI は handler 経由**；View 実装は IME host 残存）
+- [x] `physicalKeyboardEnable` の解釈・emit スケジュールが `HardwareKeyboardCoordinator` に集約
 
 ### Phase 6. `InputActionDispatcher` / `KeyboardModeController` 分離
 
+**進捗 (2026-06-05):** `InputActionDispatcher` で `onKeyDown` モード振り分け。未処理キーは各 `handle*KeyDown` 内の `super.onKeyDown` のみ（二重呼び出しなし）。
+
+**進捗 (2026-06-05 Phase 6 部分完了):** `KeyboardModeController` — `sessionMode` を dispatcher が参照。`InputActionDispatcher.dispatchTenKeyGesture` — 日本語 TenKey tap/flick の main/floating 振り分け。`currentInputModeForSession` は controller へ委譲（既存 `setCurrentInputModeForSession` 互換）。単体: `KeyboardModeControllerTest`（拡張）。
+
+**進捗 (2026-06-05 Phase 7 スケッチ):** `ImeSessionState` + `currentImeSessionSnapshot()` — オーケストレータ read-only 参照用（全面移行は未）。
+
 やること:
 
-- `handle*` 群の責務整理
+- `handle*` 群の残り（long press / QWERTY / custom keyboard）
 - キーボード遷移と入力解釈の分離
 
 完了条件:
 
-- `IMEService` は Android イベント受け取りと委譲に集中する
+- [~] `IMEService` は Android イベント受け取りと委譲に集中しつつある（**onKeyDown + 主要 TenKey ジェスチャは dispatcher/bridge 経由**）
 
 ## テスト戦略
 
@@ -545,7 +553,11 @@ IME は UI テストや端末依存が強いため、いきなり完全自動化
 - `HardwareKeyboardCoordinator`
 - `KeyboardModeController`
 
-### 3. 結合テストは代表操作に絞る
+### 3. 性能テストのゲート
+
+`QwertyGlideDecoderPerformanceTest` は `./gradlew :app:testFullStandardDebugUnitTest` から **除外**（Gradle `excludeTestsMatching`）。手動・CI 別ジョブで実行。ambiguous ケースのみ p95 400ms 緩和。
+
+### 4. 結合テストは代表操作に絞る
 
 最低限の代表ケース:
 

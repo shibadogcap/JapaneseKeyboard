@@ -231,6 +231,8 @@ class FlickKeyboardSizeSettingsFragment : Fragment() {
             customKeyTextColor = AppPreference.custom_theme_key_text_color,
             customSpecialKeyTextColor = AppPreference.custom_theme_special_key_text_color,
             customEnterKeyTextColor = AppPreference.custom_theme_enter_key_text_color,
+            customPopupBgColor = AppPreference.custom_theme_popup_bg_color,
+            customPopupTextColor = AppPreference.custom_theme_popup_text_color,
             liquidGlassEnable = AppPreference.liquid_glass_preference,
             customBorderEnable = AppPreference.custom_theme_border_enable,
             customBorderColor = AppPreference.custom_theme_border_color,

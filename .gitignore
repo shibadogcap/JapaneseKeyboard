@@ -25,4 +25,8 @@ app/release
 app/fullStandard/
 app/liteFdroid/
 app/liteStandard
+app/src/main/assets
 MEDIA/
+*.kt.bak
+**/IMEService.kt.bak
+clones/

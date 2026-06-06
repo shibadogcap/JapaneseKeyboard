@@ -17,6 +17,16 @@ interface SystemUserDictionaryDao {
     @Query("SELECT * FROM system_user_dictionary_entry ORDER BY yomi ASC, tango ASC, id ASC")
     suspend fun getAllForBuild(): List<SystemUserDictionaryEntry>
 
+    @Query(
+        """
+        SELECT * FROM system_user_dictionary_entry
+        WHERE yomi LIKE :prefix || '%'
+        ORDER BY score ASC, yomi ASC, tango ASC, id ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun searchByReadingPrefix(prefix: String, limit: Int): List<SystemUserDictionaryEntry>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entry: SystemUserDictionaryEntry)
 

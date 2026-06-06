@@ -43,6 +43,31 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
     private val selectEnterLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageSelected(it, "custom_enter_icon", "enter") }
     }
+    private val selectEnterAccessLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_access_icon", "enter_access") }
+    }
+    private val selectEnterDoneLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_done_icon", "enter_done") }
+    }
+    private val selectEnterGoLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_go_icon", "enter_go") }
+    }
+    private val selectEnterNextLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_next_icon", "enter_next") }
+    }
+    private val selectEnterPreviousLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_previous_icon", "enter_previous") }
+    }
+    private val selectEnterSearchLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_search_icon", "enter_search") }
+    }
+    private val selectEnterSendLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_enter_send_icon", "enter_send") }
+    }
+    private val selectConvertLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { handleImageSelected(it, "custom_convert_icon", "convert") }
+    }
+
     private val selectSpaceLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { handleImageSelected(it, "custom_space_icon", "space") }
     }
@@ -99,6 +124,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         private const val PREF_KEY_CUSTOM_SPECIAL_TEXT = "theme_custom_special_key_text_color"
         private const val PREF_KEY_CUSTOM_ENTER = "theme_custom_enter_key_color"
         private const val PREF_KEY_CUSTOM_ENTER_TEXT = "theme_custom_enter_key_text_color"
+        private const val PREF_KEY_CUSTOM_POPUP_BG = "theme_custom_popup_bg_color"
+        private const val PREF_KEY_CUSTOM_POPUP_TEXT = "theme_custom_popup_text_color"
         private const val PREF_KEY_CUSTOM_CANDIDATE_TEXT =
             "theme_custom_candidate_text_color"
         private const val PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG =
@@ -236,6 +263,20 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             getString(R.string.theme_custom_bg_color)
         ) { appPreference.custom_theme_bg_color }
         customCategory.addPreference(customBgPref)
+
+        val customPopupBgPref = createColorPreference(
+            context,
+            PREF_KEY_CUSTOM_POPUP_BG,
+            "フリックポップアップの背景色"
+        ) { appPreference.custom_theme_popup_bg_color }
+        customCategory.addPreference(customPopupBgPref)
+
+        val customPopupTextPref = createColorPreference(
+            context,
+            PREF_KEY_CUSTOM_POPUP_TEXT,
+            "フリックポップアップの文字色"
+        ) { appPreference.custom_theme_popup_text_color }
+        customCategory.addPreference(customPopupTextPref)
 
         // Custom Key Color
         val customKeyPref = createColorPreference(
@@ -516,9 +557,86 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         }
         iconCategory.addPreference(enterPref)
 
+        val enterAccessPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_access"
+            title = "「確定 (Enter - Access)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_access")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_access", selectEnterAccessLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterAccessPref)
+
+        val enterDonePref = Preference(context).apply {
+            key = "custom_key_appearance_enter_done"
+            title = "「確定 (Enter - Done)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_done")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_done", selectEnterDoneLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterDonePref)
+
+        val enterGoPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_go"
+            title = "「確定 (Enter - Go)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_go")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_go", selectEnterGoLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterGoPref)
+
+        val enterNextPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_next"
+            title = "「確定 (Enter - Next)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_next")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_next", selectEnterNextLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterNextPref)
+
+        val enterPreviousPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_previous"
+            title = "「確定 (Enter - Previous)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_previous")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_previous", selectEnterPreviousLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterPreviousPref)
+
+        val enterSearchPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_search"
+            title = "「確定 (Enter - Search)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_search")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_search", selectEnterSearchLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterSearchPref)
+
+        val enterSendPref = Preference(context).apply {
+            key = "custom_key_appearance_enter_send"
+            title = "「確定 (Enter - Send)」キーの見た目"
+            updateSpecialKeySummary(this, "enter_send")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "enter_send", selectEnterSendLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(enterSendPref)
+
         val spacePref = Preference(context).apply {
             key = "custom_key_appearance_space"
-            title = "「スペース (変換)」キーの見た目"
+            title = "「スペース (空白)」キーの見た目"
             updateSpecialKeySummary(this, "space")
             setOnPreferenceClickListener {
                 showSpecialKeyAppearanceDialog(this, "space", selectSpaceLauncher)
@@ -526,6 +644,17 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             }
         }
         iconCategory.addPreference(spacePref)
+
+        val convertPref = Preference(context).apply {
+            key = "custom_key_appearance_convert"
+            title = "「変換」キーの見た目"
+            updateSpecialKeySummary(this, "convert")
+            setOnPreferenceClickListener {
+                showSpecialKeyAppearanceDialog(this, "convert", selectConvertLauncher)
+                true
+            }
+        }
+        iconCategory.addPreference(convertPref)
 
         val symbolPref = Preference(context).apply {
             key = "custom_key_appearance_symbol"
@@ -658,6 +787,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         findPreference<Preference>(PREF_KEY_CUSTOM_SPECIAL_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_ENTER)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_ENTER_TEXT)?.isVisible = isVisible
+        findPreference<Preference>(PREF_KEY_CUSTOM_POPUP_BG)?.isVisible = isVisible
+        findPreference<Preference>(PREF_KEY_CUSTOM_POPUP_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_TEXT)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG)?.isVisible = isVisible
         findPreference<Preference>(PREF_KEY_CUSTOM_CANDIDATE_ITEM_PRESSED_BG)?.isVisible = isVisible
@@ -683,6 +814,8 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
                 color
             PREF_KEY_CUSTOM_ENTER -> appPreference.custom_theme_enter_key_color = color
             PREF_KEY_CUSTOM_ENTER_TEXT -> appPreference.custom_theme_enter_key_text_color = color
+            PREF_KEY_CUSTOM_POPUP_BG -> appPreference.custom_theme_popup_bg_color = color
+            PREF_KEY_CUSTOM_POPUP_TEXT -> appPreference.custom_theme_popup_text_color = color
             PREF_KEY_CUSTOM_CANDIDATE_TEXT -> appPreference.custom_theme_candidate_text_color =
                 color
             PREF_KEY_CUSTOM_CANDIDATE_ITEM_BG ->
@@ -784,6 +917,13 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             "space" -> appPreference.custom_text_space
             "symbol" -> appPreference.custom_text_symbol
             "123" -> appPreference.custom_text_123
+            "enter_access" -> appPreference.custom_text_enter_access
+            "enter_done" -> appPreference.custom_text_enter_done
+            "enter_go" -> appPreference.custom_text_enter_go
+            "enter_next" -> appPreference.custom_text_enter_next
+            "enter_search" -> appPreference.custom_text_enter_search
+            "enter_send" -> appPreference.custom_text_enter_send
+            "convert" -> appPreference.custom_text_convert
             else -> ""
         }
 
@@ -859,9 +999,41 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
                 appPreference.custom_text_enter = text
                 appPreference.custom_icon_enter_path = ""
             }
+            "enter_access" -> {
+                appPreference.custom_text_enter_access = text
+                appPreference.custom_icon_enter_access_path = ""
+            }
+            "enter_done" -> {
+                appPreference.custom_text_enter_done = text
+                appPreference.custom_icon_enter_done_path = ""
+            }
+            "enter_go" -> {
+                appPreference.custom_text_enter_go = text
+                appPreference.custom_icon_enter_go_path = ""
+            }
+            "enter_next" -> {
+                appPreference.custom_text_enter_next = text
+                appPreference.custom_icon_enter_next_path = ""
+            }
+            "enter_previous" -> {
+                appPreference.custom_text_enter_previous = text
+                appPreference.custom_icon_enter_previous_path = ""
+            }
+            "enter_search" -> {
+                appPreference.custom_text_enter_search = text
+                appPreference.custom_icon_enter_search_path = ""
+            }
+            "enter_send" -> {
+                appPreference.custom_text_enter_send = text
+                appPreference.custom_icon_enter_send_path = ""
+            }
             "space" -> {
                 appPreference.custom_text_space = text
                 appPreference.custom_icon_space_path = ""
+            }
+            "convert" -> {
+                appPreference.custom_text_convert = text
+                appPreference.custom_icon_convert_path = ""
             }
             "symbol" -> {
                 appPreference.custom_text_symbol = text
@@ -894,9 +1066,41 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
                 appPreference.custom_text_enter = ""
                 appPreference.custom_icon_enter_path = ""
             }
+            "enter_access" -> {
+                appPreference.custom_text_enter_access = ""
+                appPreference.custom_icon_enter_access_path = ""
+            }
+            "enter_done" -> {
+                appPreference.custom_text_enter_done = ""
+                appPreference.custom_icon_enter_done_path = ""
+            }
+            "enter_go" -> {
+                appPreference.custom_text_enter_go = ""
+                appPreference.custom_icon_enter_go_path = ""
+            }
+            "enter_next" -> {
+                appPreference.custom_text_enter_next = ""
+                appPreference.custom_icon_enter_next_path = ""
+            }
+            "enter_previous" -> {
+                appPreference.custom_text_enter_previous = ""
+                appPreference.custom_icon_enter_previous_path = ""
+            }
+            "enter_search" -> {
+                appPreference.custom_text_enter_search = ""
+                appPreference.custom_icon_enter_search_path = ""
+            }
+            "enter_send" -> {
+                appPreference.custom_text_enter_send = ""
+                appPreference.custom_icon_enter_send_path = ""
+            }
             "space" -> {
                 appPreference.custom_text_space = ""
                 appPreference.custom_icon_space_path = ""
+            }
+            "convert" -> {
+                appPreference.custom_text_convert = ""
+                appPreference.custom_icon_convert_path = ""
             }
             "symbol" -> {
                 appPreference.custom_text_symbol = ""
@@ -925,7 +1129,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
     private fun updateSpecialKeySummary(pref: Preference, type: String) {
         val hasImage = when (type) {
             "enter" -> appPreference.custom_icon_enter_path.isNotEmpty()
+            "enter_access" -> appPreference.custom_icon_enter_access_path.isNotEmpty()
+            "enter_done" -> appPreference.custom_icon_enter_done_path.isNotEmpty()
+            "enter_go" -> appPreference.custom_icon_enter_go_path.isNotEmpty()
+            "enter_next" -> appPreference.custom_icon_enter_next_path.isNotEmpty()
+            "enter_previous" -> appPreference.custom_icon_enter_previous_path.isNotEmpty()
+            "enter_search" -> appPreference.custom_icon_enter_search_path.isNotEmpty()
+            "enter_send" -> appPreference.custom_icon_enter_send_path.isNotEmpty()
             "space" -> appPreference.custom_icon_space_path.isNotEmpty()
+            "convert" -> appPreference.custom_icon_convert_path.isNotEmpty()
             "left" -> appPreference.custom_icon_arrow_left_path.isNotEmpty()
             "right" -> appPreference.custom_icon_arrow_right_path.isNotEmpty()
             "mode_switch" -> appPreference.custom_icon_mode_switch_path.isNotEmpty()
@@ -944,7 +1156,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             "emoji" -> appPreference.custom_text_emoji
             "delete" -> appPreference.custom_text_delete
             "enter" -> appPreference.custom_text_enter
+            "enter_access" -> appPreference.custom_text_enter_access
+            "enter_done" -> appPreference.custom_text_enter_done
+            "enter_go" -> appPreference.custom_text_enter_go
+            "enter_next" -> appPreference.custom_text_enter_next
+            "enter_previous" -> appPreference.custom_text_enter_previous
+            "enter_search" -> appPreference.custom_text_enter_search
+            "enter_send" -> appPreference.custom_text_enter_send
             "space" -> appPreference.custom_text_space
+            "convert" -> appPreference.custom_text_convert
             "symbol" -> appPreference.custom_text_symbol
             "123" -> appPreference.custom_text_123
             else -> ""
@@ -952,7 +1172,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
 
         val imagePath = when (type) {
             "enter" -> appPreference.custom_icon_enter_path
+            "enter_access" -> appPreference.custom_icon_enter_access_path
+            "enter_done" -> appPreference.custom_icon_enter_done_path
+            "enter_go" -> appPreference.custom_icon_enter_go_path
+            "enter_next" -> appPreference.custom_icon_enter_next_path
+            "enter_previous" -> appPreference.custom_icon_enter_previous_path
+            "enter_search" -> appPreference.custom_icon_enter_search_path
+            "enter_send" -> appPreference.custom_icon_enter_send_path
             "space" -> appPreference.custom_icon_space_path
+            "convert" -> appPreference.custom_icon_convert_path
             "left" -> appPreference.custom_icon_arrow_left_path
             "right" -> appPreference.custom_icon_arrow_right_path
             "mode_switch" -> appPreference.custom_icon_mode_switch_path
@@ -1098,7 +1326,15 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
         if (path != null) {
             when (type) {
                 "enter" -> appPreference.custom_icon_enter_path = path
+                "enter_access" -> appPreference.custom_icon_enter_access_path = path
+                "enter_done" -> appPreference.custom_icon_enter_done_path = path
+                "enter_go" -> appPreference.custom_icon_enter_go_path = path
+                "enter_next" -> appPreference.custom_icon_enter_next_path = path
+                "enter_previous" -> appPreference.custom_icon_enter_previous_path = path
+                "enter_search" -> appPreference.custom_icon_enter_search_path = path
+                "enter_send" -> appPreference.custom_icon_enter_send_path = path
                 "space" -> appPreference.custom_icon_space_path = path
+                "convert" -> appPreference.custom_icon_convert_path = path
                 "left" -> appPreference.custom_icon_arrow_left_path = path
                 "right" -> appPreference.custom_icon_arrow_right_path = path
                 "shift_off" -> appPreference.custom_icon_shift_off_path = path

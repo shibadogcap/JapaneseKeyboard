@@ -27,7 +27,8 @@ class VariationsPopupView(context: Context) : View(context) {
     var maxColumns = 3 // デフォルトは3 (元のコードに合わせる)
 
     // ■■■ 共通設定 ■■■
-    private val cornerRadius = 30f
+    private val cornerRadius: Float
+        get() = 30f * context.resources.displayMetrics.density
     private val clipPath = Path()
     private var chars: List<Char> = emptyList()
     private var selectedIndex = -1
@@ -154,6 +155,8 @@ class VariationsPopupView(context: Context) : View(context) {
             0f, 0f, width.toFloat(), height.toFloat(),
             cornerRadius, cornerRadius, Path.Direction.CW
         )
+        
+        canvas.save()
         canvas.clipPath(clipPath)
 
         // 背景描画
@@ -192,6 +195,25 @@ class VariationsPopupView(context: Context) : View(context) {
             canvas.drawText(char.toString(), cx, cy, targetPaint)
             targetPaint.textSize = originalTextSize
         }
+        
+        canvas.restore()
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = context.resources.displayMetrics.density * 1f
+            color = if (currentStyle == PopupStyle.NEUMORPHISM) {
+                manipulateColor(neuBackgroundPaint.color, 0.85f)
+            } else {
+                manipulateColor(flatBackgroundPaint.color, if (flatBackgroundPaint.color == Color.WHITE) 0.85f else 0.8f)
+            }
+        }
+        val rectF = RectF(
+            strokePaint.strokeWidth / 2f,
+            strokePaint.strokeWidth / 2f,
+            width.toFloat() - strokePaint.strokeWidth / 2f,
+            height.toFloat() - strokePaint.strokeWidth / 2f
+        )
+        canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, strokePaint)
     }
 
     private fun fittedTextSize(paint: Paint, text: String, cellWidth: Float, cellHeight: Float): Float {

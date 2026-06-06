@@ -309,6 +309,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private var customSpecialKeyColor: Int = Color.GRAY
     private var customKeyTextColor: Int = Color.BLACK
     private var customSpecialKeyTextColor: Int = Color.BLACK
+    private var customPopupBgColor: Int = Color.WHITE
+    private var customPopupTextColor: Int = Color.BLACK
     private var liquidGlassEnable: Boolean = false
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
@@ -875,7 +877,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         customTextEnter: String = "",
         customTextSpace: String = "",
         customTextSymbol: String = "",
-        customText123: String = ""
+        customText123: String = "",
+        convertPath: String = "",
+        customTextConvert: String = ""
     ) {
         val enterDrawable = loadCustomIcon(enterPath)
         customEnterDrawable = enterDrawable?.let { fitDrawable(it) }
@@ -921,6 +925,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         customTextSymbolStr = customTextSymbol
         customText123Str = customText123
 
+        customTextConvertStr = customTextConvert
+        val convertDrawable = loadCustomIcon(convertPath)
+        customConvertDrawable = convertDrawable?.let { fitDrawable(it) }
+
         applySpecialKeyCustomizations()
     }
 
@@ -964,6 +972,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
         customEnterKeyTextColor: Int,
+        customPopupBgColor: Int,
+        customPopupTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
@@ -982,6 +992,8 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         this.customSpecialKeyColor = customSpecialKeyColor
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
+        this.customPopupBgColor = customPopupBgColor
+        this.customPopupTextColor = customPopupTextColor
 
         this.liquidGlassEnable = liquidGlassEnable
 
@@ -1105,9 +1117,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         if (!::popTextActive.isInitialized) return
         val (bubbleColor, strokeColor, textColor) = when {
             themeMode == "custom" -> Triple(
-                customBgColor,
-                manipulateColor(customBgColor, if (isNightMode) 1.35f else 0.86f),
-                customKeyTextColor
+                customPopupBgColor,
+                manipulateColor(customPopupBgColor, if (isNightMode) 1.25f else 0.75f),
+                customPopupTextColor
             )
             isNightMode -> Triple(
                 ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_bg),
@@ -1258,8 +1270,14 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 } else {
                     view.background = insetEnterBackground(enterDrawableState?.newDrawable()?.mutate())
                 }
-                if (view is MaterialTextView) view.setTextColor(enterColorStateList)
-                if (view is AppCompatButton) view.setTextColor(enterColorStateList)
+                if (view is MaterialTextView) {
+                    view.setTextColor(enterColorStateList)
+                    androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(view, enterColorStateList)
+                }
+                if (view is AppCompatButton) {
+                    view.setTextColor(enterColorStateList)
+                    androidx.core.widget.TextViewCompat.setCompoundDrawableTintList(view, enterColorStateList)
+                }
                 if (view is AppCompatImageButton) {
                     ImageViewCompat.setImageTintList(view, enterColorStateList)
                 }
@@ -2890,25 +2908,35 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     @Suppress("UNUSED_PARAMETER")
     fun setSideKeySpaceDrawable(drawable: Drawable?) {
         prepareSpecialKeyButton(binding.keySpace)
-        if (customTextSpaceStr.isNotEmpty()) {
-            binding.keySpace.setCompoundDrawables(null, null, null, null)
-            binding.keySpace.text = customTextSpaceStr
-            customTypeface?.let { binding.keySpace.typeface = it }
-            return
-        }
-        val defaultDrawable = if (
-            drawable != null &&
+        val isHenkanMode = drawable != null &&
             cachedHenkanDrawable?.constantState != null &&
             drawable.constantState == cachedHenkanDrawable?.constantState
-        ) {
-            cachedHenkanDrawable
+
+        if (isHenkanMode) {
+            if (customTextConvertStr.isNotEmpty()) {
+                binding.keySpace.setCompoundDrawables(null, null, null, null)
+                binding.keySpace.text = customTextConvertStr
+                customTypeface?.let { binding.keySpace.typeface = it }
+                return
+            }
+            if (customConvertDrawable != null) {
+                setCenteredIcon(binding.keySpace, customConvertDrawable)
+            } else {
+                setCenteredIcon(binding.keySpace, cachedHenkanDrawable, tintAsDefaultIcon = true)
+            }
         } else {
-            drawable ?: cachedSpaceDrawable
-        }
-        if (customSpaceDrawable != null) {
-            setCenteredIcon(binding.keySpace, customSpaceDrawable)
-        } else {
-            setCenteredIcon(binding.keySpace, defaultDrawable, tintAsDefaultIcon = true)
+            if (customTextSpaceStr.isNotEmpty()) {
+                binding.keySpace.setCompoundDrawables(null, null, null, null)
+                binding.keySpace.text = customTextSpaceStr
+                customTypeface?.let { binding.keySpace.typeface = it }
+                return
+            }
+            if (customSpaceDrawable != null) {
+                setCenteredIcon(binding.keySpace, customSpaceDrawable)
+            } else {
+                val defaultDrawable = drawable ?: cachedSpaceDrawable
+                setCenteredIcon(binding.keySpace, defaultDrawable, tintAsDefaultIcon = true)
+            }
         }
         customTypeface?.let { binding.keySpace.typeface = it }
     }
@@ -3318,6 +3346,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     private var customEnterDrawable: Drawable? = null
     private var customSpaceDrawable: Drawable? = null
+    private var customConvertDrawable: Drawable? = null
     private var customLeftDrawable: Drawable? = null
     private var customRightDrawable: Drawable? = null
 
@@ -3333,6 +3362,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
     private var customTextEnterStr: String = ""
     private var customTextSpaceStr: String = ""
+    private var customTextConvertStr: String = ""
     private var customTextSymbolStr: String = ""
     private var customText123Str: String = ""
 

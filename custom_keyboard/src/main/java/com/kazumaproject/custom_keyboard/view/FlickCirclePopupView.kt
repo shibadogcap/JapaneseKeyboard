@@ -67,13 +67,13 @@ class FlickCirclePopupView @JvmOverloads constructor(
     private val segmentAngleMap =
         mutableMapOf<FlickDirection, Pair<Float, Float>>()
 
-    private var shapeType: ShapeType = ShapeType.CIRCLE
+    private var shapeType: ShapeType = ShapeType.ROUNDED_SQUARE
 
     // --- UI Size Properties ---
     private var centerCircleRadius = 60f
     private var orbitRadius = 160f
     private var upperOrbitRadius: Float? = null
-    private var cornerRadius = 60f
+    private var cornerRadius = 24f
 
     var preferredWidth = (orbitRadius * 2).toInt()
         private set

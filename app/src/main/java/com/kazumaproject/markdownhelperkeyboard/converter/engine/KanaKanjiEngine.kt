@@ -19,6 +19,9 @@ import com.kazumaproject.domain.toSymbolCategory
 import com.kazumaproject.hiraToKata
 import com.kazumaproject.markdownhelperkeyboard.converter.ConnectionMatrix
 import com.kazumaproject.markdownhelperkeyboard.converter.bitset.SuccinctBitVector
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionarySourceKind
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyMid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.graph.GraphBuilder
@@ -1310,12 +1313,12 @@ class KanaKanjiEngine {
         val mozcUTWebList = if (mozcUTWeb == true) getMozcUTWeb(input) else emptyList()
 
         val resultList =
-            resultNBestFinalDeferred + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra
+            resultNBestFinalDeferred + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra + emojiListDeferred + emoticonListDeferred + symbolListDeferred
 
         val resultListFinal =
             resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string })
 
-        return resultListFinal + kotowazaListDeferred + symbolHalfWidthListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + (emojiListDeferred + emoticonListDeferred).sortedBy { it.score } + symbolListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
+        return resultListFinal + kotowazaListDeferred + symbolHalfWidthListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
 
     }
 
@@ -1811,10 +1814,10 @@ class KanaKanjiEngine {
         val mozcUTWebList = if (mozcUTWeb == true) getMozcUTWeb(input) else emptyList()
 
         val resultList =
-            resultNBestFinalDeferred.candidates + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra
+            resultNBestFinalDeferred.candidates + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra + emojiListDeferred + emoticonListDeferred + symbolListDeferred
 
         val resultListFinal =
-            resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string }) + kotowazaListDeferred + symbolHalfWidthListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + (emojiListDeferred + emoticonListDeferred).sortedBy { it.score } + symbolListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
+            resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string }) + kotowazaListDeferred + symbolHalfWidthListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
 
         return BunsetsuCandidateResult(
             candidates = resultListFinal,
@@ -2703,12 +2706,12 @@ class KanaKanjiEngine {
         val mozcUTWebList = if (mozcUTWeb == true) getMozcUTWeb(input) else emptyList()
 
         val resultList =
-            resultNBestFinalDeferred + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra
+            resultNBestFinalDeferred + readingCorrectionListDeferred + predictiveSearchResult + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra + symbolListDeferred
 
         val resultListFinal =
             resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string })
 
-        return resultListFinal + kotowazaListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + hirakanaAndKana + yomiPartListDeferred + symbolListDeferred + singleKanjiListDeferred
+        return resultListFinal + kotowazaListDeferred + (englishDeferred + englishZenkaku).sortedBy { it.score } + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
 
     }
 
@@ -3166,12 +3169,12 @@ class KanaKanjiEngine {
         val mozcUTWebList = if (mozcUTWeb == true) getMozcUTWeb(input) else emptyList()
 
         val resultList =
-            resultNBestFinalDeferred + readingCorrectionListDeferred + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra
+            resultNBestFinalDeferred + readingCorrectionListDeferred + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra + emojiListDeferred + emoticonListDeferred + symbolListDeferred
 
         val resultListFinal =
             resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string })
 
-        return resultListFinal + (englishDeferred + englishZenkaku).sortedBy { it.score } + symbolHalfWidthListDeferred + (emojiListDeferred + emoticonListDeferred).sortedBy { it.score } + symbolListDeferred + kotowazaListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
+        return resultListFinal + (englishDeferred + englishZenkaku).sortedBy { it.score } + symbolHalfWidthListDeferred + kotowazaListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
 
     }
 
@@ -3652,10 +3655,10 @@ class KanaKanjiEngine {
         val mozcUTWebList = if (mozcUTWeb == true) getMozcUTWeb(input) else emptyList()
 
         val resultList =
-            resultNBestFinalDeferred.candidates + readingCorrectionListDeferred + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra
+            resultNBestFinalDeferred.candidates + readingCorrectionListDeferred + mozcUTPersonNames + mozcUTPlacesList + mozcUTWikiList + mozcUTNeologdList + mozcUTWebList + listOfDictionaryToday + numbersDeferred + convertYearToEra + emojiListDeferred + emoticonListDeferred + symbolListDeferred
 
         val resultListFinal =
-            resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string }) + (englishDeferred + englishZenkaku).sortedBy { it.score } + symbolHalfWidthListDeferred + (emojiListDeferred + emoticonListDeferred).sortedBy { it.score } + symbolListDeferred + kotowazaListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
+            resultList.sortedWith(compareBy<Candidate> { it.score }.thenBy { it.string }) + (englishDeferred + englishZenkaku).sortedBy { it.score } + symbolHalfWidthListDeferred + kotowazaListDeferred + hirakanaAndKana + yomiPartListDeferred + singleKanjiListDeferred
 
         return BunsetsuCandidateResult(
             candidates = resultListFinal,
@@ -3964,6 +3967,79 @@ class KanaKanjiEngine {
             symbol = symbol, category = categorizeEmoji(symbol)
         )
     }.sortByEmojiCategory()
+
+    fun searchEmojiDictionaryEntries(input: String, limit: Int): List<AzooKeyDictionaryEntry> {
+        if (input.isBlank() || limit <= 0) {
+            return emptyList()
+        }
+        val readings = deferredPredictionEmojiSymbols(
+            input = input,
+            yomiTrie = emojiYomiTrie,
+            succinctBitVector = emojiSuccinctBitVectorLBSYomi,
+        )
+        return deferredFromDictionarySymbols(
+            input = input,
+            commonPrefixListString = readings,
+            yomiTrie = emojiYomiTrie,
+            tokenArray = emojiTokenArray,
+            tangoTrie = emojiTangoTrie,
+            succinctBitVectorLBSYomi = emojiSuccinctBitVectorLBSYomi,
+            succinctBitVectorIsLeafYomi = emojiSuccinctBitVectorIsLeafYomi,
+            succinctBitVectorTokenArray = emojiSuccinctBitVectorTokenArray,
+            succinctBitVectorTangoLBS = emojiSuccinctBitVectorTangoLBS,
+            type = 11,
+        ).take(limit).map { candidate ->
+            AzooKeyDictionaryEntry(
+                surface = candidate.string,
+                reading = candidate.yomi ?: input,
+                leftId = candidate.leftId?.toInt(),
+                rightId = candidate.rightId?.toInt(),
+                mid = AzooKeyMid.EMOJI,
+                wordCost = candidate.score,
+                sourceKind = AzooKeyDictionarySourceKind.Emoji,
+            )
+        }
+    }
+
+    fun searchSymbolDictionaryEntries(input: String, limit: Int): List<AzooKeyDictionaryEntry> {
+        if (input.isBlank() || limit <= 0) {
+            return emptyList()
+        }
+        val readings = deferredPredictionEmojiSymbols(
+            input = input,
+            yomiTrie = symbolYomiTrie,
+            succinctBitVector = symbolSuccinctBitVectorLBSYomi,
+        )
+        val candidates = deferredFromDictionarySymbols(
+            input = input,
+            commonPrefixListString = readings,
+            yomiTrie = symbolYomiTrie,
+            tokenArray = symbolTokenArray,
+            tangoTrie = symbolTangoTrie,
+            succinctBitVectorLBSYomi = symbolSuccinctBitVectorLBSYomi,
+            succinctBitVectorIsLeafYomi = symbolSuccinctBitVectorIsLeafYomi,
+            succinctBitVectorTokenArray = symbolSuccinctBitVectorTokenArray,
+            succinctBitVectorTangoLBS = symbolSuccinctBitVectorTangoLBS,
+            type = 13,
+        ).let { result ->
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                result.filterNot { it.string.containsHentaigana() }
+            } else {
+                result
+            }
+        }
+        return candidates.take(limit).map { candidate ->
+            AzooKeyDictionaryEntry(
+                surface = candidate.string,
+                reading = candidate.yomi ?: input,
+                leftId = candidate.leftId?.toInt(),
+                rightId = candidate.rightId?.toInt(),
+                mid = AzooKeyMid.GENERAL,
+                wordCost = candidate.score,
+                sourceKind = AzooKeyDictionarySourceKind.Symbol,
+            )
+        }
+    }
 
     fun getSymbolEmoticonCandidates(): List<Emoticon> = emoticonTokenArray.getNodeIds().map {
         emoticonTangoTrie.getLetterShortArray(
@@ -4292,6 +4368,11 @@ class KanaKanjiEngine {
             tokenArray.getListDictionaryByYomiTermIdShortArray(
                 termIdArray, succinctBitVectorTokenArray
             ).map { entry ->
+                val penalty = when (type.toInt()) {
+                    13 -> 3500
+                    11, 12 -> 2000
+                    else -> 0
+                }
                 Candidate(
                     string = when (entry.nodeId) {
                         -2 -> yomi
@@ -4302,13 +4383,14 @@ class KanaKanjiEngine {
                     },
                     type = type,
                     length = yomi.length.toUByte(),
-                    score = entry.wordCost.toInt() + if (yomi.length == input.length) 0
-                    else 1000 * (yomi.length - input.length),
+                    score = entry.wordCost.toInt() + penalty + if (yomi.length == input.length) 0
+                    else 1500 * (yomi.length - input.length),
+                    yomi = yomi,
                     leftId = tokenArray.leftIds[entry.posTableIndex.toInt()],
                     rightId = tokenArray.rightIds[entry.posTableIndex.toInt()]
                 )
             }
-        }
+        }.sortedBy { it.score }.take(60)
     }
 
     private fun deferredFromMozcUTDictionary(
