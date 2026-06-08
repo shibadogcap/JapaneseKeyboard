@@ -154,7 +154,7 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/paste_icon_patent"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_height="32dp"
         android:layout_marginStart="16dp"
         app:layout_constrainedWidth="true"
         app:layout_constraintWidth_max="160dp"
@@ -162,7 +162,6 @@
         android:background="@drawable/ten_keys_center_bg"
         android:paddingStart="0dp"
         android:paddingEnd="8dp"
-        android:paddingVertical="4dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -190,11 +189,10 @@
             android:maxLines="1"
             android:textColor="@color/keyboard_icon_color"
             android:textSize="12sp"
-            app:layout_constraintBottom_toTopOf="@+id/clipboard_preview_text_description"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@id/paste_icon"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_chainStyle="packed" />
+            app:layout_constraintTop_toTopOf="parent" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/clipboard_preview_text_description"

@@ -11,6 +11,8 @@ import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.PostCommitPredictionFacade
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Singleton
 class DefaultKanaKanjiConverter @Inject constructor(
@@ -26,9 +28,9 @@ class DefaultKanaKanjiConverter @Inject constructor(
         runtime: ConvertRuntimeContext,
         environment: ImeCandidateEnvironment,
         mode: CandidateRequestMode,
-    ): ConvertCandidatesResponse {
+    ): ConvertCandidatesResponse = withContext(Dispatchers.Default) {
         if (input.isEmpty) {
-            return ConvertCandidatesResponse(
+            return@withContext ConvertCandidatesResponse(
                 result = ConversionResult(mainResults = emptyList()),
                 bunsetsuResult = null,
             )
@@ -40,7 +42,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
             mode = mode,
         )
         val serviceResult = candidateService.convert(request, environment)
-        return ConvertCandidatesResponse(
+        ConvertCandidatesResponse(
             result = serviceResult.conversionResult,
             bunsetsuResult = serviceResult.bunsetsuResult,
         )
@@ -53,7 +55,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
         environment: ImeCandidateEnvironment,
         postProcess: CandidatePostProcessEnvironment,
         mode: CandidateRequestMode,
-    ): ConvertCandidatesResponse {
+    ): ConvertCandidatesResponse = withContext(Dispatchers.Default) {
         val raw = requestCandidates(
             input = input,
             options = options,
@@ -66,7 +68,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
             candidates = raw.result.mainResults,
             environment = postProcess,
         )
-        return raw.copy(
+        raw.copy(
             result = raw.result.copy(mainResults = processed),
         )
     }
@@ -79,7 +81,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
         postProcess: CandidatePostProcessEnvironment,
         zenzRerank: ZenzRerankRequest?,
         mode: CandidateRequestMode,
-    ): ConvertCandidatesResponse {
+    ): ConvertCandidatesResponse = withContext(Dispatchers.Default) {
         val response = requestCandidatesPostProcessed(
             input = input,
             options = options,
@@ -88,7 +90,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
             postProcess = postProcess,
             mode = mode,
         )
-        val rerank = zenzRerank ?: return response
+        val rerank = zenzRerank ?: return@withContext response
         val request = CandidateRequestBridge.toCandidateRequest(
             composingText = input,
             options = options,
@@ -96,13 +98,13 @@ class DefaultKanaKanjiConverter @Inject constructor(
             mode = mode,
         )
         if (!zenzConversionService.shouldRerank(request, rerank.config)) {
-            return response
+            return@withContext response
         }
         val reranked = zenzConversionService.rerank(
             request = rerank,
             policy = request.runtimeConversionPolicy,
-        ) ?: return response
-        return response.copy(
+        ) ?: return@withContext response
+        response.copy(
             result = response.result.copy(mainResults = reranked),
         )
     }

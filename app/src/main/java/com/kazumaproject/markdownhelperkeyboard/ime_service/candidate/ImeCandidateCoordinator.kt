@@ -91,10 +91,11 @@ class ImeCandidateCoordinator @Inject constructor(
         zenz: ImeCandidateZenzContext,
         preferences: ImeCandidatePreferences,
         mode: CandidateRequestMode = CandidateRequestMode.Normal,
+        cursorPosition: Int? = null,
     ): List<Candidate>? {
         val request = buildCandidateRequest(input, preferences, mode)
         val reranked = zenzConversionService.rerank(
-            request = zenz.toRerankRequest(input, baseCandidates).copy(
+            request = zenz.toRerankRequest(input, baseCandidates, cursorPosition).copy(
                 leftContext = plan.leftContext,
             ),
             policy = request.runtimeConversionPolicy,
@@ -120,6 +121,7 @@ class ImeCandidateCoordinator @Inject constructor(
         zenz: ImeCandidateZenzContext,
         preferences: ImeCandidatePreferences,
         mode: CandidateRequestMode = CandidateRequestMode.Normal,
+        cursorPosition: Int? = null,
     ): List<ZenzCandidate> {
         val request = buildCandidateRequest(input, preferences, mode)
         return zenzConversionService.generatePredictive(
@@ -127,6 +129,7 @@ class ImeCandidateCoordinator @Inject constructor(
                 insertReading = input,
                 leftContext = zenz.leftContext,
                 config = zenz.config,
+                cursorPosition = cursorPosition,
             ),
             policy = request.runtimeConversionPolicy,
         )
@@ -138,6 +141,7 @@ class ImeCandidateCoordinator @Inject constructor(
         zenz: ImeCandidateZenzContext,
         preferences: ImeCandidatePreferences,
         mode: CandidateRequestMode = CandidateRequestMode.Normal,
+        cursorPosition: Int? = null,
     ): List<ZenzCandidate> {
         if (dictionaryCandidates.isEmpty()) return emptyList()
         val request = buildCandidateRequest(input, preferences, mode)
@@ -148,6 +152,7 @@ class ImeCandidateCoordinator @Inject constructor(
                 leftContext = zenz.leftContext,
                 nBest = zenz.nBest,
                 config = zenz.config,
+                cursorPosition = cursorPosition,
             ),
         )
     }

@@ -22,6 +22,11 @@ class FloatingCandidateListAdapter(
     var onSuggestionClicked: ((suggestion: CandidateItem) -> Unit)? = null
     var onPagerClicked: (() -> Unit)? = null
 
+    // --- Styling Properties ---
+    var itemTextColor: Int? = null
+    var itemBackground: Int? = null
+    var itemPressedBackground: Int? = null
+
     // --- Highlight State ---
     private var highlightedPosition: Int = RecyclerView.NO_POSITION
 
@@ -107,10 +112,19 @@ class FloatingCandidateListAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        // Set activation state for background drawable
-        holder.itemView.isActivated = (position == highlightedPosition)
-
         val currentItem = getItem(position)
+        val textView = holder.itemView.findViewById<TextView>(R.id.text_view_item)
+        itemTextColor?.let { textView.setTextColor(it) }
+
+        val isHighlighted = (position == highlightedPosition)
+        holder.itemView.isActivated = isHighlighted
+
+        if (isHighlighted) {
+            itemPressedBackground?.let { holder.itemView.setBackgroundColor(it) }
+        } else {
+            itemBackground?.let { holder.itemView.setBackgroundColor(it) }
+        }
+
         when (holder) {
             is SuggestionViewHolder -> holder.bind(currentItem.word)
             is PagerViewHolder -> holder.bind(currentItem.word)

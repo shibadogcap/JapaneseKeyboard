@@ -16,10 +16,39 @@ import javax.inject.Singleton
 class ZenzConversionService @Inject constructor(
     private val zenzEngine: ZenzEnginePort,
 ) {
+    companion object {
+        private const val ALIGNMENT_SEPARATOR = "\uEE08"
+    }
+
+    private fun String.isValidZenzInput(): Boolean {
+        if (isEmpty()) return false
+        return all { char ->
+            char in '\u3041'..'\u3096' || // ひらがな
+            char in '\u30A1'..'\u30F6' || // カタカナ
+            char == 'ー' || char == '〜' ||
+            char in 'a'..'z' || char in 'A'..'Z' || // 半角英字
+            char in 'ａ'..'ｚ' || char in 'Ａ'..'Ｚ' || // 全角英字
+            char in '0'..'9' || char in '０'..'９' || // 半角・全角数字
+            char in listOf('?', '？', '!', '！', '。', '、', ',', '.', '-', '_', ' ', '　')
+        }
+    }
+
+    private fun shouldInsertAlignmentSeparator(input: String, cursorPosition: Int?): Boolean {
+        if (cursorPosition == null) return false
+        return cursorPosition in 0 until input.length
+    }
+
+    private fun inputWithAlignmentSeparator(input: String, cursorPosition: Int?): String {
+        if (cursorPosition == null || !shouldInsertAlignmentSeparator(input, cursorPosition)) {
+            return input
+        }
+        return input.substring(0, cursorPosition) + ALIGNMENT_SEPARATOR + input.substring(cursorPosition)
+    }
+
     fun shouldGenerate(request: ZenzGenerationRequest, policy: AzooKeyRuntimeConversionPolicy): Boolean {
         if (!policy.allowsPersonalizedConversion) return false
         if (request.insertReading.length <= 1) return false
-        return request.insertReading.isAllHiraganaWithSymbols()
+        return request.insertReading.isValidZenzInput()
     }
 
     suspend fun generatePredictive(
@@ -50,15 +79,27 @@ class ZenzConversionService @Inject constructor(
     suspend fun evaluateZenzai(
         request: ZenzPredictiveRequest,
     ): List<ZenzCandidate> {
-        if (request.insertReading.length <= 1 || !request.insertReading.isAllHiraganaWithSymbols()) {
+        if (request.insertReading.length <= 1 || !request.insertReading.isValidZenzInput()) {
             return emptyList()
         }
         val firstCandidate = request.topDictionaryCandidate
+        val hasCursor = shouldInsertAlignmentSeparator(request.insertReading, request.cursorPosition)
+        val inputKatakanaForEval = if (hasCursor) {
+            inputWithAlignmentSeparator(request.insertReading.hiraganaToKatakana(), request.cursorPosition)
+        } else {
+            request.insertReading.hiraganaToKatakana()
+        }
+        val candidateForEval = if (hasCursor) {
+            firstCandidate + ALIGNMENT_SEPARATOR
+        } else {
+            firstCandidate
+        }
+
         val raw = zenzEngine.candidateEvaluate(
             profile = request.config.profile,
             leftContext = request.leftContext,
-            inputKatakana = request.insertReading.hiraganaToKatakana(),
-            candidate = firstCandidate,
+            inputKatakana = inputKatakanaForEval,
+            candidate = candidateForEval,
         )
         val parsed = ZenzaiCandidateEvaluationResult.parse(raw)
         return when (parsed) {
@@ -127,7 +168,7 @@ class ZenzConversionService @Inject constructor(
         if (!request.config.rerankEnabled) return null
         if (policy.shouldUseZenzai) return null
         if (request.config.hasHardwareKeyboard) return null
-        if (request.insertReading.length <= 1 || !request.insertReading.isAllHiraganaWithSymbols()) {
+        if (request.insertReading.length <= 1 || !request.insertReading.isValidZenzInput()) {
             return null
         }
         if (request.candidates.size < 2) return null

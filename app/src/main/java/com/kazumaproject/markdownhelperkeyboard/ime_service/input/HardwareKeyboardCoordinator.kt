@@ -115,21 +115,34 @@ class HardwareKeyboardCoordinator(
         cursorAnchorInfo: CursorAnchorInfo,
         initialCursorDetectInFloatingCandidateView: Boolean,
         initialCursorXPosition: Int,
+        yOffset: Int = 0,
+        screenHeight: Int = 0,
+        popupWindowHeight: Int = 0,
     ): FloatingCandidateAnchorUpdate {
         val matrix: Matrix = cursorAnchorInfo.matrix
-        val screenCoords = floatArrayOf(
+        val screenCoordsBottom = floatArrayOf(
             cursorAnchorInfo.insertionMarkerHorizontal,
-            cursorAnchorInfo.insertionMarkerTop,
+            cursorAnchorInfo.insertionMarkerBottom,
         )
-        matrix.mapPoints(screenCoords)
-        val screenX = screenCoords[0]
-        val screenY = screenCoords[1]
+        matrix.mapPoints(screenCoordsBottom)
+        val screenX = screenCoordsBottom[0]
+        val screenYBottom = screenCoordsBottom[1]
         val x = if (initialCursorDetectInFloatingCandidateView) {
             initialCursorXPosition
         } else {
             (screenX - 64).coerceAtLeast(0f).toInt()
         }
-        val y = screenY.toInt()
+        val y = if (screenHeight > 0 && popupWindowHeight > 0 && screenYBottom > screenHeight * 0.6f) {
+            val screenCoordsTop = floatArrayOf(
+                cursorAnchorInfo.insertionMarkerHorizontal,
+                cursorAnchorInfo.insertionMarkerTop,
+            )
+            matrix.mapPoints(screenCoordsTop)
+            val screenYTop = screenCoordsTop[1]
+            (screenYTop.toInt() - popupWindowHeight - yOffset).coerceAtLeast(0)
+        } else {
+            screenYBottom.toInt() + yOffset
+        }
         return FloatingCandidateAnchorUpdate(
             x = x,
             y = y,
@@ -145,7 +158,9 @@ class HardwareKeyboardCoordinator(
     ): Boolean {
         return cursorAnchorInfo != null &&
             floatingCandidateWindow != null &&
-            composingInputNonEmpty
+            composingInputNonEmpty &&
+            !cursorAnchorInfo.insertionMarkerHorizontal.isNaN() &&
+            !cursorAnchorInfo.insertionMarkerBottom.isNaN()
     }
 
     fun interface FloatingCandidateWindowHost {

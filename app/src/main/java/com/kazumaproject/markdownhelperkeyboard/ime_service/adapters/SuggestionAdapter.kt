@@ -11,6 +11,7 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.Gravity
 import android.widget.ImageView
 import android.widget.FrameLayout
 import android.content.Context
@@ -403,7 +404,8 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
     }
 
     inner class InlineSuggestionViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val container: FrameLayout = itemView as FrameLayout
+        val container: FrameLayout = (itemView as? InlineSuggestionClipContainer)?.getContainer() ?: (itemView as FrameLayout)
+        var currentSuggestion: InlineSuggestion? = null
     }
 
     override fun getItemViewType(position: Int): Int {
@@ -478,11 +480,30 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
             VIEW_TYPE_INLINE_SUGGESTION -> {
                 val container = InlineSuggestionClipContainer(parent.context).apply {
-                    layoutParams = ViewGroup.LayoutParams(
+                    val density = resources.displayMetrics.density
+                    val margin4px = (4 * density).toInt()
+                    layoutParams = ViewGroup.MarginLayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+                        (32 * density).toInt()
+                    ).apply {
+                        topMargin = margin4px
+                        bottomMargin = margin4px
+                    }
                     minimumWidth = parent.context.dpToPxInt(100f)
+
+                    if (isDynamicColorEnable) {
+                        if (context.isDarkThemeOn()) {
+                            setBackgroundResource(
+                                com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
+                            )
+                        } else {
+                            setBackgroundResource(
+                                com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
+                            )
+                        }
+                    } else {
+                        setBackgroundResource(R.drawable.ten_keys_center_bg)
+                    }
                 }
                 InlineSuggestionViewHolder(container)
             }
@@ -510,39 +531,132 @@ class SuggestionAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         }
     }
 
+    override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+        super.onViewRecycled(holder)
+        if (holder is InlineSuggestionViewHolder) {
+            holder.currentSuggestion = null
+            holder.container.removeAllViews()
+        }
+    }
+
     private fun onBindInlineSuggestionViewHolder(holder: InlineSuggestionViewHolder, position: Int) {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             holder.itemView.post {
                 try {
                     if (position >= 0 && position < inlineSuggestions.size) {
                         val suggestion = inlineSuggestions[position]
+                        holder.currentSuggestion = suggestion
                         val clipContainer = holder.itemView as? InlineSuggestionClipContainer
                         val targetContainer = clipContainer?.getContainer() ?: holder.container
                         targetContainer.removeAllViews()
 
+                        val isOnlyInline = suggestions.isEmpty() && inlineCount == 1
+                        val density = holder.itemView.context.resources.displayMetrics.density
+                        val margin40px = (40 * density).toInt()
+                        val isDynamicColorEnable = com.google.android.material.color.DynamicColors.isDynamicColorAvailable()
+
+                        clipContainer?.maxWidthLimit = if (isOnlyInline) (160 * density).toInt() else -1
+
+                        holder.itemView.layoutParams = (holder.itemView.layoutParams as? ViewGroup.MarginLayoutParams)?.apply {
+                            width = if (isOnlyInline) ViewGroup.LayoutParams.MATCH_PARENT else ViewGroup.LayoutParams.WRAP_CONTENT
+                            rightMargin = if (isOnlyInline) margin40px else 0
+                        }
+
+                        if (isOnlyInline) {
+                            holder.itemView.setBackgroundResource(android.R.color.transparent)
+                        } else {
+                            val emptyDrawableColor = candidateEmptyDrawableColor
+                            if (emptyDrawableColor != null) {
+                                holder.itemView.setBackgroundResource(R.drawable.ten_keys_center_bg)
+                                holder.itemView.setDrawableSolidColor(emptyDrawableColor)
+                            } else {
+                                if (isDynamicColorEnable) {
+                                    if (holder.itemView.context.isDarkThemeOn()) {
+                                        holder.itemView.setBackgroundResource(
+                                            com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
+                                        )
+                                    } else {
+                                        holder.itemView.setBackgroundResource(
+                                            com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
+                                        )
+                                    }
+                                } else {
+                                    holder.itemView.setBackgroundResource(R.drawable.ten_keys_center_bg)
+                                }
+                            }
+                        }
+
+                        val targetLp = targetContainer.layoutParams as? FrameLayout.LayoutParams ?: FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+
+                        if (isOnlyInline) {
+                            targetLp.width = FrameLayout.LayoutParams.WRAP_CONTENT
+                            targetLp.height = (32 * density).toInt()
+                            targetLp.gravity = Gravity.CENTER
+                            targetContainer.layoutParams = targetLp
+
+                            val emptyDrawableColor = candidateEmptyDrawableColor
+                            if (emptyDrawableColor != null) {
+                                targetContainer.setBackgroundResource(R.drawable.ten_keys_center_bg)
+                                targetContainer.setDrawableSolidColor(emptyDrawableColor)
+                            } else {
+                                if (isDynamicColorEnable) {
+                                    if (holder.itemView.context.isDarkThemeOn()) {
+                                        targetContainer.setBackgroundResource(
+                                            com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
+                                        )
+                                    } else {
+                                        targetContainer.setBackgroundResource(
+                                            com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
+                                        )
+                                    }
+                                } else {
+                                    targetContainer.setBackgroundResource(R.drawable.ten_keys_center_bg)
+                                }
+                            }
+
+                            val pad8 = (8 * density).toInt()
+                            targetContainer.setPadding(pad8, 0, pad8, 0)
+                        } else {
+                            targetLp.width = FrameLayout.LayoutParams.MATCH_PARENT
+                            targetLp.height = FrameLayout.LayoutParams.MATCH_PARENT
+                            targetLp.gravity = Gravity.NO_GRAVITY
+                            targetContainer.layoutParams = targetLp
+                            targetContainer.setBackgroundResource(android.R.color.transparent)
+                            targetContainer.setPadding(0, 0, 0, 0)
+                        }
+
+                        val heightPx = (40 * density).toInt()
                         val size = Size(
-                            holder.itemView.width.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(160f),
-                            holder.itemView.height.takeIf { it > 0 } ?: holder.itemView.context.dpToPxInt(40f)
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                            heightPx
                         )
 
                         Timber.d("Inflating inline suggestion position=$position size=${size.width}x${size.height}")
                         suggestion.inflate(holder.itemView.context, size, holder.itemView.context.mainExecutor) { view ->
                             holder.itemView.post {
-                                try {
-                                    if (view != null) {
-                                        targetContainer.removeAllViews()
-                                        targetContainer.addView(
-                                            view,
-                                            FrameLayout.LayoutParams(
-                                                FrameLayout.LayoutParams.MATCH_PARENT,
-                                                FrameLayout.LayoutParams.MATCH_PARENT
+                                if (holder.currentSuggestion === suggestion) {
+                                    try {
+                                        if (view != null) {
+                                            targetContainer.removeAllViews()
+                                            targetContainer.addView(
+                                                view,
+                                                FrameLayout.LayoutParams(
+                                                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                                                    FrameLayout.LayoutParams.MATCH_PARENT,
+                                                    Gravity.CENTER
+                                                )
                                             )
-                                        )
-                                    } else {
-                                        Timber.w("Inline suggestion inflated null view position=$position")
+                                        } else {
+                                            Timber.w("Inline suggestion inflated null view position=$position")
+                                        }
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "Error adding inline suggestion view in post")
                                     }
-                                } catch (e: Exception) {
-                                    Timber.e(e, "Error adding inline suggestion view in post")
+                                } else {
+                                    Timber.d("Discarded inflated view for position=$position because suggestion has changed")
                                 }
                             }
                         }
@@ -1040,6 +1154,8 @@ class InlineSuggestionClipContainer @JvmOverloads constructor(
     private val mContentBounds = Rect()
     private val mContentContainer: FrameLayout
 
+    var maxWidthLimit: Int = -1
+
     init {
         val mBackgroundView = SurfaceView(context)
         mBackgroundView.setZOrderOnTop(true)
@@ -1048,6 +1164,35 @@ class InlineSuggestionClipContainer @JvmOverloads constructor(
 
         mContentContainer = FrameLayout(context)
         addView(mContentContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        if (maxWidthLimit > 0) {
+            val childWidthSpec = MeasureSpec.makeMeasureSpec(maxWidthLimit, MeasureSpec.AT_MOST)
+            if (childCount >= 2) {
+                val backgroundView = getChildAt(0)
+                val contentContainer = getChildAt(1)
+
+                contentContainer.measure(childWidthSpec, heightMeasureSpec)
+
+                val bgWidthSpec = MeasureSpec.makeMeasureSpec(contentContainer.measuredWidth, MeasureSpec.EXACTLY)
+                val bgHeightSpec = MeasureSpec.makeMeasureSpec(contentContainer.measuredHeight, MeasureSpec.EXACTLY)
+                backgroundView.measure(bgWidthSpec, bgHeightSpec)
+
+                val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+                val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+                val finalWidth = if (widthMode == MeasureSpec.EXACTLY) {
+                    widthSize
+                } else {
+                    contentContainer.measuredWidth
+                }
+
+                val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+                setMeasuredDimension(finalWidth, heightSize)
+                return
+            }
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 
     override fun onAttachedToWindow() {

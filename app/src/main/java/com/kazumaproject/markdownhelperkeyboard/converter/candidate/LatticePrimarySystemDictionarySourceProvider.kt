@@ -1,5 +1,6 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLatticeConverter
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLatticeIncrementalState
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLoudsBackedDicdataStore
@@ -50,7 +51,7 @@ class LatticePrimarySystemDictionarySourceProvider(
             emptyList()
         }
         val resolver = AzooKeyDictionaryConnectionIdResolver()
-        val wordCandidates = result.latticeNodes
+        val latticeWordCandidates = result.latticeNodes
             .asSequence()
             .filter { node -> node.startIndex == 0 && node.endIndex <= request.input.length }
             .map { node ->
@@ -59,12 +60,42 @@ class LatticePrimarySystemDictionarySourceProvider(
                     connectionIdResolver = resolver,
                 )
             }
+            .toList()
+
+        val rawPrefixCandidates = (1..request.input.length).flatMap { len ->
+            val prefixYomi = request.input.substring(0, len)
+            val hira = Candidate(
+                string = prefixYomi,
+                type = CandidateType.HIRAGANA,
+                length = len.toUByte(),
+                score = -100 - len,
+                value = -100f - len,
+                yomi = prefixYomi,
+                leftId = 0,
+                rightId = 0,
+                isLearningTarget = true
+            )
+            val kata = Candidate(
+                string = prefixYomi.hiraganaToKatakana(),
+                type = CandidateType.KATAKANA,
+                length = len.toUByte(),
+                score = -105 - len,
+                value = -105f - len,
+                yomi = prefixYomi,
+                leftId = 0,
+                rightId = 0,
+                isLearningTarget = true
+            )
+            listOf(hira, kata)
+        }
+
+        val wordCandidates = (latticeWordCandidates + rawPrefixCandidates)
             .distinctBy { candidate -> candidate.yomi to candidate.string }
             .sortedWith(
                 compareByDescending<Candidate> { it.length.toInt() }
                     .thenByDescending { it.value }
             )
-            .take(request.effectiveSearchNBest.coerceAtLeast(nBest))
+            .take(500)
             .toList()
         val firstClauseCandidates = wordCandidates
             .filter { candidate -> candidate.yomi != request.input || candidate.string !in result.mainCandidates.map { it.string } }

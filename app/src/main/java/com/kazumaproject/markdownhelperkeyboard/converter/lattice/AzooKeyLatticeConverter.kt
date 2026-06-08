@@ -27,6 +27,16 @@ class AzooKeyLatticeConverter(
             incrementalState?.clear()
             return AzooKeyLatticeConversionResult(emptyList(), emptyList())
         }
+
+        val cachedInput = incrementalState?.normalizedInput
+        val cachedNodes = incrementalState?.latticeNodes.orEmpty()
+        val normalized = request.input.hiraganaToKatakana()
+        val isDeletion = incrementalState != null &&
+                !cachedInput.isNullOrBlank() &&
+                cachedNodes.isNotEmpty() &&
+                cachedInput.startsWith(normalized) &&
+                normalized.length < cachedInput.length
+
         val needTypo = request.typoCorrectionMode != AzooKeyStyleTypoCorrectionMode.Disabled
         val store = AzooKeyLoudsBackedDicdataStore(
             loudsLookups = loudsLookups,
@@ -34,30 +44,43 @@ class AzooKeyLatticeConverter(
             typoSearchers = typoSearchers,
             enableTypoCorrection = needTypo,
         )
-        val normalized = request.input.hiraganaToKatakana()
-        val nodes = buildNodes(
-            store = store,
-            request = request,
-            normalized = normalized,
-            incrementalState = incrementalState,
-        )
+
+        val nodes = if (isDeletion) {
+            cachedNodes.filter { it.endIndex <= normalized.length }
+        } else {
+            buildNodes(
+                store = store,
+                request = request,
+                normalized = normalized,
+                incrementalState = incrementalState,
+                cachedInput = cachedInput,
+                cachedNodes = cachedNodes,
+            )
+        }
+
         incrementalState?.let { state ->
             state.normalizedInput = normalized
             state.latticeNodes = nodes
         }
+
         val inputLength = request.input.hiraganaToKatakana().length
         val decoded = decoder.decode(
             inputLength = inputLength,
             nodes = nodes,
             nBest = nBest,
         )
+
         val resolver = AzooKeyDictionaryConnectionIdResolver()
-        val exactSingles = buildList {
-            loudsLookups.forEach { lookup ->
-                addAll(lookup.exactEntries(request.input))
-            }
-            if (request.shouldReadMemoryDictionary) {
-                addAll(searchMemory(request.input, nBest))
+        val exactSingles = if (isDeletion) {
+            nodes.filter { it.startIndex == 0 && it.endIndex == normalized.length }.map { it.entry }
+        } else {
+            buildList {
+                loudsLookups.forEach { lookup ->
+                    addAll(lookup.exactEntries(request.input))
+                }
+                if (request.shouldReadMemoryDictionary) {
+                    addAll(searchMemory(request.input, nBest))
+                }
             }
         }
             .distinctBy { it.reading to it.surface }
@@ -67,6 +90,7 @@ class AzooKeyLatticeConverter(
                     connectionIdResolver = resolver,
                 )
             }
+
         val main = (exactSingles + decoded)
             .groupBy { it.string }
             .map { (_, candidates) ->
@@ -80,6 +104,7 @@ class AzooKeyLatticeConverter(
                     .thenByDescending { it.value }
             )
             .take(nBest)
+
         return AzooKeyLatticeConversionResult(
             mainCandidates = main,
             latticeNodes = nodes,
@@ -91,10 +116,10 @@ class AzooKeyLatticeConverter(
         request: CandidateRequest,
         normalized: String,
         incrementalState: AzooKeyLatticeIncrementalState?,
+        cachedInput: String?,
+        cachedNodes: List<AzooKeyLatticeNode>,
     ): List<AzooKeyLatticeNode> {
         val useMemory = request.shouldReadMemoryDictionary
-        val cachedInput = incrementalState?.normalizedInput
-        val cachedNodes = incrementalState?.latticeNodes.orEmpty()
         if (
             incrementalState != null &&
             !cachedInput.isNullOrBlank() &&

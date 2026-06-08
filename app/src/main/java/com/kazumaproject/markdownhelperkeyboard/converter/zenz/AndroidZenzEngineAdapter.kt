@@ -1,6 +1,8 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.zenz
 
 import com.kazumaproject.zenz.ZenzEngine
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,8 +13,8 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
         leftContext: String,
         inputKatakana: String,
         maxTokens: Int,
-    ): String {
-        return ZenzEngine.generateWithContextAndConditions(
+    ): String = withContext(Dispatchers.Default) {
+        ZenzEngine.generateWithContextAndConditions(
             profile = profile,
             topic = "",
             style = "",
@@ -28,8 +30,8 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
         leftContext: String,
         inputKatakana: String,
         candidate: String,
-    ): String {
-        return ZenzEngine.candidateEvaluate(
+    ): String = withContext(Dispatchers.Default) {
+        ZenzEngine.candidateEvaluate(
             profile = profile,
             topic = "",
             style = "",
@@ -45,9 +47,9 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
         leftContext: String,
         inputKatakana: String,
         candidates: List<String>,
-    ): FloatArray {
-        if (candidates.isEmpty()) return FloatArray(0)
-        return ZenzEngine.scoreCandidates(
+    ): FloatArray = withContext(Dispatchers.Default) {
+        if (candidates.isEmpty()) return@withContext FloatArray(0)
+        ZenzEngine.scoreCandidates(
             profile = profile,
             topic = "",
             style = "",

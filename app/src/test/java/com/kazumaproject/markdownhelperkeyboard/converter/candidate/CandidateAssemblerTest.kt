@@ -49,7 +49,7 @@ class CandidateAssemblerTest {
             )
         )
 
-        assertEquals(listOf("第一", "第二", "♪", "文節"), result.mainResults.map { it.string })
+        assertEquals(listOf("第一", "第二", "文節", "♪"), result.mainResults.map { it.string })
         assertEquals(listOf("文節"), result.firstClauseResults.map { it.string })
     }
 

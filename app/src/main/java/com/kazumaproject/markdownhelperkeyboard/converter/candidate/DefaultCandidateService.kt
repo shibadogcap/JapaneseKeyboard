@@ -28,13 +28,13 @@ class DefaultCandidateService @Inject constructor(
     override suspend fun convert(
         request: CandidateRequest,
         environment: ImeCandidateEnvironment,
-    ): AzooKeyStyleCandidateServiceResult {
+    ): AzooKeyStyleCandidateServiceResult = withContext(Dispatchers.Default) {
         val policy = resolveSystemDictionarySourcePolicy(
             loudsRegistryAvailable = azooKeyDictionaryAssets.loudsDictionaryRegistry != null,
             connectionCostStoreAvailable = azooKeyDictionaryAssets.connectionCostStore != null,
             explicit = environment.systemDictionarySourcePolicy,
         )
-        return createFactory(environment)
+        createFactory(environment)
             .create(
                 systemSourceProvider = createSystemSourceProvider(environment, policy),
                 includeLoudsInAuxiliary = policy == SystemDictionarySourcePolicy.DualPath,
@@ -171,7 +171,9 @@ class DefaultCandidateService @Inject constructor(
             return LatticePrimarySystemDictionarySourceProvider(
                 loudsLookups = listOf(registry),
                 searchMemory = { reading, limit ->
-                    learningMemoryRepository.prefixSearch(reading, limit)
+                    withContext(Dispatchers.IO) {
+                        learningMemoryRepository.prefixSearch(reading, limit)
+                    }
                 },
                 engine = engineProvider,
                 nBest = environment.auxiliaryConfig.loudsDictionaryLimit,

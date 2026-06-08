@@ -181,6 +181,12 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private var isFlickGuideEnabled: Boolean = false
     private var popupViewStyle = PopupViewStyle(100, 28f)
 
+    private var lastSpaceKeyDrawable: Drawable? = null
+    private var lastSpaceKeyText: String? = null
+    private var lastSpaceKeyIsHenkanMode: Boolean? = null
+    private var lastEnterKeyDrawable: Drawable? = null
+    private var lastSmallLetterKeyText: String? = null
+
     private val cachedArrowRightDrawable: Drawable? by lazy {
         ContextCompat.getDrawable(
             context,
@@ -2870,11 +2876,14 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     fun setBackgroundSmallLetterKey(
         drawable: Drawable? = cachedLanguageDrawable
     ) {
-        binding.keySmallLetter.text = when (currentInputMode.value) {
+        val targetText = when (currentInputMode.value) {
             InputMode.ModeJapanese -> "ﾞ ﾟ"
             InputMode.ModeEnglish -> "a/A"
             InputMode.ModeNumber -> "()"
         }
+        if (lastSmallLetterKeyText == targetText) return
+        lastSmallLetterKeyText = targetText
+        binding.keySmallLetter.text = targetText
         prepareSpecialKeyButton(binding.keySmallLetter)
     }
 
@@ -2884,17 +2893,22 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         isLanguageEnable: Boolean,
         isEnglish: Boolean
     ) {
-        binding.keySmallLetter.text = when (currentInputMode.value) {
+        val targetText = when (currentInputMode.value) {
             InputMode.ModeJapanese -> "ﾞ ﾟ"
             InputMode.ModeEnglish -> "a/A"
             InputMode.ModeNumber -> "()"
         }
+        if (lastSmallLetterKeyText == targetText) return
+        lastSmallLetterKeyText = targetText
+        binding.keySmallLetter.text = targetText
         prepareSpecialKeyButton(binding.keySmallLetter)
     }
 
     /** Set custom drawable on the Enter key **/
     fun setSideKeyEnterDrawable(drawable: Drawable?) {
         if (hasCustomEnterIcon || customTextEnterStr.isNotEmpty()) return
+        if (lastEnterKeyDrawable == drawable) return
+        lastEnterKeyDrawable = drawable
         prepareSpecialKeyButton(binding.keyEnter)
         setCenteredIcon(binding.keyEnter, drawable)
     }
@@ -2907,10 +2921,38 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     /** Set custom drawable on the Space key **/
     @Suppress("UNUSED_PARAMETER")
     fun setSideKeySpaceDrawable(drawable: Drawable?) {
-        prepareSpecialKeyButton(binding.keySpace)
         val isHenkanMode = drawable != null &&
             cachedHenkanDrawable?.constantState != null &&
             drawable.constantState == cachedHenkanDrawable?.constantState
+
+        val targetText = if (isHenkanMode) {
+            if (customTextConvertStr.isNotEmpty()) customTextConvertStr else ""
+        } else {
+            if (customTextSpaceStr.isNotEmpty()) customTextSpaceStr else ""
+        }
+
+        val targetDrawable = if (isHenkanMode) {
+            if (customTextConvertStr.isNotEmpty()) null
+            else if (customConvertDrawable != null) customConvertDrawable
+            else cachedHenkanDrawable
+        } else {
+            if (customTextSpaceStr.isNotEmpty()) null
+            else if (customSpaceDrawable != null) customSpaceDrawable
+            else (drawable ?: cachedSpaceDrawable)
+        }
+
+        if (lastSpaceKeyIsHenkanMode == isHenkanMode &&
+            lastSpaceKeyDrawable == targetDrawable &&
+            lastSpaceKeyText == targetText
+        ) {
+            return
+        }
+
+        lastSpaceKeyIsHenkanMode = isHenkanMode
+        lastSpaceKeyDrawable = targetDrawable
+        lastSpaceKeyText = targetText
+
+        prepareSpecialKeyButton(binding.keySpace)
 
         if (isHenkanMode) {
             if (customTextConvertStr.isNotEmpty()) {
@@ -2934,8 +2976,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             if (customSpaceDrawable != null) {
                 setCenteredIcon(binding.keySpace, customSpaceDrawable)
             } else {
-                val defaultDrawable = drawable ?: cachedSpaceDrawable
-                setCenteredIcon(binding.keySpace, defaultDrawable, tintAsDefaultIcon = true)
+                setCenteredIcon(binding.keySpace, targetDrawable, tintAsDefaultIcon = true)
             }
         }
         customTypeface?.let { binding.keySpace.typeface = it }

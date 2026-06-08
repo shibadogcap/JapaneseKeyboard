@@ -22,6 +22,7 @@ data class ZenzRerankRequest(
     val candidates: List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate>,
     val leftContext: String,
     val config: ZenzConversionConfig,
+    val cursorPosition: Int? = null,
 )
 
 data class ZenzPredictiveRequest(
@@ -30,6 +31,7 @@ data class ZenzPredictiveRequest(
     val leftContext: String,
     val nBest: Int,
     val config: ZenzConversionConfig,
+    val cursorPosition: Int? = null,
 ) {
     val topDictionaryCandidate: String
         get() = dictionaryCandidates.firstOrNull().orEmpty()
@@ -39,4 +41,5 @@ data class ZenzGenerationRequest(
     val insertReading: String,
     val leftContext: String,
     val config: ZenzConversionConfig,
+    val cursorPosition: Int? = null,
 )

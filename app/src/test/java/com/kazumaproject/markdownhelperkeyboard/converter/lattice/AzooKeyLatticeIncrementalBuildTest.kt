@@ -79,6 +79,38 @@ class AzooKeyLatticeIncrementalBuildTest {
         assertTrue(state.latticeNodes.any { it.entry.surface == "司会" })
     }
 
+    @Test
+    fun converterFiltersNodesOnDeletion() = runTest {
+        var lookupCalls = 0
+        val lookup = CountingLookup { lookupCalls += 1 }
+        val state = AzooKeyLatticeIncrementalState()
+        val converter = AzooKeyLatticeConverter()
+
+        converter.convert(
+            request = request("しかい"),
+            loudsLookups = listOf(lookup),
+            searchMemory = { _, _ -> emptyList() },
+            nBest = 5,
+            incrementalState = state,
+        )
+        assertEquals("シカイ", state.normalizedInput)
+        assertTrue(state.latticeNodes.isNotEmpty())
+        lookupCalls = 0
+
+        converter.convert(
+            request = request("しか"),
+            loudsLookups = listOf(lookup),
+            searchMemory = { _, _ -> emptyList() },
+            nBest = 5,
+            incrementalState = state,
+        )
+
+        assertEquals(0, lookupCalls)
+        assertEquals("シカ", state.normalizedInput)
+        assertTrue(state.latticeNodes.isNotEmpty())
+        assertTrue(state.latticeNodes.all { it.endIndex <= 2 })
+    }
+
     private fun nodeKey(node: AzooKeyLatticeNode): String {
         return "${node.startIndex}:${node.endIndex}:${node.entry.surface}"
     }
@@ -123,7 +155,14 @@ class AzooKeyLatticeIncrementalBuildTest {
 
         override fun commonPrefixEntries(reading: String): List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry> {
             onPrefix(reading.length)
-            return exactEntries(reading)
+            val list = mutableListOf<com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry>()
+            if (reading.startsWith("シ") || reading.startsWith("し")) {
+                list.add(entry("し", "し", 0, 1))
+            }
+            if (reading.startsWith("シカイ") || reading.startsWith("しかい")) {
+                list.add(entry("司会", "しかい", 0, 3))
+            }
+            return list
         }
 
         private fun entry(

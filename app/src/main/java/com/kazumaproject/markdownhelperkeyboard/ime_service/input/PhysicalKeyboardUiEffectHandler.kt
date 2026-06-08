@@ -31,7 +31,7 @@ class PhysicalKeyboardUiEffectHandler {
                 physicalKeyboardEnabled = true,
                 dockInputModeLabel = dockLabelForMode(sessionInputMode),
                 cursorUpdateFlags = CURSOR_UPDATE_MONITORING,
-                mainRootAlpha = 0f,
+                mainRootAlpha = 1f,
                 showFloatingDock = true,
                 dismissFloatingCandidate = false,
                 dismissFloatingDock = false,

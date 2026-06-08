@@ -87,7 +87,7 @@ class AzooKeyLatticePrimaryGoldenTest {
         mainCandidates.forEach { println("candidate: surface=${it.string} yomi=${it.yomi} score=${it.score} value=${it.value} type=${it.type}") }
         val surfaces = mainCandidates.map { it.string }
         assertEquals(
-            listOf("司会", "視界", "歯科医", "市会", "士会"),
+            listOf("司会", "視界", "しかい", "歯科医", "市会"),
             surfaces.take(5),
         )
     }

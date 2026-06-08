@@ -129,7 +129,7 @@ object AppPreference {
         Pair("qwerty_romaji_hankaku_number_preference", false)
 
     private val QWERTY_ROMAJI_HANKAKU_SYMBOL_PREFERENCE =
-        Pair("qwerty_romaji_hankaku_symbol_preference", false)
+        Pair("qwerty_romaji_hankaku_symbol_preference", true)
 
     private val QWERTY_SHOW_POPUP_WINDOW = Pair("qwerty_show_popup_window_preference", true)
 

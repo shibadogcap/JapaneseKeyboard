@@ -107,6 +107,7 @@ fun ImeCandidateZenzContext.prepareRerankPlan(
 fun ImeCandidateZenzContext.toRerankRequest(
     input: String,
     candidates: List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate>,
+    cursorPosition: Int? = null,
 ): com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest {
     return com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest(
         insertReading = input,
@@ -118,6 +119,7 @@ fun ImeCandidateZenzContext.toRerankRequest(
             rerankBaseWeight = ImeCandidateZenzContext.RERANK_ALPHA,
             rerankZenzWeight = ImeCandidateZenzContext.RERANK_BETA,
         ),
+        cursorPosition = cursorPosition,
     )
 }
 

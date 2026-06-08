@@ -20,7 +20,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
             InputConnection.CURSOR_UPDATE_IMMEDIATE or InputConnection.CURSOR_UPDATE_MONITOR,
             effect.cursorUpdateFlags,
         )
-        assertEquals(0f, effect.mainRootAlpha, 0f)
+        assertEquals(1f, effect.mainRootAlpha, 0f)
         assertTrue(effect.showFloatingDock)
         assertTrue(effect.resetHenkanState)
     }
@@ -66,7 +66,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
                 "kb",
                 "video",
                 "expand",
-                "alpha:0.0",
+                "alpha:1.0",
                 "cursor:${PhysicalKeyboardUiEffectHandler.CURSOR_UPDATE_MONITORING}",
                 "dockShow",
                 "highlight",

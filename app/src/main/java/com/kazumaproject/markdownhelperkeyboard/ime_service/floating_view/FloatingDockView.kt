@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.floating_view
 
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -34,6 +35,21 @@ class FloatingDockView @JvmOverloads constructor(
      */
     fun setText(text: String) {
         binding.dockText.text = text
+    }
+
+    fun applyThemeColors(
+        backgroundColor: Int,
+        textColor: Int,
+        iconBackgroundColor: Int,
+    ) {
+        setBackgroundColor(backgroundColor)
+        binding.dockText.setTextColor(textColor)
+        binding.dockIcon.setColorFilter(textColor)
+        binding.dockIcon.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 999f * resources.displayMetrics.density
+            setColor(iconBackgroundColor)
+        }
     }
 
     /**

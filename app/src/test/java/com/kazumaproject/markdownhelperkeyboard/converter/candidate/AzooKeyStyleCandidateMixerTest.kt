@@ -20,7 +20,7 @@ class AzooKeyStyleCandidateMixerTest {
             )
         )
 
-        assertEquals(listOf("変換", "予測1", "予測2", "予測3"), result.mainResults.map { it.string })
+        assertEquals(listOf("予測1", "予測2", "予測3", "変換"), result.mainResults.map { it.string })
         assertEquals(listOf("予測1", "予測2", "予測3", "予測4"), result.predictionResults.map { it.string })
     }
 
@@ -77,9 +77,9 @@ class AzooKeyStyleCandidateMixerTest {
         )
 
         assertEquals(
-            listOf("全文1", "全文2", "全文3", "全文4", "全文5", "文節", "長い単語", "短"),
-            result.mainResults.map { it.string },
-        )
+             listOf("全文1", "全文2", "全文3", "全文4", "全文5", "文節", "長い単語", "短"),
+             result.mainResults.map { it.string },
+         )
     }
 
     @Test
@@ -91,12 +91,60 @@ class AzooKeyStyleCandidateMixerTest {
                 candidate("候補3", CandidateType.NBEST, 8, value = 8f),
                 candidate("あずーきー", CandidateType.HIRAGANA, 1, value = 1f, yomi = "あずーきー"),
             ),
+            input = "あずーきー",
             options = AzooKeyStyleConvertRequestOptions(
                 japanesePredictionMode = AzooKeyStylePredictionMode.Disabled,
             )
         )
 
         assertEquals("あずーきー", result.mainResults[2].string)
+    }
+
+    @Test
+    fun mixPromotesExactReadingCandidateBasedOnYomi() {
+        val result = AzooKeyStyleCandidateMixer.mix(
+            mainCandidates = listOf(
+                candidate("候補1", CandidateType.NBEST, 10, value = 10f),
+                candidate("候補2", CandidateType.NBEST, 9, value = 9f),
+                candidate("候補3", CandidateType.NBEST, 8, value = 8f),
+                candidate("今日", CandidateType.NBEST, 1, value = 1f, yomi = "きょう"),
+            ),
+            input = "きょう",
+            options = AzooKeyStyleConvertRequestOptions(
+                japanesePredictionMode = AzooKeyStylePredictionMode.Disabled,
+            )
+        )
+
+        assertEquals("今日", result.mainResults[2].string)
+    }
+
+    @Test
+    fun mixGeneratesHalfWidthForSymbolsAndBrackets() {
+        val result = AzooKeyStyleCandidateMixer.mix(
+            mainCandidates = listOf(
+                candidate("「", CandidateType.NBEST, 10, value = 10f),
+            ),
+            options = AzooKeyStyleConvertRequestOptions(
+                japanesePredictionMode = AzooKeyStylePredictionMode.Disabled,
+            )
+        )
+
+        assertEquals(listOf("「", "["), result.mainResults.map { it.string })
+    }
+
+    @Test
+    fun mixAppendsSpecialCandidatesAfterWordCandidates() {
+        val result = AzooKeyStyleCandidateMixer.mix(
+            mainCandidates = listOf(candidate("変換", CandidateType.NBEST, 10)),
+            firstClauseCandidates = listOf(candidate("文節", CandidateType.PART_OF_LETTERS, 20)),
+            wordCandidates = listOf(candidate("単語", CandidateType.PART_OF_LETTERS, 30)),
+            specialCandidates = listOf(candidate("★", CandidateType.SPECIAL, 40)),
+            options = AzooKeyStyleConvertRequestOptions(
+                japanesePredictionMode = AzooKeyStylePredictionMode.Disabled,
+            )
+        )
+
+        assertEquals(listOf("変換", "文節", "単語", "★"), result.mainResults.map { it.string })
     }
 
     private fun candidate(
