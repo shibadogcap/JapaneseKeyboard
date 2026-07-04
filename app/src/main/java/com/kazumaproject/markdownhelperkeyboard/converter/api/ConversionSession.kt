@@ -4,6 +4,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCand
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLatticeIncrementalState
+import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLatticeNode
 
 /**
  * AzooKey [ConversionSessionState](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。
@@ -19,6 +20,9 @@ data class ConversionSession(
     var lastCommittedCandidate: Candidate? = null,
     var lastBunsetsuResult: BunsetsuCandidateResult? = null,
     val latticeIncrementalState: AzooKeyLatticeIncrementalState = AzooKeyLatticeIncrementalState(),
+    var leftSideContext: String = "",
+    /** 前回変換時の lattice ノード全体。4 経路分岐（no_change / changed / afterComplete）で再利用する。 */
+    var previousLattice: List<AzooKeyLatticeNode>? = null,
 ) {
     private val zenzRerankCache = object : LinkedHashMap<String, List<Candidate>>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Candidate>>): Boolean {
@@ -29,10 +33,23 @@ data class ConversionSession(
     fun recordConversion(
         input: ComposingText,
         bunsetsuResult: BunsetsuCandidateResult? = null,
+        latticeNodes: List<AzooKeyLatticeNode>? = null,
     ) {
         previousComposingText = input
         lastConvertTarget = input.convertTarget
         lastBunsetsuResult = bunsetsuResult
+        if (latticeNodes != null) {
+            previousLattice = latticeNodes
+        }
+    }
+
+    /** 文節部分確定後の lattice warm-start（AzooKey [setCompletedData](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当）。 */
+    fun setCompletedData(candidate: Candidate) {
+        completedCandidate = candidate
+    }
+
+    /** afterComplete 変換経路を消費した後に呼ぶ。 */
+    fun consumeCompletedData() {
         completedCandidate = null
     }
 
@@ -59,9 +76,11 @@ data class ConversionSession(
             yomi = reading,
             leftId = tapped?.leftId,
             rightId = tapped?.rightId,
+            data = tapped?.data ?: emptyList(),
         )
         completedCandidate = committed
         lastCommittedCandidate = committed
+        leftSideContext += surface
         stopComposition(keepCommitted = true)
         return committed
     }
@@ -74,6 +93,8 @@ data class ConversionSession(
         latticeIncrementalState.clear()
         if (!keepCommitted) {
             completedCandidate = null
+            leftSideContext = ""
+            previousLattice = null
         }
     }
 
@@ -98,6 +119,8 @@ data class ConversionSession(
     fun reset() {
         stopComposition(keepCommitted = false)
         lastCommittedCandidate = null
+        leftSideContext = ""
+        previousLattice = null
         clearZenzRerankCache()
     }
 

@@ -101,6 +101,7 @@ import com.kazumaproject.core.data.popup.PopupViewStyle
 import com.kazumaproject.core.data.popup.QwertyPopupViewStyleSet
 import com.kazumaproject.core.domain.extensions.dpToPx
 import com.kazumaproject.core.domain.extensions.getThemeColorOrFallback
+import com.kazumaproject.core.domain.extensions.isLightColor
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.core.domain.extensions.isAsciiDigitForRomajiQwerty
 import com.kazumaproject.core.domain.extensions.isAsciiSymbolForRomajiQwerty
@@ -158,7 +159,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCandi
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCandidateLearningPolicyInput
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPostCommitPredictionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPostCommitPredictionPolicyInput
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleCandidateMixer
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleCandidateRanker
 import com.kazumaproject.markdownhelperkeyboard.converter.api.CandidateRequestBridge
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateCoordinator
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidatePresentationCoordinator
@@ -184,20 +185,21 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLiveC
 
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStylePredictionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRuntimeConversionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleZenzaiMode
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.adjustCandidate
+
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequest
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestMode
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestPrivacy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLane
 
 
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.QWERTY_GLIDE_CANDIDATE_TYPE
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.SystemKanaKanjiEngineSourceConfig
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTransitionLearningPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTransitionLearningPolicyInput
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzRerankFusionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzaiCandidateEvaluationResult
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.EnglishEngine
@@ -471,6 +473,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     @Inject
     lateinit var candidateCoordinator: ImeCandidateCoordinator
 
+    private val liveConversionManager = com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.LiveConversionManager(enabled = false)
+
     private val suggestionOrchestrator: ImeSuggestionOrchestrator by lazy {
         ImeSuggestionOrchestrator(candidateCoordinator)
     }
@@ -478,13 +482,21 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private val editorGateway: EditorGateway by lazy {
         EditorGateway(
             connectionProvider = { currentInputConnection },
-            onComposingChange = { cancelCandidateTranslationIfComposingChanges(it) },
-            onPreEditMutation = { cancelCandidateTranslationIfPreEditMutates() },
+            onComposingChange = {
+                suppressSelectionCleanupForInternalPreEditMove()
+                cancelCandidateTranslationIfComposingChanges(it)
+            },
+            onPreEditMutation = {
+                suppressSelectionCleanupForInternalPreEditMove()
+                cancelCandidateTranslationIfPreEditMutates()
+            },
             onCommit = {
+                suppressSelectionCleanupForInternalPreEditMove()
                 clearFunctionKeyConversionSource()
                 cancelCandidateTranslationIfPreEditMutates()
             },
             onFinishComposing = {
+                suppressSelectionCleanupForInternalPreEditMove()
                 clearFunctionKeyConversionSource()
                 cancelCandidateTranslationIfPreEditMutates()
             },
@@ -538,8 +550,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             this@IMEService.updateDisplayedCandidates(insertString, candidates)
         }
 
-        override suspend fun applyLiveConversion(insertString: String, candidates: List<Candidate>) {
-            this@IMEService.applyLiveConversionIfNeeded(insertString, candidates)
+        override suspend fun applyLiveConversion(
+            insertString: String,
+            candidates: List<Candidate>,
+            firstClauseResults: List<Candidate>
+        ) {
+            this@IMEService.applyLiveConversionIfNeeded(insertString, candidates, firstClauseResults)
         }
 
         override fun updateBunsetsuSpaceKeyIfNeeded(
@@ -831,6 +847,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var isLiveConversionEnable: Boolean? = false
     private var liveConversionStartLength: Int = 1
     private var showLiveConversionCandidateYomi: Boolean = false
+    private var liveConversionAutomaticCompletionStrength: String = "weak"
     private var nBest: Int? = 4
     private var flickSensitivityPreferenceValue: Int? = 100
     private var longPressTimeoutPreferenceValue: Int? = 300
@@ -964,6 +981,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var enableTypoCorrectionQwertyEnglishKeyboardPreference: Boolean? = false
 
     private var cachedPreferences: ImePreferencesSnapshot? = null
+    private var cachedRuntimeConversionPolicy: AzooKeyRuntimeConversionPolicy? = null
+    private var cachedRuntimeConversionPolicyInput: String? = null
 
     private var customIconEnterPath: String = ""
     private var customIconSpacePath: String = ""
@@ -1004,6 +1023,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var circularFlickDirectionCount: Int? = 4
 
     private var customKeyBorderWidth: Int? = 1
+
+    private var keyBorderEnable: Boolean? = false
+    private var keyCornerRadiusDp: Int? = 8
+    private var keyPopupStyle: String? = "default"
 
     private var qwertySwitchNumberKeyWithoutNumberPreference: Boolean? = false
     private var qwertyGlideInputCoordinator: QwertyGlideInputCoordinator? = null
@@ -1130,6 +1153,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         private const val ZENZ_RERANK_TOP_K = 4
         private const val ZENZ_RERANK_ALPHA = 0.7f
         private const val ZENZ_RERANK_BETA = 0.3f
+        private const val ZENZ_LEFT_CONTEXT_MAX = 20
         private val DEFAULT_DELETE_KEY_FLICK_TARGETS =
             DeleteKeyFlickDeleteTargetRepository.DEFAULT_TARGET_SYMBOLS.toSet()
         private val ALWAYS_DELETE_KEY_FLICK_BOUNDARIES = setOf(' ', '　', '\n')
@@ -1586,10 +1610,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         applyImePreferences(preferences)
         initializeMozcDictionaries(preferences)
         suggestionAdapter?.updateCustomTabVisibility(preferences.customKeyboardSuggestionPreference)
+        syncZenzLeftContextFromEditor()
     }
 
     private fun applyImePreferences(preferences: ImePreferencesSnapshot) {
         this.cachedPreferences = preferences
+        cachedRuntimeConversionPolicy = null
+        cachedRuntimeConversionPolicyInput = null
         val deleteKeyFlickPreferencesChanged =
             isDeleteLeftFlickPreference != preferences.isDeleteLeftFlickPreference ||
                     isDeleteUpFlickPreference != preferences.isDeleteUpFlickPreference ||
@@ -1614,8 +1641,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         customDirectModeSpaceHankakuPreference =
             preferences.customDirectModeSpaceHankakuPreference
         isLiveConversionEnable = preferences.isLiveConversionEnable
+        liveConversionManager.enabled = preferences.isLiveConversionEnable ?: false
         liveConversionStartLength = preferences.liveConversionStartLength.coerceIn(1, 10)
         showLiveConversionCandidateYomi = preferences.showLiveConversionCandidateYomi
+        liveConversionAutomaticCompletionStrength = preferences.liveConversionAutomaticCompletionStrength
         val shouldShowLiveConversionCandidateYomi =
             preferences.isLiveConversionEnable && preferences.showLiveConversionCandidateYomi
         listOfNotNull(suggestionAdapter, suggestionAdapterFull).forEach { adapter ->
@@ -1817,6 +1846,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         circularFlickWindowScale = preferences.circularFlickWindowScale
         circularFlickDirectionCount = preferences.circularFlickDirectionCount
         customKeyBorderWidth = preferences.customKeyBorderWidth
+        keyBorderEnable = preferences.keyBorderEnable
+        keyCornerRadiusDp = preferences.keyCornerRadiusDp
+        keyPopupStyle = preferences.keyPopupStyle
         qwertySwitchNumberKeyWithoutNumberPreference =
             preferences.qwertySwitchNumberKeyWithoutNumberPreference
         customRomajiZenkakuConversionEnablePreference =
@@ -2643,24 +2675,61 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
 
             floatingKeyboardBinding?.let { floatingKeyboardLayoutBinding ->
+                val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+                val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+                val isCustom = keyboardThemeMode == "custom"
+
+                val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+                val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+                val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+                val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+                val resolvedPopupBgColor = customThemePopupBgColor ?: Color.WHITE
+
+                val resolvedKeyTextColor = if (isCustom) {
+                    customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+                } else {
+                    if (isDark) Color.WHITE else Color.BLACK
+                }
+
+                val resolvedSpecialKeyTextColor = if (isCustom) {
+                    customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+                } else {
+                    if (isDark) Color.WHITE else Color.BLACK
+                }
+
+                val resolvedEnterKeyTextColor = if (isCustom) {
+                    customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+                } else {
+                    if (isDark) Color.WHITE else Color.BLACK
+                }
+
+                val resolvedPopupTextColor = if (isCustom) {
+                    customThemePopupTextColor ?: if (resolvedPopupBgColor.isLightColor()) Color.BLACK else Color.WHITE
+                } else {
+                    if (isDark) Color.WHITE else Color.BLACK
+                }
+
                 floatingKeyboardLayoutBinding.keyboardViewFloating.applyKeyboardTheme(
                     themeMode = keyboardThemeMode ?: "default",
                     currentNightMode = currentNightMode,
                     isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-                    customBgColor = customThemeBgColor ?: Color.WHITE,
-                    customKeyColor = customThemeKeyColor ?: Color.WHITE,
-                    customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-                    customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-                    customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-                    customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-                    customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
-                    customPopupBgColor = customThemePopupBgColor ?: Color.WHITE,
-                    customPopupTextColor = customThemePopupTextColor ?: Color.BLACK,
+                    customBgColor = resolvedBgColor,
+                    customKeyColor = resolvedKeyColor,
+                    customSpecialKeyColor = resolvedSpecialKeyColor,
+                    customEnterKeyColor = resolvedEnterKeyColor,
+                    customKeyTextColor = resolvedKeyTextColor,
+                    customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+                    customEnterKeyTextColor = resolvedEnterKeyTextColor,
+                    customPopupBgColor = resolvedPopupBgColor,
+                    customPopupTextColor = resolvedPopupTextColor,
                     liquidGlassEnable = liquidGlassThemePreference ?: false,
                     customBorderEnable = customKeyBorderEnablePreference ?: false,
                     customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
                     liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-                    borderWidth = customKeyBorderWidth ?: 1
+                    borderWidth = customKeyBorderWidth ?: 1,
+                    keyBorderEnable = keyBorderEnable ?: false,
+                    keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+                    keyPopupStyle = keyPopupStyle ?: "default"
                 )
                 floatingKeyboardLayoutBinding.keyboardViewFloating.setPopupWindowAnchorProvider {
                     floatingKeyboardLayoutBinding.root
@@ -2856,28 +2925,51 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
         mainLayoutBinding?.let { updateUpperAreaVisibility(it) }
         if (hasPhysicalKeyboard) {
-            val popupContentView = layoutInflater.inflate(R.layout.floating_candidate_layout, null)
-            val recyclerView =
-                popupContentView.findViewById<RecyclerView>(R.id.floating_candidate_recycler_view)
-            recyclerView.adapter = listAdapter
-            recyclerView.layoutManager = LinearLayoutManager(this)
-            floatingCandidateWindow = PopupWindow(
-                popupContentView,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT
-            ).apply {
-                isOutsideTouchable = false
-                isClippingEnabled = false
+            floatingCandidateWindow?.let {
+                if (it.isShowing) it.dismiss()
             }
-            applyThemeToFloatingCandidateListAdapter()
+            floatingCandidateWindow = null
+            initialCursorDetectInFloatingCandidateView = false
+            initialCursorXPosition = 0
+            physicalKeyboardFloatingXPosition = 0
+            physicalKeyboardFloatingYPosition = 0
 
+            ensureFloatingCandidateWindowInitialized()
+            floatingDockView.setText("あ")
+        }
+    }
+
+    private fun ensureFloatingCandidateWindowInitialized() {
+        if (floatingCandidateWindow != null) return
+
+        Timber.d("Initializing floatingCandidateWindow")
+        val popupContentView = layoutInflater.inflate(R.layout.floating_candidate_layout, null)
+        val recyclerView =
+            popupContentView.findViewById<RecyclerView>(R.id.floating_candidate_recycler_view)
+        recyclerView.adapter = listAdapter
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        floatingCandidateWindow = PopupWindow(
+            popupContentView,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT
+        ).apply {
+            isOutsideTouchable = false
+            isClippingEnabled = false
+            animationStyle = 0
+        }
+        applyThemeToFloatingCandidateListAdapter()
+
+        if (floatingDockWindow == null && ::floatingDockView.isInitialized) {
             floatingDockWindow = PopupWindow(
                 floatingDockView,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT
-            )
+            ).apply {
+                animationStyle = 0
+            }
+        }
 
-            floatingDockView.setText("あ")
+        if (floatingModeSwitchWindow == null && ::floatingModeSwitchView.isInitialized) {
             floatingModeSwitchWindow = PopupWindow(
                 floatingModeSwitchView,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -2885,13 +2977,23 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             ).apply {
                 isTouchable = false
                 isClippingEnabled = false
+                animationStyle = 0
             }
         }
+    }
+
+    override fun onFinishInput() {
+        super.onFinishInput()
+        Timber.d("onUpdate onFinishInput")
+        finishComposingText()
+        resetAllFlags()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
         Timber.d("onUpdate onFinishInputView")
+        finishComposingText()
+        resetAllFlags()
         persistCurrentCustomKeyboardInputModeIfEnabled()
         isInputViewActive = false
         qwertyGlideInputCoordinator?.cancelPending()
@@ -2900,7 +3002,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         releaseFloatingKeyboardBackgroundVideoPlayer()
         stopVoiceInput()
         _keyboardSymbolViewState.update { SymbolKeyboardState() }
-        floatingCandidateWindow?.dismiss()
+        floatingCandidateWindow?.let {
+            if (it.isShowing) it.dismiss()
+        }
+        floatingCandidateWindow = null
         floatingDockWindow?.dismiss()
         floatingModeSwitchWindow?.dismiss()
         floatingKeyboardView?.dismiss()
@@ -2953,6 +3058,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         hankakuPreference = null
         customDirectModeSpaceHankakuPreference = true
         isLiveConversionEnable = null
+        liveConversionManager.enabled = false
         nBest = null
         lastCandidate = null
         flickSensitivityPreferenceValue = null
@@ -3168,6 +3274,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     override fun onUpdateCursorAnchorInfo(cursorAnchorInfo: CursorAnchorInfo?) {
         super.onUpdateCursorAnchorInfo(cursorAnchorInfo)
+        if (isSystemUiRemoteInputSession) return
+        if (physicalKeyboardEnable.replayCache.firstOrNull() == true) {
+            ensureFloatingCandidateWindowInitialized()
+        }
         Timber.d("onUpdateCursorAnchorInfo start: [${cursorAnchorInfo == null}] [${floatingCandidateWindow == null}]")
         val insertString = inputString.value
         if (!hardwareKeyboardCoordinator.shouldProcessFloatingCandidateAnchor(
@@ -3178,6 +3288,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         ) {
             isPostCommitPredictionActive = false
             floatingCandidateWindow?.dismiss()
+            initialCursorDetectInFloatingCandidateView = false
+            initialCursorXPosition = 0
             return
         }
         val density = resources.displayMetrics.density
@@ -3230,13 +3342,16 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private val floatingCandidateWindowHost =
         HardwareKeyboardCoordinator.FloatingCandidateWindowHost { x, y, window ->
+            if (isSystemUiRemoteInputSession) return@FloatingCandidateWindowHost
             Timber.d("onUpdateCursorAnchorInfo window debug: [$x] [$y] [${window.isShowing}]")
             if (window.isShowing) {
                 window.update(x, y, -1, -1)
             } else {
+                val anchor = mainLayoutBinding?.let { resolveShowListPopupAnchor(it) }
+                    ?: this@IMEService.window.window?.decorView
                 showPopupWindowSafely(
                     popupWindow = window,
-                    anchorView = this@IMEService.window.window?.decorView,
+                    anchorView = anchor,
                     gravity = Gravity.NO_GRAVITY,
                     x = x,
                     y = y,
@@ -3594,17 +3709,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 suggestionViewParent.setBackgroundResource(com.kazumaproject.core.R.drawable.keyboard_root_material)
                                 suggestionVisibility.setBackgroundResource(com.kazumaproject.core.R.drawable.recyclerview_size_button_bg_material)
                                 candidateTabLayout.setBackgroundResource(com.kazumaproject.core.R.drawable.keyboard_root_material)
-                                val symbolKeyBg =
-                                    customThemeKeyColor ?: Color.WHITE
-                                keyboardSymbolView.setKeyboardTheme(
-                                    backgroundColor = manipulateColor(symbolKeyBg, 1.2f),
-                                    iconColor = customThemeKeyTextColor ?: Color.BLACK,
-                                    selectedIconColor = manipulateColor(
-                                        customThemeKeyTextColor ?: Color.BLACK, 0.6f
-                                    ),
-                                    keyBackgroundColor = symbolKeyBg,
-                                    liquidGlassEnable = liquidGlassThemePreference ?: false
-                                )
                                 applyThemeToSuggestionAdapter()
 
                                 root.setDrawableSolidColor(customThemeBgColor ?: Color.WHITE)
@@ -3689,6 +3793,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     mainView.suggestionRecyclerView.isVisible = suggestionViewStatus.value
                     updateUpperAreaVisibility(mainView)
                     applyThemeToSuggestionAdapter()
+                    applyThemeToSymbolKeyboard()
                 }
             }
         }
@@ -3710,18 +3815,28 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd
         )
 
+        if (
+            SystemClock.uptimeMillis() < suppressSelectionCleanupUntilMillis &&
+            (inputString.value.isNotEmpty() || stringInTail.get().isNotEmpty())
+        ) {
+            Timber.d("onUpdateSelection ignored for internal preedit cursor move: [${inputString.value}] [${stringInTail.get()}]")
+            refreshReconversionUi()
+            return
+        }
+
+        if (suppressedSelectionCleanupCount > 0) {
+            suppressedSelectionCleanupCount -= 1
+            Timber.d("onUpdateSelection suppressed: [${inputString.value}] [${stringInTail.get()}]")
+            return
+        }
+
         if (candidatesStart == -1 && candidatesEnd == -1) {
             if (_inputString.value.isNotEmpty() || stringInTail.get().isNotEmpty()) {
                 Timber.d("onUpdateSelection: composing text cleared externally. Resetting inputString and tail.")
-                _inputString.update { "" }
-                stringInTail.set("")
-                suggestionClickNum = 0
-                isHenkan.set(false)
-                henkanPressedWithBunsetsuDetect = false
-                scope.launch {
-                    _suggestionFlag.emit(CandidateShowFlag.Idle)
-                }
+                finishComposingText()
+                resetAllFlags()
             }
+            syncZenzLeftContextFromEditor()
         }
 
         // Check if composing text is active
@@ -3755,22 +3870,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         refreshCandidateForCurrentPreedit()
                     }
                 }
+            } else {
+                Timber.d("onUpdateSelection: user moved cursor outside composing region. Finishing and resetting.")
+                finishComposingText()
+                resetAllFlags()
             }
-            return
-        }
-
-        if (
-            SystemClock.uptimeMillis() < suppressSelectionCleanupUntilMillis &&
-            (inputString.value.isNotEmpty() || stringInTail.get().isNotEmpty())
-        ) {
-            Timber.d("onUpdateSelection ignored for internal preedit cursor move: [${inputString.value}] [${stringInTail.get()}]")
-            refreshReconversionUi()
-            return
-        }
-
-        if (suppressedSelectionCleanupCount > 0) {
-            suppressedSelectionCleanupCount -= 1
-            Timber.d("onUpdateSelection suppressed: [${inputString.value}] [${stringInTail.get()}]")
             return
         }
 
@@ -4582,21 +4686,18 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
             if (isHenkan.get()) {
                 listAdapter.selectHighlightedItem()
-                scope.launch {
-                    delay(32)
-                    if (physicalKeyboardInputMode == PhysicalKeyboardInputMode.KANA) {
-                        PhysicalKanaMapper.resolve(
-                            keyCode = keyCode,
-                            isShift = e.isShiftPressed
-                        )?.let { kana ->
-                            _inputString.update { KanaDakutenComposer.append("", kana) }
-                        }
-                    } else {
-                        handlePhysicalRomajiOrUnicodeKey(keyCode, e)?.let { romajiResult ->
-                            Timber.d("KeyEvent Key Henkan: $e\n$insertString\n${romajiResult.first}")
-                            _inputString.update {
-                                romajiResult.first
-                            }
+                if (physicalKeyboardInputMode == PhysicalKeyboardInputMode.KANA) {
+                    PhysicalKanaMapper.resolve(
+                        keyCode = keyCode,
+                        isShift = e.isShiftPressed
+                    )?.let { kana ->
+                        _inputString.update { KanaDakutenComposer.append("", kana) }
+                    }
+                } else {
+                    handlePhysicalRomajiOrUnicodeKey(keyCode, e)?.let { romajiResult ->
+                        Timber.d("KeyEvent Key Henkan: $e\n$insertString\n${romajiResult.first}")
+                        _inputString.update {
+                            romajiResult.first
                         }
                     }
                 }
@@ -4648,15 +4749,21 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val unicode = event.getUnicodeChar(event.metaState)
         if (unicode == 0) return null
 
+        val isEnglish = currentInputModeForSession == InputMode.ModeEnglish
         return if (keyCode in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z) {
-            if (isDefaultRomajiHenkanMap) {
+            if (isEnglish) {
+                romajiConverter?.handleKeyEvent(event)
+            } else if (isDefaultRomajiHenkanMap) {
                 romajiConverter?.handleKeyEventZenkaku(event)
             } else {
                 romajiConverter?.handleKeyEvent(event)
             }
         } else {
-            if (isDefaultRomajiHenkanMap) {
-                romajiConverter?.handleUnicodeCharZenkaku(unicode)
+            if (isEnglish) {
+                romajiConverter?.handleUnicodeChar(unicode)
+            } else if (isDefaultRomajiHenkanMap) {
+                val mappedChar = unicode.toChar().toRomajiQwertyOutputChar()
+                romajiConverter?.handleUnicodeChar(mappedChar.code)
             } else {
                 romajiConverter?.handleUnicodeChar(unicode)
             }
@@ -5292,9 +5399,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun setQwertyRomajiModeOnActiveSurface(enabled: Boolean) {
+        val finalEnabled = if (currentInputModeForSession == InputMode.ModeEnglish) false else enabled
         getActiveKeyboardSurface()
             ?.qwertyView
-            ?.setRomajiMode(enabled)
+            ?.setRomajiMode(finalEnabled)
     }
 
     private fun setCurrentQwertyRomajiModeForSession(enabled: Boolean) {
@@ -5327,7 +5435,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun renderQwertyStateOnActiveSurface() {
         val qwertyView = getActiveKeyboardSurface()?.qwertyView ?: return
-        qwertyView.setRomajiMode(currentQwertyRomajiModeForSession)
+        val finalRomajiMode = if (currentInputModeForSession == InputMode.ModeEnglish) false else currentQwertyRomajiModeForSession
+        qwertyView.setRomajiMode(finalRomajiMode)
         qwertyView.setRomajiEnglishSwitchKeyTextWithStyle(
             currentInputModeForSession == InputMode.ModeJapanese
         )
@@ -5778,24 +5887,61 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun configureFloatingTenKeyView(
         floatingKeyboardLayoutBinding: FloatingKeyboardLayoutBinding
     ) {
+        val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+        val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+        val isCustom = keyboardThemeMode == "custom"
+
+        val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+        val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+        val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+        val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+        val resolvedPopupBgColor = customThemePopupBgColor ?: Color.WHITE
+
+        val resolvedKeyTextColor = if (isCustom) {
+            customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedSpecialKeyTextColor = if (isCustom) {
+            customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedEnterKeyTextColor = if (isCustom) {
+            customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedPopupTextColor = if (isCustom) {
+            customThemePopupTextColor ?: if (resolvedPopupBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
         floatingKeyboardLayoutBinding.keyboardViewFloating.applyKeyboardTheme(
             themeMode = keyboardThemeMode ?: "default",
             currentNightMode = currentNightMode,
             isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-            customBgColor = customThemeBgColor ?: Color.WHITE,
-            customKeyColor = customThemeKeyColor ?: Color.WHITE,
-            customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-            customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-            customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-            customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-            customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
-            customPopupBgColor = customThemePopupBgColor ?: Color.WHITE,
-            customPopupTextColor = customThemePopupTextColor ?: Color.BLACK,
+            customBgColor = resolvedBgColor,
+            customKeyColor = resolvedKeyColor,
+            customSpecialKeyColor = resolvedSpecialKeyColor,
+            customEnterKeyColor = resolvedEnterKeyColor,
+            customKeyTextColor = resolvedKeyTextColor,
+            customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+            customEnterKeyTextColor = resolvedEnterKeyTextColor,
+            customPopupBgColor = resolvedPopupBgColor,
+            customPopupTextColor = resolvedPopupTextColor,
             liquidGlassEnable = liquidGlassThemePreference ?: false,
             customBorderEnable = customKeyBorderEnablePreference ?: false,
             customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
             liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-            borderWidth = customKeyBorderWidth ?: 1
+            borderWidth = customKeyBorderWidth ?: 1,
+            keyBorderEnable = keyBorderEnable ?: false,
+            keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+            keyPopupStyle = keyPopupStyle ?: "default"
         )
         floatingKeyboardLayoutBinding.keyboardViewFloating.setPopupWindowAnchorProvider {
             floatingKeyboardLayoutBinding.root
@@ -5890,24 +6036,61 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding
     ) {
         mainView.keyboardView.apply {
+            val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+            val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+            val isCustom = keyboardThemeMode == "custom"
+
+            val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+            val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+            val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+            val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+            val resolvedPopupBgColor = customThemePopupBgColor ?: Color.WHITE
+
+            val resolvedKeyTextColor = if (isCustom) {
+                customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedSpecialKeyTextColor = if (isCustom) {
+                customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedEnterKeyTextColor = if (isCustom) {
+                customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedPopupTextColor = if (isCustom) {
+                customThemePopupTextColor ?: if (resolvedPopupBgColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
             applyKeyboardTheme(
                 themeMode = keyboardThemeMode ?: "default",
                 currentNightMode = currentNightMode,
                 isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-                customBgColor = customThemeBgColor ?: Color.WHITE,
-                customKeyColor = customThemeKeyColor ?: Color.WHITE,
-                customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-                customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-                customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-                customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-                customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
-                customPopupBgColor = customThemePopupBgColor ?: Color.WHITE,
-                customPopupTextColor = customThemePopupTextColor ?: Color.BLACK,
+                customBgColor = resolvedBgColor,
+                customKeyColor = resolvedKeyColor,
+                customSpecialKeyColor = resolvedSpecialKeyColor,
+                customEnterKeyColor = resolvedEnterKeyColor,
+                customKeyTextColor = resolvedKeyTextColor,
+                customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+                customEnterKeyTextColor = resolvedEnterKeyTextColor,
+                customPopupBgColor = resolvedPopupBgColor,
+                customPopupTextColor = resolvedPopupTextColor,
                 liquidGlassEnable = liquidGlassThemePreference ?: false,
                 customBorderEnable = customKeyBorderEnablePreference ?: false,
                 customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
                 liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-                borderWidth = customKeyBorderWidth ?: 1
+                borderWidth = customKeyBorderWidth ?: 1,
+                keyBorderEnable = keyBorderEnable ?: false,
+                keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+                keyPopupStyle = keyPopupStyle ?: "default"
             )
             setPopupWindowAnchorProvider { mainView.root }
             setOnFlickListener(object : FlickListener {
@@ -6016,6 +6199,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         highlightedAbsoluteIndex: Int? = null
     ) {
         Timber.d("updateSuggestionsForFloatingCandidate: $suggestions")
+        if (suggestions.isNotEmpty() && physicalKeyboardEnable.replayCache.firstOrNull() == true) {
+            ensureFloatingCandidateWindowInitialized()
+            requestCursorUpdates(InputConnection.CURSOR_UPDATE_IMMEDIATE or InputConnection.CURSOR_UPDATE_MONITOR)
+        }
         fullSuggestionsList = suggestions
         highlightedAbsoluteIndex?.let { absoluteIndex ->
             if (suggestions.isNotEmpty() && absoluteIndex != RecyclerView.NO_POSITION) {
@@ -6062,22 +6249,52 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding
     ) {
         mainView.tabletView.apply {
+            val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+            val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+            val isCustom = keyboardThemeMode == "custom"
+
+            val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+            val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+            val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+            val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+
+            val resolvedKeyTextColor = if (isCustom) {
+                customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedSpecialKeyTextColor = if (isCustom) {
+                customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedEnterKeyTextColor = if (isCustom) {
+                customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
             applyKeyboardTheme(
                 themeMode = keyboardThemeMode ?: "default",
                 currentNightMode = currentNightMode,
                 isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-                customBgColor = customThemeBgColor ?: Color.WHITE,
-                customKeyColor = customThemeKeyColor ?: Color.WHITE,
-                customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-                customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-                customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-                customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-                customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
+                customBgColor = resolvedBgColor,
+                customKeyColor = resolvedKeyColor,
+                customSpecialKeyColor = resolvedSpecialKeyColor,
+                customEnterKeyColor = resolvedEnterKeyColor,
+                customKeyTextColor = resolvedKeyTextColor,
+                customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+                customEnterKeyTextColor = resolvedEnterKeyTextColor,
                 liquidGlassEnable = liquidGlassThemePreference ?: false,
                 customBorderEnable = customKeyBorderEnablePreference ?: false,
                 customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
                 liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-                borderWidth = customKeyBorderWidth ?: 1
+                borderWidth = customKeyBorderWidth ?: 1,
+                keyBorderEnable = keyBorderEnable ?: false,
+                keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+                keyPopupStyle = keyPopupStyle ?: "default"
             )
             setOnFlickListener(object : FlickListener {
                 override fun onFlick(gestureType: GestureType, key: Key, char: Char?) {
@@ -7807,6 +8024,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      * 指定されたキーボードを表示するための統一された関数
      */
     private fun showKeyboard(type: KeyboardType) {
+        if (currentInputType in numberTypes) {
+            showNumberKeyboardForCurrentInputType()
+            return
+        }
         hideAllKeyboards()
         val resolvedType = resolveKeyboardTypeForCurrentOrientation(type)
         Timber.d("showKeyboard called: requested=$type resolved=$resolvedType")
@@ -8454,24 +8675,61 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             // これにより Floating OFF の通常 popup 表示位置 / 表示先が PR 前と同等になる。
             flickView.setPopupWindowAnchorProvider(null)
         }
+        val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+        val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+        val isCustom = keyboardThemeMode == "custom"
+
+        val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+        val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+        val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+        val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+        val resolvedPopupBgColor = customThemePopupBgColor ?: Color.WHITE
+
+        val resolvedKeyTextColor = if (isCustom) {
+            customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedSpecialKeyTextColor = if (isCustom) {
+            customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedEnterKeyTextColor = if (isCustom) {
+            customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
+        val resolvedPopupTextColor = if (isCustom) {
+            customThemePopupTextColor ?: if (resolvedPopupBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        } else {
+            if (isDark) Color.WHITE else Color.BLACK
+        }
+
         flickView.applyKeyboardTheme(
             themeMode = keyboardThemeMode ?: "default",
             currentNightMode = currentNightMode,
             isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-            customBgColor = customThemeBgColor ?: Color.WHITE,
-            customKeyColor = customThemeKeyColor ?: Color.WHITE,
-            customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-            customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-            customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-            customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-            customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
-            customPopupBgColor = customThemePopupBgColor ?: Color.WHITE,
-            customPopupTextColor = customThemePopupTextColor ?: Color.BLACK,
+            customBgColor = resolvedBgColor,
+            customKeyColor = resolvedKeyColor,
+            customSpecialKeyColor = resolvedSpecialKeyColor,
+            customEnterKeyColor = resolvedEnterKeyColor,
+            customKeyTextColor = resolvedKeyTextColor,
+            customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+            customEnterKeyTextColor = resolvedEnterKeyTextColor,
+            customPopupBgColor = resolvedPopupBgColor,
+            customPopupTextColor = resolvedPopupTextColor,
             liquidGlassEnable = liquidGlassThemePreference ?: false,
             customBorderEnable = customKeyBorderEnablePreference ?: false,
             customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
             liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-            borderWidth = customKeyBorderWidth ?: 1
+            borderWidth = customKeyBorderWidth ?: 1,
+            keyBorderEnable = keyBorderEnable ?: false,
+            keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+            keyPopupStyle = keyPopupStyle ?: "default"
         )
 
         flickView.setAngleAndRange(
@@ -11040,28 +11298,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     val zenz = buildImeCandidateZenzContext(insertReading)
                     val preferences = buildImeCandidatePreferences()
                     val policy = currentRuntimeConversionPolicy(insertReading)
+                    if (policy.shouldUseZenzai) {
+                        _zenzCandidates.update { emptyList() }
+                        return@collectLatest
+                    }
                     val currentFullInput = inputString.value + stringInTail.get()
-                    val zenzCandidates = if (policy.shouldUseZenzai) {
-                        lastLocalUpdatedInput.first { completedInput ->
-                            completedInput == insertReading || currentFullInput != insertReading
-                        }
-                        if (currentFullInput != insertReading) {
-                            emptyList()
-                        } else {
-                            val suggestions = filteredCandidateList ?: emptyList()
-                            if (suggestions.isEmpty()) {
-                                emptyList()
-                            } else {
-                                candidateCoordinator.evaluateLiveZenzai(
-                                    input = insertReading,
-                                    dictionaryCandidates = suggestions,
-                                    zenz = zenz,
-                                    preferences = preferences,
-                                    cursorPosition = cursorPosition,
-                                )
-                            }
-                        }
-                    } else {
+                    val zenzCandidates = run {
                         val generated = candidateCoordinator.generateLiveZenzCandidates(
                             input = insertReading,
                             zenz = zenz,
@@ -11094,13 +11336,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             )
                             if (mergedCandidates != null) {
                                 suggestionAdapter?.suggestions = mergedCandidates
-
-                                if (shouldStartLiveConversion(insertString)) {
-                                    isContinuousTapInputEnabled.set(true)
-                                    lastFlickConvertedNextHiragana.set(true)
-                                    applyFirstSuggestion(mergedCandidates.first())
-                                    hasConvertedKatakana = true
-                                }
                             }
                         } else {
                             if (inputString.value.isEmpty()) {
@@ -11120,7 +11355,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         launch {
+            var lastString = ""
             inputString.collectLatest { string ->
+                if (string.length < lastString.length && string.isNotEmpty()) {
+                    delay(50)
+                }
+                lastString = string
                 processInputString(string, mainView)
             }
         }
@@ -11158,35 +11398,31 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         return getZenzLeftContext(insertString, cachedPreferences)
     }
 
+    private fun syncZenzLeftContextFromEditor() {
+        val left = getLeftContext(inputLength = 0)
+        candidateCoordinator.updateLeftSideContext(left)
+        Timber.d("syncZenzLeftContextFromEditor: synced memory leftSideContext to [$left]")
+    }
+
     private suspend fun getZenzLeftContext(
         insertString: String,
         snapshot: ImePreferencesSnapshot? = cachedPreferences,
     ): String {
         return try {
-            withContext(Dispatchers.Main) {
-                val liveConversion = snapshot?.isLiveConversionEnable ?: (isLiveConversionEnable == true)
-                val lastCandidateLength = if (liveConversion) {
-                    lastCandidate?.length ?: 0
-                } else {
-                    insertString.length
-                }
-
-                val useRightContext = snapshot?.enableZenzRightContextPreference
-                    ?: (enableZenzRightContextPreference == true)
-                if (useRightContext) {
-                    val tmpResult = getLeftContext(inputLength = lastCandidateLength)
-                        .dropLast(lastCandidateLength)
-                    tmpResult.ifEmpty {
-                        getRightContext(inputLength = lastCandidateLength)
-                    }
-                } else {
-                    getLeftContext(inputLength = lastCandidateLength)
-                        .dropLast(lastCandidateLength)
-                }
-            }
+            truncateZenzLeftContext(getLeftContext(inputLength = 0))
         } catch (e: Exception) {
             Timber.e(e, "Error getZenzLeftContext")
             ""
+        }
+    }
+
+    /** AzooKey v3: left context は最大 20 文字（改行以降は切り捨て）。 */
+    private fun truncateZenzLeftContext(raw: String): String {
+        val withoutNewline = raw.substringBefore('\n').substringBefore('\r')
+        return if (withoutNewline.length <= ZENZ_LEFT_CONTEXT_MAX) {
+            withoutNewline
+        } else {
+            withoutNewline.takeLast(ZENZ_LEFT_CONTEXT_MAX)
         }
     }
 
@@ -11200,6 +11436,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
             return
         }
+        // supplementaryCandidates は main と分離済み。ライブ変換は mainResults のみ参照する。
+        val displayCandidates = candidates
         val request = keyboardSurfaceCoordinator.buildCandidateSurfaceRequest(
             physicalKeyboardEnableReplayFirst = physicalKeyboardEnable.replayCache.firstOrNull() == true &&
                 hasHardwareKeyboardConnected == true,
@@ -11207,17 +11445,18 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         )
         keyboardSurfaceCoordinator.routeCandidateDisplay(
             request = request,
-            candidates = candidates,
+            candidates = displayCandidates,
             host = candidateSurfaceHost,
         )
 
         if (currentRuntimeConversionPolicy(insertString).allowsPersonalizedConversion) {
-            filteredCandidateList = candidates
+            filteredCandidateList = displayCandidates
         }
         if (isZenzEnabledForSession()) {
             lastLocalUpdatedInput.emit(insertString)
         }
     }
+
 
     private fun isZenzEnabledForSession(): Boolean {
         return cachedPreferences?.zenzEnableStatePreference ?: (zenzEnableStatePreference == true)
@@ -11227,6 +11466,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding,
     ): PhysicalKeyboardUiEffectHandler.PhysicalKeyboardUiHost =
         object : PhysicalKeyboardUiEffectHandler.PhysicalKeyboardUiHost {
+            override fun setWindowAnimations(animations: Int) {
+                window.window?.setWindowAnimations(animations)
+            }
+
             override fun clearWindowBackgroundBlur() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     window.window?.setBackgroundBlurRadius(0)
@@ -11267,7 +11510,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
 
             override fun requestCursorUpdates(flags: Int) {
-                this@IMEService.requestCursorUpdates(flags)
+                if (!isSystemUiRemoteInputSession) {
+                    this@IMEService.requestCursorUpdates(flags)
+                }
             }
 
             override fun showFloatingDockIfNeeded() {
@@ -11514,19 +11759,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val prioritized = candidateCoordinator.prioritizeReranked(reranked)
             updateDisplayedCandidates(insertString, prioritized)
             updateBunsetsuSpaceKeyIfNeeded(mainView, prioritized, insertString)
-
-            if (
-                requestToken == zenzRerankRequestToken &&
-                shouldStartLiveConversion(insertString) &&
-                !hasConvertedKatakana &&
-                inputString.value == insertString &&
-                prioritized.isNotEmpty()
-            ) {
-                val rerankedCommitString = getCandidateCommitString(prioritized.first())
-                if (rerankedCommitString != lastCandidate) {
-                    applyFirstSuggestion(prioritized.first())
-                }
-            }
         }
     }
 
@@ -12341,7 +12573,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val adapterFull = suggestionAdapterFull
 
         val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
 
         val candidateTextColorVal: Int
         val candidateItemBgColorVal: Int
@@ -12351,12 +12582,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
         when (keyboardThemeMode) {
             "custom" -> {
-                candidateTextColorVal = customThemeCandidateTextColor ?: (if (isDark) Color.WHITE else Color.BLACK)
+                val isCustomDark = !(customThemeBgColor ?: Color.WHITE).isLightColor()
+                candidateTextColorVal = customThemeCandidateTextColor ?: (if (isCustomDark) Color.WHITE else Color.BLACK)
                 candidateItemBgColorVal = customThemeCandidateItemBgColor ?: Color.TRANSPARENT
                 candidateItemPressedBgColorVal = customThemeCandidateItemPressedBgColor
                     ?: ContextCompat.getColor(this, com.kazumaproject.core.R.color.qwety_key_bg_color)
-                emptyDrawableColorVal = customThemeSpecialKeyColor ?: (if (isDark) Color.parseColor("#303030") else Color.parseColor("#E0E0E0"))
-                emptyDrawableTextColorVal = customThemeSpecialKeyTextColor ?: (if (isDark) Color.WHITE else Color.BLACK)
+                emptyDrawableColorVal = customThemeSpecialKeyColor ?: (if (isCustomDark) Color.parseColor("#303030") else Color.parseColor("#E0E0E0"))
+                emptyDrawableTextColorVal = customThemeSpecialKeyTextColor ?: (if (isCustomDark) Color.WHITE else Color.BLACK)
             }
             "dark" -> {
                 candidateTextColorVal = Color.WHITE
@@ -12375,7 +12607,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             else -> {
                 val isDynamic = DynamicColors.isDynamicColorAvailable()
                 if (isDynamic) {
-                    val fallbackBg = ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_bg)
                     val fallbackTextColor = ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_icon_color)
                     val defaultTextColor = getThemeColorOrFallback(
                         attrRes = MaterialR.attr.colorOnSurface,
@@ -12469,6 +12700,97 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             bgContainer?.setBackgroundColor(bgColor)
         }
         applyThemeToSuggestionAdapter()
+    }
+
+    /**
+     * Applies the current theme colors to the symbol keyboard (emoji/symbol/clipboard view)
+     * for ALL theme modes (custom, dark, light, default/dynamic color).
+     */
+    private fun applyThemeToSymbolKeyboard() {
+        val symbolView = mainLayoutBinding?.keyboardSymbolView ?: return
+        val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val isDynamic = DynamicColors.isDynamicColorAvailable()
+
+        val defaultKeyBg = if (isDynamic) {
+            getThemeColorOrFallback(
+                attrRes = MaterialR.attr.colorSurfaceContainerHigh,
+                fallbackColor = ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_bg)
+            )
+        } else {
+            if (isNight) Color.parseColor("#303030") else Color.parseColor("#E0E0E0")
+        }
+        val defaultBg = if (isDynamic) {
+            getThemeColorOrFallback(
+                attrRes = MaterialR.attr.colorSurface,
+                fallbackColor = ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_bg)
+            )
+        } else {
+            if (isNight) Color.parseColor("#1C1F23") else Color.parseColor("#E0E5EC")
+        }
+
+        // Resolve backgrounds per theme mode
+        val (bgColor, keyBgColor) = when (keyboardThemeMode) {
+            "custom" -> Pair(
+                customThemeBgColor ?: Color.WHITE,
+                customThemeKeyColor ?: Color.WHITE
+            )
+            "dark" -> Pair(
+                Color.parseColor("#1C1F23"),
+                Color.parseColor("#303030")
+            )
+            "light" -> Pair(
+                Color.parseColor("#E0E5EC"),
+                Color.parseColor("#E0E0E0")
+            )
+            else -> Pair(defaultBg, defaultKeyBg)
+        }
+
+        // Unified: derive icon color from key background color
+        val iconColor = if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        val selectedIconColor = manipulateColor(iconColor, 0.6f)
+
+        symbolView.setKeyboardTheme(
+            backgroundColor = manipulateColor(bgColor, 1.1f),
+            iconColor = iconColor,
+            selectedIconColor = selectedIconColor,
+            keyBackgroundColor = keyBgColor,
+            liquidGlassEnable = liquidGlassThemePreference ?: false
+        )
+    }
+
+    /**
+     * Applies the current theme's icon color to the shortcut toolbar adapter
+     * for ALL theme modes (custom, dark, light, default/dynamic color).
+     */
+    private fun applyShortcutAdapterIconColor() {
+        val adapter = shortcutAdapter ?: return
+        val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val isDynamic = DynamicColors.isDynamicColorAvailable()
+
+        val defaultBg = if (isDynamic) {
+            getThemeColorOrFallback(
+                attrRes = MaterialR.attr.colorSurface,
+                fallbackColor = ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_bg)
+            )
+        } else {
+            if (isNight) Color.parseColor("#1C1F23") else Color.parseColor("#E0E5EC")
+        }
+
+        // Resolve toolbar background per theme mode
+        val bgColor = when (keyboardThemeMode) {
+            "custom" -> customThemeBgColor ?: Color.WHITE
+            "dark" -> Color.parseColor("#1C1F23")
+            "light" -> Color.parseColor("#E0E5EC")
+            else -> defaultBg
+        }
+
+        // Unified: derive icon color from background, with custom override support
+        val iconColor = if (keyboardThemeMode == "custom") {
+            customThemeShortcutIconColor ?: (if (bgColor.isLightColor()) Color.BLACK else Color.WHITE)
+        } else {
+            if (bgColor.isLightColor()) Color.BLACK else Color.WHITE
+        }
+        adapter.setIconColor(iconColor)
     }
 
     private fun animateSuggestionImageViewVisibility(
@@ -12590,6 +12912,25 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 refreshReconversionUi()
                 return
             }
+            if (deleteKeyLongKeyPressed.get()) {
+                setComposingTextAfterEdit(
+                    inputString = string,
+                    spannableString = createSpannableWithTail(string),
+                    backgroundColor = if (customComposingTextPreference == true) {
+                        inputCompositionAfterBackgroundColor
+                            ?: getColor(com.kazumaproject.core.R.color.blue)
+                    } else {
+                        getColor(com.kazumaproject.core.R.color.blue)
+                    },
+                    textColor = if (customComposingTextPreference == true) {
+                        inputCompositionTextColor
+                    } else {
+                        null
+                    }
+                )
+                refreshReconversionUi()
+                return
+            }
             if (qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTY) {
                 handleTenKeyQwertyInput(string)
             } else {
@@ -12613,6 +12954,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 onLeftKeyLongPressUp.set(true)
                 onRightKeyLongPressUp.set(true)
                 onDeleteLongPressUp.set(true)
+                liveConversionManager.stopComposition()
             }
             _zenzCandidates.update { emptyList() }
             hasConvertedKatakana = false
@@ -12700,7 +13042,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private suspend fun handleTenKeyQwertyInput(string: String) {
         val spannable = createSpannableWithTail(string)
         _suggestionFlag.emit(CandidateShowFlag.Updating)
-        if (!(shouldStartLiveConversion(string) && isFlickOnlyMode == true)) {
+        if (!shouldStartLiveConversion(string)) {
             setComposingTextPreEdit(
                 inputString = string,
                 spannableString = spannable,
@@ -12713,24 +13055,22 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 textColor = if (customComposingTextPreference == true) inputCompositionTextColor else null
             )
         }
-        if (isLiveConversionEnable != true) {
-            // ライブ変換が無効な場合は、入力されたテキストをそのまま表示します。
-            setComposingTextAfterEdit(
-                inputString = string,
-                spannableString = spannable,
-                backgroundColor = if (customComposingTextPreference == true) {
-                    inputCompositionAfterBackgroundColor
-                        ?: getColor(com.kazumaproject.core.R.color.blue)
-                } else {
-                    getColor(com.kazumaproject.core.R.color.blue)
-                },
-                textColor = if (customComposingTextPreference == true) {
-                    inputCompositionTextColor
-                } else {
-                    null
-                }
-            )
-        }
+        // ライブ変換の有効・無効に関わらず、同期的に入力テキストを即座に描画します。
+        setComposingTextAfterEdit(
+            inputString = string,
+            spannableString = spannable,
+            backgroundColor = if (customComposingTextPreference == true) {
+                inputCompositionAfterBackgroundColor
+                    ?: getColor(com.kazumaproject.core.R.color.blue)
+            } else {
+                getColor(com.kazumaproject.core.R.color.blue)
+            },
+            textColor = if (customComposingTextPreference == true) {
+                inputCompositionTextColor
+            } else {
+                null
+            }
+        )
     }
 
     /**
@@ -12738,7 +13078,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      */
     private suspend fun handleDefaultInput(string: String) {
         val spannable = createSpannableWithTail(string)
-        if (!(shouldStartLiveConversion(string) && isFlickOnlyMode == true)) {
+        if (!shouldStartLiveConversion(string)) {
             setComposingTextPreEdit(
                 inputString = string,
                 spannableString = spannable,
@@ -12756,29 +13096,27 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return
         }
 
-        if (isLiveConversionEnable != true) {
-            val shouldCommitOriginalText =
-                inputString.value.isNotEmpty() && !isHenkan.get() && !onDeleteLongPressUp.get() && !englishSpaceKeyPressed.get() && !deleteKeyLongKeyPressed.get() && !hasConvertedKatakana
+        val shouldCommitOriginalText =
+            inputString.value.isNotEmpty() && !isHenkan.get() && !onDeleteLongPressUp.get() && !englishSpaceKeyPressed.get() && !deleteKeyLongKeyPressed.get() && !hasConvertedKatakana
 
-            if (shouldCommitOriginalText) {
-                isContinuousTapInputEnabled.set(true)
-                lastFlickConvertedNextHiragana.set(true)
-                setComposingTextAfterEdit(
-                    inputString = string,
-                    spannableString = spannable,
-                    backgroundColor = if (customComposingTextPreference == true) {
-                        inputCompositionAfterBackgroundColor
-                            ?: getColor(com.kazumaproject.core.R.color.blue)
-                    } else {
-                        getColor(com.kazumaproject.core.R.color.blue)
-                    },
-                    textColor = if (customComposingTextPreference == true) {
-                        inputCompositionTextColor
-                    } else {
-                        null
-                    }
-                )
-            }
+        if (shouldCommitOriginalText) {
+            isContinuousTapInputEnabled.set(true)
+            lastFlickConvertedNextHiragana.set(true)
+            setComposingTextAfterEdit(
+                inputString = string,
+                spannableString = spannable,
+                backgroundColor = if (customComposingTextPreference == true) {
+                    inputCompositionAfterBackgroundColor
+                        ?: getColor(com.kazumaproject.core.R.color.blue)
+                } else {
+                    getColor(com.kazumaproject.core.R.color.blue)
+                },
+                textColor = if (customComposingTextPreference == true) {
+                    inputCompositionTextColor
+                } else {
+                    null
+                }
+            )
         }
     }
 
@@ -12802,8 +13140,28 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         return currentRuntimeConversionPolicy(input).shouldUseLiveConversion
     }
 
-    private fun currentRuntimeConversionPolicy(input: String) =
-        CandidateRequestBridge.toCandidateRequest(
+    /**
+     * 変換キー押下時のライブ変換候補選択（ライブ変換 OFF 時のみ使用）。
+     * 読み長が入力全体と一致する候補のみ採用する。
+     */
+    private fun selectLiveConversionCandidate(
+        insertString: String,
+        candidates: List<Candidate>,
+    ): Candidate? {
+        return candidates.firstOrNull { candidate ->
+            val lane = CandidateType.laneOf(candidate)
+            if (lane == CandidateLane.Special || lane == CandidateLane.Prediction) {
+                return@firstOrNull false
+            }
+            candidate.data.sumOf { it.reading.length } == insertString.length
+        }
+    }
+
+    private fun currentRuntimeConversionPolicy(input: String): AzooKeyRuntimeConversionPolicy {
+        if (cachedRuntimeConversionPolicyInput == input) {
+            return cachedRuntimeConversionPolicy!!
+        }
+        val policy = CandidateRequestBridge.toCandidateRequest(
             composingText = composingTextForCandidateRequest(input),
             options = ImeCandidateRequestFactory.buildConvertRequestOptions(
                 preferences = buildImeCandidatePreferences(),
@@ -12812,6 +13170,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             runtime = ImeCandidateRequestFactory.buildRuntimeContext(buildImeCandidatePreferences()),
             mode = CandidateRequestMode.Normal,
         ).runtimeConversionPolicy
+        cachedRuntimeConversionPolicyInput = input
+        cachedRuntimeConversionPolicy = policy
+        return policy
+    }
 
     private fun currentAzooKeyLearningType(): AzooKeyStyleLearningType {
         val snapshot = cachedPreferences ?: return AzooKeyStyleLearningType.Nothing
@@ -12868,12 +13230,19 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun applyFirstSuggestion(
         candidate: Candidate
     ) {
+        applyLiveConversionDisplay(getCandidateCommitString(candidate))
+    }
+
+    /**
+     * AzooKey [DisplayedTextManager.updateComposingText] に準拠し、ライブ変換の表示のみ更新する。
+     * [_inputString] は [convertTarget] のまま維持し、短い候補で入力が切り詰められないようにする。
+     */
+    private fun applyLiveConversionDisplay(liveText: String) {
         beginBatchEdit()
-        val commitString = getCandidateCommitString(candidate)
-        lastCandidate = commitString
-        val newSpannable = createSpannableWithTail(commitString)
+        lastCandidate = liveText
+        val newSpannable = createSpannableWithTail(liveText)
         setComposingTextAfterEdit(
-            inputString = commitString,
+            inputString = liveText,
             spannableString = newSpannable,
             backgroundColor = if (customComposingTextPreference == true) {
                 inputCompositionAfterBackgroundColor
@@ -14198,15 +14567,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 LinearLayoutManager(this@IMEService, LinearLayoutManager.HORIZONTAL, false)
             adapter = shortcutAdapter
         }
-        distributeShortcutToolbarItems(mainView)
-        when (keyboardThemeMode) {
-            "custom" -> {
-                shortcutAdapter?.setIconColor(customThemeShortcutIconColor ?: Color.BLACK)
-            }
-
-            else -> {
-            }
+        mainView.upperAreaContentContainer.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            distributeShortcutToolbarItems(mainView)
         }
+        distributeShortcutToolbarItems(mainView)
+        applyShortcutAdapterIconColor()
         shortcutAdapter?.onItemClicked = { type ->
             when (type) {
                 ShortcutType.SETTINGS -> {
@@ -14272,7 +14637,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val itemWidth = (width / count).coerceAtLeast(1)
             val usedWidth = itemWidth * count
             val sidePadding = ((width - usedWidth) / 2).coerceAtLeast(0)
-            mainView.shortcutToolbarRecyclerview.setPadding(sidePadding, 0, sidePadding, 0)
+            // Distribute any rounding remainder to the end padding so items fill the width exactly
+            val endPadding = (width - usedWidth - sidePadding).coerceAtLeast(0)
+            mainView.shortcutToolbarRecyclerview.setPadding(sidePadding, 0, endPadding, 0)
             mainView.shortcutToolbarRecyclerview.clipToPadding = true
             shortcutAdapter?.setItemWidth(itemWidth)
         }
@@ -14467,24 +14834,61 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding,
     ) {
         qwertyView.apply {
+            val isNight = currentNightMode == Configuration.UI_MODE_NIGHT_YES
+            val isDark = keyboardThemeMode == "dark" || (keyboardThemeMode == "default" && isNight)
+            val isCustom = keyboardThemeMode == "custom"
+
+            val resolvedBgColor = customThemeBgColor ?: Color.WHITE
+            val resolvedKeyColor = customThemeKeyColor ?: Color.WHITE
+            val resolvedSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY
+            val resolvedEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE
+            val resolvedPopupBgColor = customThemePopupBgColor ?: Color.WHITE
+
+            val resolvedKeyTextColor = if (isCustom) {
+                customThemeKeyTextColor ?: if (resolvedKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedSpecialKeyTextColor = if (isCustom) {
+                customThemeSpecialKeyTextColor ?: if (resolvedSpecialKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedEnterKeyTextColor = if (isCustom) {
+                customThemeEnterKeyTextColor ?: if (resolvedEnterKeyColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
+            val resolvedPopupTextColor = if (isCustom) {
+                customThemePopupTextColor ?: if (resolvedPopupBgColor.isLightColor()) Color.BLACK else Color.WHITE
+            } else {
+                if (isDark) Color.WHITE else Color.BLACK
+            }
+
             applyKeyboardTheme(
                 themeMode = keyboardThemeMode ?: "default",
                 currentNightMode = currentNightMode,
                 isDynamicColorEnabled = DynamicColors.isDynamicColorAvailable(),
-                customBgColor = customThemeBgColor ?: Color.WHITE,
-                customKeyColor = customThemeKeyColor ?: Color.WHITE,
-                customSpecialKeyColor = customThemeSpecialKeyColor ?: Color.GRAY,
-                customEnterKeyColor = customThemeEnterKeyColor ?: Color.BLUE,
-                customKeyTextColor = customThemeKeyTextColor ?: Color.BLACK,
-                customSpecialKeyTextColor = customThemeSpecialKeyTextColor ?: Color.BLACK,
-                customEnterKeyTextColor = customThemeEnterKeyTextColor ?: Color.WHITE,
-                customPopupBgColor = customThemePopupBgColor ?: Color.WHITE,
-                customPopupTextColor = customThemePopupTextColor ?: Color.BLACK,
+                customBgColor = resolvedBgColor,
+                customKeyColor = resolvedKeyColor,
+                customSpecialKeyColor = resolvedSpecialKeyColor,
+                customEnterKeyColor = resolvedEnterKeyColor,
+                customKeyTextColor = resolvedKeyTextColor,
+                customSpecialKeyTextColor = resolvedSpecialKeyTextColor,
+                customEnterKeyTextColor = resolvedEnterKeyTextColor,
+                customPopupBgColor = resolvedPopupBgColor,
+                customPopupTextColor = resolvedPopupTextColor,
                 liquidGlassEnable = liquidGlassThemePreference ?: false,
                 customBorderEnable = customKeyBorderEnablePreference ?: false,
                 customBorderColor = customKeyBorderEnableColor ?: Color.BLACK,
                 liquidGlassKeyAlphaEnable = liquidGlassKeyBlurRadiousPreference ?: 255,
-                borderWidth = customKeyBorderWidth ?: 1
+                borderWidth = customKeyBorderWidth ?: 1,
+                keyBorderEnable = keyBorderEnable ?: false,
+                keyCornerRadiusDp = keyCornerRadiusDp ?: 8,
+                keyPopupStyle = keyPopupStyle ?: "default"
             )
             setLongPressTimeout((longPressTimeoutPreferenceValue ?: 300).toLong())
             applyPopupViewStyleSet(currentQwertyPopupViewStyleSet())
@@ -15229,7 +15633,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return
         }
         if (handleBunsetsuCandidateClick(candidate, currentInputMode, position)) {
-            setCursorLeftAfterCommitPair(candidate.string)
+            applyCandidateCompleteActions(candidate)
             restoreKeyboardFromFullSuggestionViewIfNeeded()
             return
         }
@@ -15261,7 +15665,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             if (handlePromotedTailAfterCandidateCommit()) {
                 return
             }
-            setCursorLeftAfterCommitPair(candidate.string)
+            applyCandidateCompleteActions(candidate)
         }
         resetFlagsSuggestionClick()
     }
@@ -15978,6 +16382,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 suggestionAdapterFull?.updateHighlightPosition(androidx.recyclerview.widget.RecyclerView.NO_POSITION)
                 isFirstClickHasStringTail = false
                 clearBunsetsuConversionSession()
+                if (isLiveConversionEnable == true) {
+                    liveConversionManager.updateAfterFirstClauseCompletion()
+                }
 
                 _inputString.update { tail }
                 stringInTail.set("")
@@ -16029,6 +16436,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 )
             }
             _inputString.update { "" }
+            lastQwertyRomajiRawInput = null
+            candidateCoordinator.resetConversionSession()
             commitText(candidate.string, 1)
             schedulePostCommitPrediction(candidate)
         }
@@ -16137,6 +16546,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun resetAllFlags() {
         Timber.d("onUpdate resetAllFlags called")
+        liveConversionManager.stopComposition()
         customKeyboardRenderJob?.cancel()
         customKeyboardRenderJob = null
         clearFunctionKeyConversionSource()
@@ -16220,6 +16630,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (stringInTail.get().isEmpty()) {
             clearSuggestionStateAfterCommit()
         }
+        liveConversionManager.stopComposition()
         _inputString.update { "" }
         refreshReconversionUi()
     }
@@ -16732,6 +17143,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             romanize = { input -> romajiConverter?.hiraganaToRomaji(input) },
             toHankakuAlphabet = { input -> input.toHankakuAlphabet() },
             zenzaiEnabled = snapshot.zenzaiEnableStatePreference,
+            zenzProfile = snapshot.zenzProfilePreference ?: (zenzProfilePreference ?: ""),
         )
     }
 
@@ -16779,17 +17191,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             versionString = "JapaneseKeyboard Version ${BuildConfig.VERSION_NAME}",
             learnedPrefixMatchThreshold = (learnPredictionPreference ?: 2) - 1,
             userDictionaryPrefixMatchThreshold = (userDictionaryPrefixMatchNumber ?: 2) - 1,
-            systemEngineConfig = SystemKanaKanjiEngineSourceConfig(
-                mozcUtPersonName = mozcUTPersonName,
-                mozcUTPlaces = mozcUTPlaces,
-                mozcUTWiki = mozcUTWiki,
-                mozcUTNeologd = mozcUTNeologd,
-                mozcUTWeb = mozcUTWeb,
-                enableTypoCorrectionJapaneseFlick = false,
-                enableTypoCorrectionQwertyEnglish = false,
-                typoCorrectionOffsetScore = 3000,
-                omissionSearchOffsetScore = 1900,
-            ),
             isLearnDictionaryMode = isLearnDictionaryMode == true,
             romanize = { input -> romajiConverter?.hiraganaToRomaji(input) },
             toHankakuAlphabet = { input -> input.toHankakuAlphabet() },
@@ -16947,25 +17348,71 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private suspend fun applyLiveConversionIfNeeded(
         insertString: String,
         displayedCandidates: List<Candidate>,
+        firstClauseResults: List<Candidate> = emptyList(),
     ) {
         if (shouldStartLiveConversion(insertString)) {
             if (!shouldApplyCandidateResult(insertString)) {
                 return
             }
-            val firstCandidate = displayedCandidates.firstOrNull() ?: return
-            isContinuousTapInputEnabled.set(true)
-            lastFlickConvertedNextHiragana.set(true)
-            applyFirstSuggestion(firstCandidate)
-            hasConvertedKatakana = true
-        } else if (isLiveConversionEnable != true && !hasConvertedKatakana && henkanPressedWithBunsetsuDetect) {
-            if (!shouldApplyCandidateResult(insertString)) {
+            val liveText = liveConversionManager.updateWithNewResults(
+                composingText = composingTextForCandidateRequest(insertString),
+                candidates = displayedCandidates,
+                firstClauseResults = firstClauseResults,
+                convertTargetCursorPosition = insertString.length,
+                convertTarget = insertString
+            )
+
+            val threshold = getAutomaticCompletionStrengthThreshold(liveConversionAutomaticCompletionStrength)
+            val autoCompletedClause = liveConversionManager.candidateForCompleteFirstClause(threshold)
+            val mainView = mainLayoutBinding
+            if (autoCompletedClause != null && mainView != null) {
+                val firstClauseReadingLength = autoCompletedClause.data.sumOf { it.reading.length }
+                    .coerceAtMost(insertString.length)
+                val remainingKana = insertString.drop(firstClauseReadingLength)
+                candidateCoordinator.setCompletedData(autoCompletedClause)
+
+                if (shouldUseQwertyRoman2KanaComposing()) {
+                    val composingText = composingTextForCandidateRequest(insertString)
+                    val indexMap = composingText.inputIndexToSurfaceIndexMap(azooKeyRoman2KanaTransducer)
+                    val inputIndex = indexMap.entries.firstOrNull { it.value == firstClauseReadingLength }?.key
+                        ?: firstClauseReadingLength
+                    val raw = lastQwertyRomajiRawInput ?: ""
+                    lastQwertyRomajiRawInput = raw.drop(inputIndex)
+                    if (remainingKana.isNotEmpty()) {
+                        candidateCoordinator.composingTextSession.rebuildFromQwertyRawInput(
+                            rawInput = lastQwertyRomajiRawInput.orEmpty(),
+                            zenkakuRomaji = isDefaultRomajiHenkanMap,
+                            displayInput = remainingKana,
+                        )
+                    }
+                } else if (remainingKana.isNotEmpty()) {
+                    candidateCoordinator.composingTextSession.applyDirectInput(remainingKana)
+                }
+
+                commitPartialCandidateAndPromoteTail(autoCompletedClause.string, remainingKana)
+                if (remainingKana.isEmpty()) {
+                    resetAllFlags()
+                }
                 return
             }
+
+            if (liveText.isNotEmpty() && liveText != lastCandidate) {
+                applyLiveConversionDisplay(liveText)
+            }
             isContinuousTapInputEnabled.set(true)
             lastFlickConvertedNextHiragana.set(true)
-            if (!hasConvertedKatakana && displayedCandidates.isNotEmpty()) {
-                applyFirstSuggestion(displayedCandidates.first())
-            }
+            hasConvertedKatakana = liveText.isNotEmpty() && liveText != insertString
+        }
+    }
+
+    private fun getAutomaticCompletionStrengthThreshold(strength: String): Int {
+        return when (strength) {
+            "disabled" -> Int.MAX_VALUE
+            "weak" -> 16
+            "normal" -> 13
+            "strong" -> 10
+            "ultrastrong" -> 6
+            else -> 16
         }
     }
 
@@ -17007,10 +17454,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun getLeftContext(inputLength: Int): String {
-        val lengthToGetTextBeforeCursor = (8 + inputLength).coerceAtMost(64)
+        val lengthToGetTextBeforeCursor = (128 + inputLength).coerceAtMost(256)
         val charSequence = editorGateway.getTextBeforeCursor(lengthToGetTextBeforeCursor, 0)
             ?: return ""
-        val text = charSequence?.toString() ?: ""
+        val text = charSequence.toString()
 
         Timber.d("getLeftContext: inputLength [$inputLength] text: [$text]")
         // 改行記号 '\n' があれば、それより後ろの部分だけを返す。
@@ -17019,10 +17466,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun getRightContext(inputLength: Int): String {
-        val lengthToGetTextAfterCursor = (8 + inputLength).coerceAtMost(64)
+        val lengthToGetTextAfterCursor = (128 + inputLength).coerceAtMost(256)
         val charSequence = editorGateway.getTextAfterCursor(lengthToGetTextAfterCursor, 0)
             ?: return ""
-        val text = charSequence?.toString() ?: ""
+        val text = charSequence.toString()
 
         Timber.d("getRightContext: inputLength [$inputLength] text: [$text]")
 
@@ -17148,13 +17595,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
                 if (current.isEmpty()) {
                     if (tailIsEmpty) {
-                        if (isEditHistoryEnabled()) {
-                            val beforeChar =
-                                captureDeletedTextFromConnection(editorGateway.connection())
-                            if (beforeChar.isNotEmpty()) {
-                                activeDeleteHistoryBatch?.deletedText?.insert(0, beforeChar)
-                            }
-                        }
+                        // Performance optimization: Skip captureDeletedTextFromConnection during long press deletion
+                        // to avoid blocking SQLite/IPC queries in the rapid loop.
                         deleteLastGraphemeOrSelection()
                     } else {
                         break
@@ -17494,7 +17936,19 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         floatingKeyboardLayoutBinding: FloatingKeyboardLayoutBinding?
     ) {
         val insertString = inputString.value
-        val suggestions = suggestionAdapter?.suggestions ?: emptyList()
+        var suggestions = suggestionAdapter?.suggestions ?: emptyList()
+
+        if (insertString.isNotEmpty() && !isHenkan.get()) {
+            val filtered = suggestions.filter { candidate ->
+                val lane = CandidateType.laneOf(candidate)
+                lane != CandidateLane.Prediction && lane != CandidateLane.Special
+            }
+            if (filtered.isNotEmpty()) {
+                suggestions = filtered
+                suggestionAdapter?.suggestions = filtered
+                suggestionAdapterFull?.suggestions = filtered
+            }
+        }
 
         if (floatingKeyboardLayoutBinding != null) {
             if (cycleFocusedBunsetsuCandidate(delta = 1, floatingKeyboardLayoutBinding)) {
@@ -17749,8 +18203,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         if (isHenkan.get()) {
                             handleHenkanModeEnterKey(suggestions, inputMode, insertString)
                         } else {
-                            finishInputEnterKey()
-                            setCursorLeftAfterCommitPair(insertString)
+                            commitEnterKeyForJapaneseInput(insertString)
                         }
                     }
 
@@ -17767,8 +18220,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         if (isHenkan.get()) {
                             handleHenkanModeEnterKey(suggestions, inputMode, insertString)
                         } else {
-                            finishInputEnterKey()
-                            setCursorLeftAfterCommitPair(insertString)
+                            commitEnterKeyForJapaneseInput(insertString)
                         }
                     }
 
@@ -17779,6 +18231,37 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
             }
         }
+    }
+
+    /**
+     * AzooKey [InputManager.enter](https://github.com/azooKey/azooKey) 相当。
+     * ライブ変換 ON 時は [LiveConversionManager.lastUsedCandidate] で確定する。
+     */
+    private fun commitEnterKeyForJapaneseInput(insertString: String) {
+        if (shouldStartLiveConversion(insertString)) {
+            val candidate = liveConversionManager.lastUsedCandidate
+            if (candidate != null) {
+                val commitString = getCandidateCommitString(candidate)
+                beginBatchEdit()
+                try {
+                    setComposingText("", 0)
+                    finishComposingText()
+                    commitText(commitString, 1)
+                } finally {
+                    endBatchEdit()
+                }
+                applyCandidateCompleteActions(candidate)
+                _inputString.update { "" }
+                lastQwertyRomajiRawInput = null
+                candidateCoordinator.resetConversionSession()
+                liveConversionManager.stopComposition()
+                clearSuggestionStateAfterCommit()
+                resetFlagsEnterKeyNotHenkan()
+                return
+            }
+        }
+        finishInputEnterKey()
+        setCursorLeftAfterCommitPair(insertString)
     }
 
     private fun handleNonEmptyInputEnterKeyFloating(
@@ -17795,8 +18278,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     if (isHenkan.get()) {
                         handleHenkanModeEnterKey(suggestions, inputMode, insertString)
                     } else {
-                        finishInputEnterKey()
-                        setCursorLeftAfterCommitPair(insertString)
+                        commitEnterKeyForJapaneseInput(insertString)
                     }
                 }
 
@@ -17806,6 +18288,23 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
             }
         }
+    }
+
+    private fun applyCandidateCompleteActions(candidate: Candidate) {
+        val moveActions = candidate.actions.filterIsInstance<
+            com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateCompleteAction.MoveCursor,
+            >()
+        if (moveActions.isNotEmpty()) {
+            moveActions.forEach { action ->
+                repeat(kotlin.math.abs(action.offset)) {
+                    if (action.offset < 0) {
+                        moveCursorLeftBySelection()
+                    }
+                }
+            }
+            return
+        }
+        setCursorLeftAfterCommitPair(candidate.string)
     }
 
     private fun setCursorLeftAfterCommitPair(insertString: String) {
@@ -18000,6 +18499,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun finishInputEnterKey() {
         _inputString.update { "" }
+        lastQwertyRomajiRawInput = null
+        candidateCoordinator.resetConversionSession()
         finishComposingText()
         clearSuggestionStateAfterCommit()
         resetFlagsEnterKeyNotHenkan()
@@ -18406,6 +18907,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             InputTypeForIME.None,
             InputTypeForIME.Number,
             InputTypeForIME.NumberDecimal,
+            InputTypeForIME.NumberPassword,
             InputTypeForIME.NumberSigned,
             InputTypeForIME.Phone,
             InputTypeForIME.Date,
@@ -18453,6 +18955,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             InputTypeForIME.None,
             InputTypeForIME.Number,
             InputTypeForIME.NumberDecimal,
+            InputTypeForIME.NumberPassword,
             InputTypeForIME.NumberSigned,
             InputTypeForIME.Phone,
             InputTypeForIME.Date,
@@ -19378,6 +19881,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     override fun finishComposingText(): Boolean {
+        liveConversionManager.stopComposition()
         return editorGateway.finishComposingText()
     }
 
@@ -19430,6 +19934,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     override fun requestCursorUpdates(p0: Int): Boolean {
+        if (isSystemUiRemoteInputSession) return false
         return editorGateway.requestCursorUpdates(p0)
     }
 
@@ -19486,117 +19991,145 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return null
         }
         return try {
-            val styles = androidx.autofill.inline.UiVersions.getVersions(uiExtras)
-            val supportsInlineUiV1 =
-                styles?.contains(androidx.autofill.inline.UiVersions.INLINE_UI_VERSION_1) == true
-
             val minInlineSuggestionSize = android.util.Size(
                 applicationContext.dpToPx(100),
-                applicationContext.dpToPx(40),
+                applicationContext.dpToPx(36),
             )
             val maxInlineSuggestionSize = android.util.Size(
                 applicationContext.dpToPx(740),
-                applicationContext.dpToPx(40),
+                applicationContext.dpToPx(36),
             )
             val specBuilder = android.widget.inline.InlinePresentationSpec.Builder(
                 minInlineSuggestionSize,
                 maxInlineSuggestionSize,
             )
-            if (supportsInlineUiV1) {
-                val isDark = keyboardThemeMode == "dark" ||
-                        (keyboardThemeMode == "default" &&
-                                (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
-                                android.content.res.Configuration.UI_MODE_NIGHT_YES)
-                val chipTextColor: Int
-                when (keyboardThemeMode) {
-                    "custom" -> {
-                        chipTextColor = customThemeSpecialKeyTextColor
-                            ?: customThemeCandidateTextColor
-                            ?: (if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
-                    }
-                    "dark" -> {
-                        chipTextColor = android.graphics.Color.WHITE
-                    }
-                    "light" -> {
-                        chipTextColor = android.graphics.Color.BLACK
-                    }
-                    else -> {
-                        val isDynamic = com.google.android.material.color.DynamicColors.isDynamicColorAvailable()
-                        if (isDynamic) {
-                            val fallbackTextColor = androidx.core.content.ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_icon_color)
-                            chipTextColor = getThemeColorOrFallback(
-                                attrRes = com.google.android.material.R.attr.colorOnSurface,
-                                fallbackColor = fallbackTextColor
-                            )
-                        } else {
-                            chipTextColor = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
-                        }
+
+            val isDark = keyboardThemeMode == "dark" ||
+                    (keyboardThemeMode == "default" &&
+                            (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                            android.content.res.Configuration.UI_MODE_NIGHT_YES)
+            val isCustomDark = !(customThemeBgColor ?: Color.WHITE).isLightColor()
+            val chipTextColor: Int
+            when (keyboardThemeMode) {
+                "custom" -> {
+                    chipTextColor = customThemeSpecialKeyTextColor
+                        ?: customThemeCandidateTextColor
+                        ?: (if (isCustomDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
+                }
+                "dark" -> {
+                    chipTextColor = android.graphics.Color.WHITE
+                }
+                "light" -> {
+                    chipTextColor = android.graphics.Color.BLACK
+                }
+                else -> {
+                    val isDynamic = com.google.android.material.color.DynamicColors.isDynamicColorAvailable()
+                    if (isDynamic) {
+                        val fallbackTextColor = androidx.core.content.ContextCompat.getColor(this, com.kazumaproject.core.R.color.keyboard_icon_color)
+                        chipTextColor = getThemeColorOrFallback(
+                            attrRes = com.google.android.material.R.attr.colorOnSurface,
+                            fallbackColor = fallbackTextColor
+                        )
+                    } else {
+                        chipTextColor = if (isDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK
                     }
                 }
-                val chipTextHintColor: Int = android.graphics.Color.argb(
-                    153,
-                    android.graphics.Color.red(chipTextColor),
-                    android.graphics.Color.green(chipTextColor),
-                    android.graphics.Color.blue(chipTextColor)
-                )
-
-                val stylesBuilder = androidx.autofill.inline.UiVersions.newStylesBuilder()
-                val chipBgDrawableId = androidx.autofill.R.drawable.autofill_inline_suggestion_chip_background
-                val chipBgColor = android.graphics.Color.TRANSPARENT
-
-                val style = androidx.autofill.inline.v1.InlineSuggestionUi.newStyleBuilder()
-                    .setSingleIconChipStyle(
-                        androidx.autofill.inline.common.ViewStyle.Builder()
-                            .setBackground(
-                                android.graphics.drawable.Icon.createWithResource(applicationContext, chipBgDrawableId)
-                                    .setTint(chipBgColor)
-                            )
-                            .setPadding(0, 0, 0, 0)
-                            .build()
-                    )
-                    .setChipStyle(
-                        androidx.autofill.inline.common.ViewStyle.Builder()
-                            .setBackground(
-                                android.graphics.drawable.Icon.createWithResource(applicationContext, chipBgDrawableId)
-                                    .setTint(chipBgColor)
-                            )
-                            .setPadding(
-                                applicationContext.dpToPx(12),
-                                0,
-                                applicationContext.dpToPx(12),
-                                0
-                            )
-                            .build()
-                    )
-                    .setStartIconStyle(
-                        androidx.autofill.inline.common.ImageViewStyle.Builder()
-                            .setLayoutMargin(0, 0, 0, 0)
-                            .build()
-                    )
-                    .setTitleStyle(
-                        androidx.autofill.inline.common.TextViewStyle.Builder()
-                            .setTextColor(chipTextColor)
-                            .setTextSize(12f)
-                            .build()
-                    )
-                    .setSubtitleStyle(
-                        androidx.autofill.inline.common.TextViewStyle.Builder()
-                            .setTextColor(chipTextHintColor)
-                            .setTextSize(10f)
-                            .build()
-                    )
-                    .setEndIconStyle(
-                        androidx.autofill.inline.common.ImageViewStyle.Builder()
-                            .setLayoutMargin(0, 0, 0, 0)
-                            .build()
-                    )
-                    .build()
-                stylesBuilder.addStyle(style)
-                specBuilder.setStyle(stylesBuilder.build())
-            } else {
-                Timber.w("Autofill UI version 1 is not supported by system uiExtras; using system-provided inline suggestion style")
-                specBuilder.setStyle(uiExtras)
             }
+            val chipTextHintColor: Int = android.graphics.Color.argb(
+                153,
+                android.graphics.Color.red(chipTextColor),
+                android.graphics.Color.green(chipTextColor),
+                android.graphics.Color.blue(chipTextColor)
+            )
+
+            val stylesBuilder = androidx.autofill.inline.UiVersions.newStylesBuilder()
+            val chipBgDrawableId = androidx.autofill.R.drawable.autofill_inline_suggestion_chip_background
+            val chipBgColor: Int
+            when (keyboardThemeMode) {
+                "custom" -> {
+                    val baseColor = customThemeCandidateTextColor
+                        ?: customThemeSpecialKeyTextColor
+                        ?: (if (isCustomDark) android.graphics.Color.WHITE else android.graphics.Color.BLACK)
+                    chipBgColor = android.graphics.Color.argb(
+                        40,
+                        android.graphics.Color.red(baseColor),
+                        android.graphics.Color.green(baseColor),
+                        android.graphics.Color.blue(baseColor)
+                    )
+                }
+                "dark" -> {
+                    chipBgColor = android.graphics.Color.argb(40, 255, 255, 255)
+                }
+                "light" -> {
+                    chipBgColor = android.graphics.Color.argb(40, 0, 0, 0)
+                }
+                else -> {
+                    val isDynamic = com.google.android.material.color.DynamicColors.isDynamicColorAvailable()
+                    if (isDynamic) {
+                        val fallbackBgColor = androidx.core.content.ContextCompat.getColor(
+                            this,
+                            com.kazumaproject.core.R.color.keyboard_icon_color
+                        )
+                        chipBgColor = getThemeColorOrFallback(
+                            attrRes = com.google.android.material.R.attr.colorSurfaceContainerHigh,
+                            fallbackColor = fallbackBgColor
+                        )
+                    } else {
+                        chipBgColor = if (isDark) android.graphics.Color.argb(40, 255, 255, 255)
+                        else android.graphics.Color.argb(40, 0, 0, 0)
+                    }
+                }
+            }
+
+            val style = androidx.autofill.inline.v1.InlineSuggestionUi.newStyleBuilder()
+                .setSingleIconChipStyle(
+                    androidx.autofill.inline.common.ViewStyle.Builder()
+                        .setBackground(
+                            android.graphics.drawable.Icon.createWithResource(applicationContext, chipBgDrawableId)
+                                .setTint(chipBgColor)
+                        )
+                        .setPadding(0, 0, 0, 0)
+                        .build()
+                )
+                .setChipStyle(
+                    androidx.autofill.inline.common.ViewStyle.Builder()
+                        .setBackground(
+                            android.graphics.drawable.Icon.createWithResource(applicationContext, chipBgDrawableId)
+                                .setTint(chipBgColor)
+                        )
+                        .setPadding(
+                            applicationContext.dpToPx(12),
+                            0,
+                            applicationContext.dpToPx(12),
+                            0
+                        )
+                        .build()
+                )
+                .setStartIconStyle(
+                    androidx.autofill.inline.common.ImageViewStyle.Builder()
+                        .setLayoutMargin(0, 0, 0, 0)
+                        .build()
+                )
+                .setTitleStyle(
+                    androidx.autofill.inline.common.TextViewStyle.Builder()
+                        .setTextColor(chipTextColor)
+                        .setTextSize(12f)
+                        .build()
+                )
+                .setSubtitleStyle(
+                    androidx.autofill.inline.common.TextViewStyle.Builder()
+                        .setTextColor(chipTextHintColor)
+                        .setTextSize(10f)
+                        .build()
+                )
+                .setEndIconStyle(
+                    androidx.autofill.inline.common.ImageViewStyle.Builder()
+                        .setLayoutMargin(0, 0, 0, 0)
+                        .build()
+                )
+                .build()
+            stylesBuilder.addStyle(style)
+            specBuilder.setStyle(stylesBuilder.build())
 
             val spec = specBuilder.build()
             // Some password managers only respond when multiple presentation specs

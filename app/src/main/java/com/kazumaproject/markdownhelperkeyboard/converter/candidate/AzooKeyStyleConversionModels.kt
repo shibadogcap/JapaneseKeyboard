@@ -5,6 +5,8 @@ data class AzooKeyStyleConversionResult(
     val predictionResults: List<Candidate> = emptyList(),
     val englishPredictionResults: List<Candidate> = emptyList(),
     val firstClauseResults: List<Candidate> = emptyList(),
+    /** AzooKey supplementaryCandidates（絵文字・記号などライブ変換対象外） */
+    val supplementaryCandidates: List<Candidate> = emptyList(),
 )
 
 data class AzooKeyStyleConvertRequestOptions(
@@ -14,6 +16,8 @@ data class AzooKeyStyleConvertRequestOptions(
     val learningType: AzooKeyStyleLearningType = AzooKeyStyleLearningType.InputAndOutput,
     val zenzaiMode: AzooKeyStyleZenzaiMode = AzooKeyStyleZenzaiMode.Off,
     val typoCorrectionMode: AzooKeyStyleTypoCorrectionMode = AzooKeyStyleTypoCorrectionMode.Automatic,
+    val fullWidthRomanCandidate: Boolean = false,
+    val halfWidthKanaCandidate: Boolean = false,
     val specialCandidateProviders: List<SpecialCandidateProvider> = DefaultSpecialCandidateProviders.providers,
     val versionString: String? = null,
 )

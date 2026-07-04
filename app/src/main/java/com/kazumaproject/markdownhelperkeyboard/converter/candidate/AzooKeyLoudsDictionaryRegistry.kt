@@ -37,17 +37,15 @@ class AzooKeyLoudsDictionaryRegistry(
         return lookup.commonPrefixEntries(normalizedReading)
     }
 
-    fun typoSearchers(): List<AzooKeyLoudsTypoSearcher> =
-        identifiers.mapNotNull { identifier ->
-            loader.loadLoudsDictionaryLookup(identifier = identifier, sourceKind = sourceKind, shardShift = shardShift)
-                ?.typoSearcher()
+    fun typoSearchers(): List<AzooKeyLoudsTypoSearcher> {
+        val trieSearchers = identifiers.mapNotNull { identifier ->
+            lookupByIdentifier(identifier)?.typoSearcher()
         }
+        return trieSearchers + AzooKeyClassicTypoCorrection.classicTypoSearcher()
+    }
 
-    private fun lookupFor(reading: String): AzooKeyLoudsDictionaryLookup? {
-        val identifier = reading.firstOrNull()?.toString() ?: return null
-        if (identifier !in identifiers) {
-            return null
-        }
+    fun lookupByIdentifier(identifier: String): AzooKeyLoudsDictionaryLookup? {
+        if (identifier !in identifiers) return null
         return lookups.getOrPut(identifier) {
             loader.loadLoudsDictionaryLookup(
                 identifier = identifier,
@@ -55,5 +53,29 @@ class AzooKeyLoudsDictionaryRegistry(
                 shardShift = shardShift,
             )
         }
+    }
+
+    fun prefixEntriesForIdentifier(
+        identifier: String,
+        reading: String,
+        maxDepth: Int = Int.MAX_VALUE,
+        maxCount: Int = Int.MAX_VALUE,
+    ): List<AzooKeyDictionaryEntry> {
+        val normalizedReading = reading.hiraganaToKatakana()
+        return lookupByIdentifier(identifier)?.prefixEntries(
+            reading = normalizedReading,
+            maxDepth = maxDepth,
+            maxCount = maxCount,
+        ) ?: emptyList()
+    }
+
+    fun exactEntriesForIdentifier(identifier: String, reading: String): List<AzooKeyDictionaryEntry> {
+        val normalizedReading = reading.hiraganaToKatakana()
+        return lookupByIdentifier(identifier)?.exactEntries(normalizedReading) ?: emptyList()
+    }
+
+    private fun lookupFor(reading: String): AzooKeyLoudsDictionaryLookup? {
+        val identifier = reading.firstOrNull()?.toString() ?: return null
+        return lookupByIdentifier(identifier)
     }
 }

@@ -7,7 +7,6 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequest
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestPrivacy
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.SystemKanaKanjiEngineSourceConfig
 
 /**
  * Immutable snapshot of IME session fields required to build [CandidateRequest] and
@@ -29,7 +28,6 @@ data class ImeCandidatePreferences(
     val versionString: String?,
     val learnedPrefixMatchThreshold: Int,
     val userDictionaryPrefixMatchThreshold: Int,
-    val systemEngineConfig: SystemKanaKanjiEngineSourceConfig,
     val isLearnDictionaryMode: Boolean,
     val romanize: (String) -> String?,
     val toHankakuAlphabet: (String) -> String,
@@ -38,7 +36,13 @@ data class ImeCandidatePreferences(
     val ngWords: List<String>,
     val ngWordPattern: Regex,
     val isOrderOverrideEnabled: Boolean,
+    val zenzProfile: String = "",
     val isCandidateSelectionActive: Boolean = false,
     val isConverting: Boolean = false,
     val isDirectInputMode: Boolean = false,
+    val englishCandidateInRoman2KanaInput: Boolean = false,
+    val zenzaiInferenceLimit: Int = 1,
+    val maxMemoryCount: Int = 65536,
+    val keyboardLanguage: com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions.KeyboardLanguage =
+        com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions.KeyboardLanguage.JaJp,
 )

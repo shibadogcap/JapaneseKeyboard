@@ -16,7 +16,6 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateReq
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestPrivacy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ImeCandidateEnvironment
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.SystemKanaKanjiEngineSourceConfig
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzConversionService
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest
 import kotlinx.coroutines.test.runTest
@@ -66,6 +65,8 @@ class ImeCandidateCoordinatorTest {
 
             override fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate> =
                 emptyList()
+
+            override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
 
             override suspend fun requestCandidatesPostProcessedWithZenzRerank(
                 input: ComposingText,
@@ -172,6 +173,8 @@ class ImeCandidateCoordinatorTest {
 
             override fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate> =
                 emptyList()
+
+            override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
         }
         val coordinator = ImeCandidateCoordinator(
             kanaKanjiConverter = fakeConverter,
@@ -230,17 +233,6 @@ class ImeCandidateCoordinatorTest {
             versionString = null,
             learnedPrefixMatchThreshold = 1,
             userDictionaryPrefixMatchThreshold = 1,
-            systemEngineConfig = SystemKanaKanjiEngineSourceConfig(
-                mozcUtPersonName = false,
-                mozcUTPlaces = false,
-                mozcUTWiki = false,
-                mozcUTNeologd = false,
-                mozcUTWeb = false,
-                enableTypoCorrectionJapaneseFlick = false,
-                enableTypoCorrectionQwertyEnglish = false,
-                typoCorrectionOffsetScore = 3000,
-                omissionSearchOffsetScore = 1900,
-            ),
             isLearnDictionaryMode = false,
             romanize = { null },
             toHankakuAlphabet = { it },

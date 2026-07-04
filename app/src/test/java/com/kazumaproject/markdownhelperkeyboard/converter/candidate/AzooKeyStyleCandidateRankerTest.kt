@@ -16,4 +16,27 @@ class AzooKeyStyleCandidateRankerTest {
         assertEquals(listOf("司会", "視界"), ranked.map { it.string })
         assertEquals(99f, ranked.first().value)
     }
+
+    @Test
+    fun applyLiveConversionEmojiPenaltyIsNoOp() {
+        val emoji = Candidate(
+            string = "🙇",
+            type = CandidateType.EMOJI_SPECIAL,
+            length = 1u,
+            score = 100,
+            value = 100f,
+        )
+        val nbest = Candidate(
+            string = "ごめんなさい",
+            type = CandidateType.NBEST,
+            length = 6u,
+            score = 50,
+            value = 50f,
+        )
+        val result = AzooKeyStyleCandidateRanker.applyLiveConversionEmojiPenalty(
+            candidates = listOf(emoji, nbest),
+            liveConversionEnabled = true,
+        )
+        assertEquals(listOf(100f, 50f), result.map { it.value })
+    }
 }

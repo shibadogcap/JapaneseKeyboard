@@ -16,11 +16,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImeCandidateZenzContextTest {
-    private val publicPolicy: AzooKeyRuntimeConversionPolicy =
+    private fun policy(zenzaiEnabled: Boolean): AzooKeyRuntimeConversionPolicy =
         AzooKeyRuntimeConversionPolicyResolver.resolve(
             AzooKeyRuntimeConversionPolicyInput(
                 learningType = AzooKeyStyleLearningType.Nothing,
-                zenzaiMode = AzooKeyStyleZenzaiMode.On,
+                zenzaiMode = if (zenzaiEnabled) {
+                    AzooKeyStyleZenzaiMode.On
+                } else {
+                    AzooKeyStyleZenzaiMode.Off
+                },
                 isComposing = true,
             ),
         )
@@ -28,13 +32,13 @@ class ImeCandidateZenzContextTest {
     @Test
     fun shouldEmitAsyncGenerationMatchesLegacySingleCharInput() {
         val zenz = baseZenz(asyncGenerationEnabled = true, rerankEnabled = false)
-        assertTrue(zenz.shouldEmitAsyncGeneration("あ", publicPolicy))
+        assertTrue(zenz.shouldEmitAsyncGeneration("あ", policy(zenzaiEnabled = false)))
     }
 
     @Test
     fun shouldEmitAsyncGenerationFalseWhenRerankEnabled() {
         val zenz = baseZenz(asyncGenerationEnabled = true, rerankEnabled = true)
-        assertFalse(zenz.shouldEmitAsyncGeneration("しかい", publicPolicy))
+        assertFalse(zenz.shouldEmitAsyncGeneration("しかい", policy(zenzaiEnabled = false)))
     }
 
     @Test
@@ -43,7 +47,7 @@ class ImeCandidateZenzContextTest {
             zenzaiEvaluationEnabled = true,
             rerankEnabled = true,
         )
-        assertTrue(zenz.shouldEmitAsyncZenzai("しかい", publicPolicy))
+        assertTrue(zenz.shouldEmitAsyncZenzai("しかい", policy(zenzaiEnabled = false)))
     }
 
     @Test

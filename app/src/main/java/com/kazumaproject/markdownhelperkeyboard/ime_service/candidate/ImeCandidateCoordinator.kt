@@ -6,13 +6,15 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
 import com.kazumaproject.markdownhelperkeyboard.converter.api.KanaKanjiConverter
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConvertRequestOptions
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStylePredictionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyLiveZenzMerge
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessEnvironment
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestMode
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ImeCandidateEnvironment
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzCandidate
+import com.kazumaproject.markdownhelperkeyboard.converter.api.displayCandidates
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLanePresentation
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzConversionService
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzGenerationRequest
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPredictiveRequest
@@ -42,7 +44,20 @@ class ImeCandidateCoordinator @Inject constructor(
             ?: ImeCandidateRequestFactory.composingText(input)
         conversionSession.liveComposingText = composingText
         val options = ImeCandidateRequestFactory.buildConvertRequestOptions(preferences, mode)
-        val runtime = ImeCandidateRequestFactory.buildRuntimeContext(preferences)
+            .copy(roman2KanaTransducer = roman2Kana)
+        val previousInput = conversionSession.lastConvertTarget
+        val previousComposingText = conversionSession.previousComposingText
+        val previousLatticeNodes = conversionSession.latticeIncrementalState.latticeNodes
+            .takeIf { it.isNotEmpty() }
+        val completedCandidate = conversionSession.completedCandidate
+        val runtime = ImeCandidateRequestFactory.buildRuntimeContext(
+            preferences = preferences,
+            previousInput = previousInput,
+            previousComposingText = previousComposingText,
+            previousLatticeNodes = previousLatticeNodes,
+            completedCandidate = completedCandidate,
+            composingText = composingText,
+        )
         val environment = ImeCandidateRequestFactory.buildEnvironment(
             preferences = preferences,
             conversionSession = conversionSession,
@@ -65,22 +80,43 @@ class ImeCandidateCoordinator @Inject constructor(
             .toCandidateRequest(composingText, options, runtime, mode)
         val policy = request.runtimeConversionPolicy
 
-        val rerankPlan = zenz?.prepareRerankPlan(
-            input = input,
-            candidates = response.result.mainResults,
-            policy = policy,
+        val rerankPlan = if (options.zenzaiMode.isEnabled) {
+            null
+        } else {
+            zenz?.prepareRerankPlan(
+                input = input,
+                candidates = response.result.mainResults,
+                policy = policy,
+            )
+        }
+        conversionSession.recordConversion(
+            composingText,
+            response.bunsetsuResult,
+            conversionSession.latticeIncrementalState.latticeNodes.takeIf { it.isNotEmpty() },
         )
-        conversionSession.recordConversion(composingText, response.bunsetsuResult)
+        if (response.usedAfterComplete) {
+            conversionSession.consumeCompletedData()
+        }
 
         val cachedReranked = rerankPlan?.let { getCachedZenzRerank(it.cacheKey) }
-        val candidates = cachedReranked ?: response.result.mainResults
+        val mainResults = cachedReranked ?: response.result.mainResults
+        val displayCandidates = if (cachedReranked != null) {
+            CandidateLanePresentation.mergeForDisplay(cachedReranked, response.result.supplementaryCandidates)
+        } else {
+            response.result.displayCandidates()
+        }
 
         return ImeCandidateSuggestResult(
-            candidates = candidates,
+            candidates = displayCandidates,
+            mainResults = mainResults,
+            supplementaryCandidates = response.result.supplementaryCandidates,
+            predictionResults = response.result.predictionResults,
+            englishPredictionResults = response.result.englishPredictionResults,
             bunsetsuResult = response.bunsetsuResult,
             zenzRerankPlan = if (cachedReranked == null) rerankPlan else null,
             emitAsyncZenzGeneration = zenz?.shouldEmitAsyncGeneration(input, policy) == true,
             emitAsyncZenzai = zenz?.shouldEmitAsyncZenzai(input, policy) == true,
+            firstClauseResults = response.result.firstClauseResults,
         )
     }
 
@@ -107,13 +143,8 @@ class ImeCandidateCoordinator @Inject constructor(
     fun prioritizeReranked(
         reranked: List<Candidate>,
     ): List<Candidate> {
-        return com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleCandidateMixer.mix(
-            mainCandidates = reranked,
-            options = AzooKeyStyleConvertRequestOptions(
-                japanesePredictionMode = AzooKeyStylePredictionMode.Disabled,
-                englishPredictionMode = AzooKeyStylePredictionMode.Disabled,
-            ),
-        ).mainResults
+        // Zenz rerank は辞書候補の順序を直接更新する。Mixer で再ソートするとスコア順に戻ってしまう。
+        return reranked
     }
 
     suspend fun generateLiveZenzCandidates(
@@ -123,15 +154,49 @@ class ImeCandidateCoordinator @Inject constructor(
         mode: CandidateRequestMode = CandidateRequestMode.Normal,
         cursorPosition: Int? = null,
     ): List<ZenzCandidate> {
-        val request = buildCandidateRequest(input, preferences, mode)
-        return zenzConversionService.generatePredictive(
+        val baseRequest = buildCandidateRequest(input, preferences, mode)
+        val predictedReading = zenzConversionService.getPredictiveReading(
             request = ZenzGenerationRequest(
                 insertReading = input,
                 leftContext = zenz.leftContext,
                 config = zenz.config,
                 cursorPosition = cursorPosition,
             ),
-            policy = request.runtimeConversionPolicy,
+            policy = baseRequest.runtimeConversionPolicy,
+        )
+        if (predictedReading.isNullOrEmpty()) return emptyList()
+
+        val combinedReading = input + predictedReading
+        val composingText = ImeCandidateRequestFactory.composingText(combinedReading)
+        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(preferences, mode)
+        val runtime = ImeCandidateRequestFactory.buildRuntimeContext(preferences)
+        val environment = ImeCandidateRequestFactory.buildEnvironment(
+            preferences = preferences,
+            conversionSession = conversionSession,
+        )
+        val postProcess = ImeCandidateRequestFactory.buildPostProcessEnvironment(
+            preferences = preferences,
+            hasNgWords = preferences.ngWords.isNotEmpty(),
+        )
+
+        val response = kanaKanjiConverter.requestCandidatesPostProcessed(
+            input = composingText,
+            options = options,
+            runtime = runtime,
+            environment = environment,
+            postProcess = postProcess,
+            mode = mode,
+        )
+
+        val bestMatch = response.result.mainResults.firstOrNull() ?: return emptyList()
+        return listOf(
+            ZenzCandidate(
+                string = bestMatch.string,
+                type = CandidateType.ZENZ,
+                length = combinedReading.length.toUByte(),
+                score = 1500,
+                originalString = input,
+            )
         )
     }
 
@@ -148,7 +213,7 @@ class ImeCandidateCoordinator @Inject constructor(
         return zenzConversionService.evaluateZenzai(
             request = ZenzPredictiveRequest(
                 insertReading = input,
-                dictionaryCandidates = dictionaryCandidates.map { it.string },
+                dictionaryCandidates = dictionaryCandidates,
                 leftContext = zenz.leftContext,
                 nBest = zenz.nBest,
                 config = zenz.config,
@@ -162,11 +227,15 @@ class ImeCandidateCoordinator @Inject constructor(
         dictionaryCandidates: List<Candidate>,
         zenzCandidates: List<ZenzCandidate>,
     ): List<Candidate>? {
-        return ImeCandidateLiveZenzMixer.mergeIfApplicable(
+        return AzooKeyLiveZenzMerge.mergeIfApplicable(
             insertReading = insertReading,
             dictionaryCandidates = dictionaryCandidates,
             zenzCandidates = zenzCandidates,
         )
+    }
+
+    fun setCompletedData(candidate: Candidate) {
+        conversionSession.setCompletedData(candidate)
     }
 
     fun committedCandidateForPostCommit(
@@ -174,11 +243,16 @@ class ImeCandidateCoordinator @Inject constructor(
         tapped: Candidate? = null,
         fallbackReading: String? = null,
     ): Candidate {
-        return conversionSession.recordCommit(
+        val committed = conversionSession.recordCommit(
             surface = surface,
             tapped = tapped,
             fallbackReading = fallbackReading,
         )
+        kanaKanjiConverter.stopComposition(
+            sessionId = conversionSession.sessionId,
+            keepCompletedData = true,
+        )
+        return committed
     }
 
     suspend fun predictPostCommitCandidates(
@@ -193,6 +267,7 @@ class ImeCandidateCoordinator @Inject constructor(
 
     fun resetConversionSession() {
         conversionSession.reset()
+        kanaKanjiConverter.stopComposition(conversionSession.sessionId, keepCompletedData = false)
         composingTextSession.reset()
     }
 
@@ -206,6 +281,14 @@ class ImeCandidateCoordinator @Inject constructor(
 
     fun clearZenzRerankCache() {
         conversionSession.clearZenzRerankCache()
+    }
+
+    fun getLeftSideContext(): String {
+        return conversionSession.leftSideContext
+    }
+
+    fun updateLeftSideContext(context: String) {
+        conversionSession.leftSideContext = context
     }
 
     fun suggestEnglishKana(input: String): List<Candidate> {

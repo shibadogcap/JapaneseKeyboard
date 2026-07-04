@@ -25,9 +25,9 @@ data class ImeCandidateZenzContext(
      */
     fun shouldEmitAsyncGeneration(
         @Suppress("UNUSED_PARAMETER") input: String,
-        @Suppress("UNUSED_PARAMETER") policy: AzooKeyRuntimeConversionPolicy,
+        policy: AzooKeyRuntimeConversionPolicy,
     ): Boolean {
-        return asyncGenerationEnabled && zenzEnabled && !rerankEnabled
+        return asyncGenerationEnabled && zenzEnabled && !rerankEnabled && !policy.shouldUseZenzai
     }
 
     /**
@@ -35,9 +35,9 @@ data class ImeCandidateZenzContext(
      */
     fun shouldEmitAsyncZenzai(
         @Suppress("UNUSED_PARAMETER") input: String,
-        @Suppress("UNUSED_PARAMETER") policy: AzooKeyRuntimeConversionPolicy,
+        policy: AzooKeyRuntimeConversionPolicy,
     ): Boolean {
-        return zenzaiEvaluationEnabled && zenzEnabled && rerankEnabled
+        return zenzaiEvaluationEnabled && zenzEnabled && rerankEnabled && !policy.shouldUseZenzai
     }
 
     fun canPrepareRerank(

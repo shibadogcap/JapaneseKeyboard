@@ -24,14 +24,14 @@ class ImeSuggestionOrchestrator(
         coordinator.composingTextSession.configure(roman2Kana)
         if (!useQwertyRoman2Kana) {
             if (displayInput.isEmpty()) {
-                coordinator.composingTextSession.reset()
+                coordinator.resetConversionSession()
             } else {
                 coordinator.composingTextSession.applyDirectInput(displayInput)
             }
             return
         }
         if (displayInput.isEmpty()) {
-            coordinator.composingTextSession.reset()
+            coordinator.resetConversionSession()
             return
         }
         when {

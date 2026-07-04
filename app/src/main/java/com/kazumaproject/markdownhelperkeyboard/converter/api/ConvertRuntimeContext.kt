@@ -18,4 +18,14 @@ data class ConvertRuntimeContext(
     val learningTypeOverride: AzooKeyStyleLearningType? = null,
     val zenzaiModeOverride: AzooKeyStyleZenzaiMode? = null,
     val experimentalZenzaiPredictiveInput: Boolean = false,
+    /** 前回変換時の入力文字列（4 経路分岐用）。null の場合は新規構築（all-path）。 */
+    val previousInput: String? = null,
+    /** 前回変換時の lattice ノード（4 経路分岐再利用用）。 */
+    val previousLatticeNodes: List<*>? = null,
+    /** 文節確定直後の変換で使う確定語。 */
+    val completedCandidate: com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate? = null,
+    /** 現在の composing（Roman2Kana セグメント含む）。 */
+    val composingText: ComposingText? = null,
+    /** 前回変換時の composing（afterComplete / dual-index 用）。 */
+    val previousComposingText: ComposingText? = null,
 )

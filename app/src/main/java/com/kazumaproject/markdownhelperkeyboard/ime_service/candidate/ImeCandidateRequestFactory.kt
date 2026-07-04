@@ -19,20 +19,39 @@ object ImeCandidateRequestFactory {
         preferences: ImeCandidatePreferences,
         mode: CandidateRequestMode,
     ): ConvertRequestOptions {
+        val predictionDisabledBySelection = preferences.isCandidateSelectionActive
         val predictionMode = when (mode) {
             CandidateRequestMode.WithoutPrediction,
             CandidateRequestMode.EnglishKana -> AzooKeyStylePredictionMode.Disabled
             CandidateRequestMode.Normal,
-            CandidateRequestMode.Original -> AzooKeyStylePredictionMode.AutoMix
+            CandidateRequestMode.Original -> if (predictionDisabledBySelection) {
+                AzooKeyStylePredictionMode.Disabled
+            } else {
+                AzooKeyStylePredictionMode.AutoMix
+            }
+        }
+        val englishPredictionMode = when (mode) {
+            CandidateRequestMode.WithoutPrediction,
+            CandidateRequestMode.EnglishKana -> AzooKeyStylePredictionMode.Disabled
+            CandidateRequestMode.Normal,
+            CandidateRequestMode.Original -> when {
+                predictionDisabledBySelection -> AzooKeyStylePredictionMode.Disabled
+                preferences.keyboardLanguage == ConvertRequestOptions.KeyboardLanguage.EnUs ->
+                    AzooKeyStylePredictionMode.AutoMix
+                else -> AzooKeyStylePredictionMode.AutoMix
+            }
         }
         return ConvertRequestOptions(
             nBest = preferences.nBest,
             requireJapanesePrediction = predictionMode,
-            requireEnglishPrediction = AzooKeyStylePredictionMode.Disabled,
+            requireEnglishPrediction = englishPredictionMode,
             learningType = preferences.learningType,
             zenzaiMode = preferences.zenzaiMode,
             experimentalZenzaiPredictiveInput = false,
             typoCorrectionMode = preferences.typoCorrectionMode,
+            fullWidthRomanCandidate = true,
+            halfWidthKanaCandidate = true,
+            englishCandidateInRoman2KanaInput = preferences.englishCandidateInRoman2KanaInput,
             metadata = preferences.versionString?.let {
                 ConvertRequestOptions.Metadata(versionString = it)
             },
@@ -41,6 +60,11 @@ object ImeCandidateRequestFactory {
             useRomajiCandidates = preferences.useRomajiCandidates,
             useBunsetsu = preferences.useBunsetsu,
             useOmissionSearch = preferences.useOmissionSearch,
+            maxMemoryCount = preferences.maxMemoryCount,
+            keyboardLanguage = preferences.keyboardLanguage,
+            zenzaiInferenceLimit = preferences.zenzaiInferenceLimit,
+            requestRichCandidates = false,
+            zenzProfile = preferences.zenzProfile,
         )
     }
 
@@ -54,6 +78,28 @@ object ImeCandidateRequestFactory {
         )
     }
 
+    fun buildRuntimeContext(
+        preferences: ImeCandidatePreferences,
+        previousInput: String?,
+        previousComposingText: ComposingText?,
+        previousLatticeNodes: List<*>?,
+        completedCandidate: com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate?,
+        composingText: ComposingText?,
+    ): ConvertRuntimeContext {
+        return ConvertRuntimeContext(
+            privacy = preferences.privacy,
+            isCandidateSelectionActive = preferences.isCandidateSelectionActive,
+            isConverting = preferences.isConverting,
+            isDirectInputMode = preferences.isDirectInputMode,
+            liveConversionMode = preferences.liveConversionMode,
+            previousInput = previousInput,
+            previousComposingText = previousComposingText,
+            previousLatticeNodes = previousLatticeNodes,
+            completedCandidate = completedCandidate,
+            composingText = composingText,
+        )
+    }
+
     fun buildEnvironment(
         preferences: ImeCandidatePreferences,
         conversionSession: ConversionSession? = null,
@@ -63,12 +109,12 @@ object ImeCandidateRequestFactory {
                 learnedPrefixMatchThreshold = preferences.learnedPrefixMatchThreshold,
                 userDictionaryPrefixMatchThreshold = preferences.userDictionaryPrefixMatchThreshold,
             ),
-            systemEngineConfig = preferences.systemEngineConfig,
             isLearnDictionaryMode = preferences.isLearnDictionaryMode,
             romanize = preferences.romanize,
             toHankakuAlphabet = preferences.toHankakuAlphabet,
             onNormalBunsetsuResult = preferences.onNormalBunsetsuResult,
             latticeIncrementalState = conversionSession?.latticeIncrementalState,
+            conversionSession = conversionSession,
         )
     }
 

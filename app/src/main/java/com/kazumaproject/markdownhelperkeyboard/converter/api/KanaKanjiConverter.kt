@@ -46,9 +46,19 @@ interface KanaKanjiConverter {
 
     /** 英字→かな候補（本家の英かな経路）。変換 API からのみ呼ぶ。 */
     fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate>
+
+    /**
+     * AzooKey [stopComposition](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。
+     * IME セッションリセット時に engine 内 lattice キャッシュを破棄する。
+     */
+    fun stopComposition(
+        sessionId: String = ConversionSession.DEFAULT_SESSION_ID,
+        keepCompletedData: Boolean = false,
+    )
 }
 
 data class ConvertCandidatesResponse(
     val result: ConversionResult,
     val bunsetsuResult: BunsetsuCandidateResult?,
+    val usedAfterComplete: Boolean = false,
 )

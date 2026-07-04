@@ -17,7 +17,6 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePos
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestMode
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestPrivacy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ImeCandidateEnvironment
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.SystemKanaKanjiEngineSourceConfig
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzConversionService
 import com.kazumaproject.markdownhelperkeyboard.ime_service.romaji_kana.RomajiComposingSnapshot
 import kotlinx.coroutines.test.runTest
@@ -38,6 +37,10 @@ class ImeSuggestionOrchestratorTest {
     @Test
     fun syncComposingSessionClearsSessionForEmptyDirectInput() {
         val orchestrator = ImeSuggestionOrchestrator(coordinator)
+        coordinator.conversionSession.previousComposingText = ComposingText.fromConvertTarget("あ")
+        coordinator.conversionSession.lastConvertTarget = "あ"
+        coordinator.conversionSession.latticeIncrementalState.normalizedInput = "ア"
+
         orchestrator.syncComposingSession(
             displayInput = "あ",
             useQwertyRoman2Kana = false,
@@ -55,6 +58,9 @@ class ImeSuggestionOrchestratorTest {
             zenkakuRomaji = false,
         )
         assertFalse(coordinator.composingTextSession.isActive())
+        org.junit.Assert.assertNull(coordinator.conversionSession.previousComposingText)
+        org.junit.Assert.assertNull(coordinator.conversionSession.lastConvertTarget)
+        org.junit.Assert.assertNull(coordinator.conversionSession.latticeIncrementalState.normalizedInput)
     }
 
     @Test
@@ -167,6 +173,8 @@ class ImeSuggestionOrchestratorTest {
                 return listOf(Candidate(string = "ハロー", type = 1, length = 3u, score = 1))
             }
 
+            override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
+
             override suspend fun requestCandidatesPostProcessedWithZenzRerank(
                 input: ComposingText,
                 options: ConvertRequestOptions,
@@ -214,6 +222,8 @@ class ImeSuggestionOrchestratorTest {
 
             override fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate> =
                 emptyList()
+
+            override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
 
             override suspend fun requestCandidatesPostProcessedWithZenzRerank(
                 input: ComposingText,
@@ -272,17 +282,6 @@ class ImeSuggestionOrchestratorTest {
             versionString = null,
             learnedPrefixMatchThreshold = 0,
             userDictionaryPrefixMatchThreshold = 0,
-            systemEngineConfig = SystemKanaKanjiEngineSourceConfig(
-                mozcUtPersonName = false,
-                mozcUTPlaces = false,
-                mozcUTWiki = false,
-                mozcUTNeologd = false,
-                mozcUTWeb = false,
-                enableTypoCorrectionJapaneseFlick = false,
-                enableTypoCorrectionQwertyEnglish = false,
-                typoCorrectionOffsetScore = 0,
-                omissionSearchOffsetScore = 0,
-            ),
             isLearnDictionaryMode = false,
             romanize = { null },
             toHankakuAlphabet = { it },

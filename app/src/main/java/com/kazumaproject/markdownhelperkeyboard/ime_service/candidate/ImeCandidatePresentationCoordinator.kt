@@ -2,6 +2,7 @@ package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLanePresentation
 import com.kazumaproject.markdownhelperkeyboard.databinding.MainLayoutBinding
 
 /**
@@ -18,7 +19,7 @@ class ImeCandidatePresentationCoordinator(
         fun stringInTailLength(): Int
         fun shouldApplyCandidateResult(insertString: String, requestToken: Long): Boolean
         suspend fun updateDisplayedCandidates(insertString: String, candidates: List<Candidate>)
-        suspend fun applyLiveConversion(insertString: String, candidates: List<Candidate>)
+        suspend fun applyLiveConversion(insertString: String, candidates: List<Candidate>, firstClauseResults: List<Candidate>)
         fun updateBunsetsuSpaceKeyIfNeeded(
             mainView: MainLayoutBinding,
             candidates: List<Candidate>,
@@ -78,7 +79,11 @@ class ImeCandidatePresentationCoordinator(
             return
         }
         host.updateDisplayedCandidates(insertString, filtered)
-        host.applyLiveConversion(insertString, filtered)
+        host.applyLiveConversion(
+            insertString,
+            CandidateLanePresentation.forLiveConversion(result.mainResults),
+            result.firstClauseResults,
+        )
         host.updateBunsetsuSpaceKeyIfNeeded(mainView, filtered, insertString)
         result.zenzRerankPlan?.let { plan ->
             host.maybeLaunchZenzRerank(requestToken, insertString, filtered, plan, mainView)

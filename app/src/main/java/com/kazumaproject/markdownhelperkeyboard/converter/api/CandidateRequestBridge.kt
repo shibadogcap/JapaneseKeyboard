@@ -43,6 +43,11 @@ object CandidateRequestBridge {
             isCandidateSelectionActive = runtime.isCandidateSelectionActive,
             isConverting = runtime.isConverting,
             isDirectInputMode = runtime.isDirectInputMode,
+            previousInput = runtime.previousInput,
+            previousLatticeNodes = runtime.previousLatticeNodes,
+            completedCandidate = runtime.completedCandidate,
+            composingText = runtime.composingText ?: composingText,
+            previousComposingText = runtime.previousComposingText,
         )
     }
 }
