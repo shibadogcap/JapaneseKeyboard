@@ -286,6 +286,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
                     composingText = inputData,
                     kana2Kanji = kana2Kanji,
                     useMemory = useMemory,
+                    roman2Kana = options.roman2KanaTransducer,
                 ),
             ).sortedByDescending { it.value }.take(3)
             predictionResults = mergeStableCandidates(stablePredictionCandidates, rawPredictions, 3)
@@ -393,11 +394,15 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         val wordList = wordCandidates.toMutableList()
         wordList.addAll(minOf(5, wordList.size), specialCandidates)
 
-        sessionState.stablePredictionCache = StablePredictionCandidateCacheEntry(
-            originalConvertTarget = inputData.convertTarget,
-            suffixCount = predictiveSource.droppedSuffixCount,
-            candidates = predictionResults,
-        )
+        sessionState.stablePredictionCache = if (predictionResults.isNotEmpty()) {
+            StablePredictionCandidateCacheEntry(
+                originalConvertTarget = inputData.convertTarget,
+                suffixCount = predictiveSource.droppedSuffixCount,
+                candidates = predictionResults,
+            )
+        } else {
+            null
+        }
 
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
         result = result + firstClauseCandidates + wordList

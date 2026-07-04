@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.core
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.core.domain.extensions.katakanaToHiragana
 import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
@@ -118,13 +119,14 @@ data class PredictiveInputCacheEntry(
 
         val consumedInsertText = currentConvertTarget.drop(baseConvertTarget.length)
         val predictedInsertText = if (context.inputStyle == InputStyle.Roman2Kana) {
-            predictedText
+            predictedText.katakanaToHiragana()
         } else {
             predictedText
         }
         if (!predictedInsertText.startsWith(consumedInsertText)) return null
-        if (consumedInsertText.length >= predictedInsertText.length) return null
-        return predictedInsertText.drop(consumedInsertText.length).take(count)
+        val consumedCount = consumedInsertText.length
+        if (consumedCount >= predictedText.length) return null
+        return predictedText.drop(consumedCount).take(count)
     }
 }
 

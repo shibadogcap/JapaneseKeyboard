@@ -1,7 +1,10 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.core
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPValue
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
@@ -363,6 +366,7 @@ class AzooKeyKana2Kanji(
         lastClause: ClauseDataUnit,
         nBest: Int,
         useMemory: Boolean,
+        roman2Kana: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
     ): List<Candidate> {
         val lastRuby = lastClause.ranges.joinToString("") { range ->
             val from = range.first
@@ -401,12 +405,43 @@ class AzooKeyKana2Kanji(
         val lastMid = lastCandidate.lastMid
         val lastRubyCount = lastRuby.length
         val ignoreCcValue = dicdataStore.getConnectionCost(lastRcid, nextLcid)
-
-        val dicdata = dicdataStore.getPredictionLOUDSDicdata(
-            key = lastRuby,
-            useMemory = useMemory,
-            includeExactMatch = false,
+        val composingCount = ComposingCount.Composite(
+            lastCandidate.composingCount,
+            ComposingCount.SurfaceCount(lastRubyCount),
         )
+
+        val inputStyle = composingText.input.lastOrNull()?.inputStyle ?: InputStyle.Direct
+        val dicdata = when (inputStyle) {
+            InputStyle.Roman2Kana -> {
+                val roman = lastRuby.takeLastWhile { it.isLetter() && it.code < 128 }
+                if (roman.isNotEmpty()) {
+                    val ruby = lastRuby.dropLast(roman.length)
+                    if (ruby.isEmpty()) {
+                        emptyList()
+                    } else {
+                        val possibleNexts = roman2Kana.possibleNexts(roman.lowercase())
+                        possibleNexts.flatMap { next ->
+                            dicdataStore.getPredictionLOUDSDicdata(
+                                key = ruby + next,
+                                useMemory = useMemory,
+                                includeExactMatch = true,
+                            )
+                        }
+                    }
+                } else {
+                    dicdataStore.getPredictionLOUDSDicdata(
+                        key = lastRuby,
+                        useMemory = useMemory,
+                        includeExactMatch = false,
+                    )
+                }
+            }
+            else -> dicdataStore.getPredictionLOUDSDicdata(
+                key = lastRuby,
+                useMemory = useMemory,
+                includeExactMatch = false,
+            )
+        }
 
         val result = mutableListOf<Candidate>()
         val ccLatter = dicdataStore.getCCLatter(lastRcid)
@@ -431,6 +466,7 @@ class AzooKeyKana2Kanji(
                 data = nodeData,
                 lastMid = if (includeMm) data.mid else lastMid,
                 rubyCount = nodeData.sumOf { it.reading.length },
+                composingCount = composingCount,
             )
             if (result.size >= nBest) {
                 result.removeAt(result.lastIndex)

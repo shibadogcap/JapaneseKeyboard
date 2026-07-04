@@ -1,7 +1,10 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.core
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionarySourceKind
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyMid
@@ -20,6 +23,7 @@ object AzooKeyPredictionHelper {
         composingText: ComposingText,
         kana2Kanji: AzooKeyKana2Kanji,
         useMemory: Boolean,
+        roman2Kana: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
     ): List<Candidate> {
         val candidates = mutableListOf<Candidate>()
         var prepart = bestCandidateDataForPrediction
@@ -44,6 +48,7 @@ object AzooKeyPredictionHelper {
                     lastClause = newLastPart.first,
                     nBest = 5,
                     useMemory = useMemory,
+                    roman2Kana = roman2Kana,
                 )
                 lastPart = newLastPart
                 if (predictions.isNotEmpty()) {
@@ -61,6 +66,7 @@ object AzooKeyPredictionHelper {
                     lastClause = lastPart.first,
                     nBest = 5,
                     useMemory = useMemory,
+                    roman2Kana = roman2Kana,
                 )
                 if (predictions.isNotEmpty()) {
                     candidates += predictions
@@ -92,6 +98,7 @@ object AzooKeyPredictionHelper {
                 lastClause = fullClause,
                 nBest = 5,
                 useMemory = useMemory,
+                roman2Kana = roman2Kana,
             )
         }
 
