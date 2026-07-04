@@ -8,8 +8,8 @@ fun interface AzooKeyLoudsTypoSearcher {
 }
 
 class AzooKeyLoudsTrieTypoSearcher(
-    private val trie: AzooKeyLoudsTrie,
-    private val charIdMap: AzooKeyCharIdMap,
+    val trie: AzooKeyLoudsTrie,
+    val charIdMap: AzooKeyCharIdMap,
 ) : AzooKeyLoudsTypoSearcher {
     override fun typoPrefixMatches(readingPrefix: String): List<Pair<String, Int>> {
         return AzooKeyLoudsTypoPrefixSearch.search(trie, charIdMap, readingPrefix)

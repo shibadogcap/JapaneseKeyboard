@@ -63,6 +63,10 @@ class AzooKeyRoman2KanaTransducer(
             return AzooKeyRoman2KanaTransducer(map)
         }
 
+        /** AzooKey [InputTables.defaultRoman2Kana](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
+        fun fromDefaultInputTable(map: Map<String, Pair<String, Int>>): AzooKeyRoman2KanaTransducer =
+            fromMap(map)
+
         /** AzooKey InputTable.possibleNexts 構築（roman prefix → katakana 変換候補列） */
         internal fun buildPossibleNexts(map: Map<String, Pair<String, Int>>): Map<String, List<String>> {
             if (map.isEmpty()) return emptyMap()

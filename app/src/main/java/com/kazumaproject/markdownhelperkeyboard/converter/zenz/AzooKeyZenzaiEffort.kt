@@ -2,8 +2,6 @@ package com.kazumaproject.markdownhelperkeyboard.converter.zenz
 
 /**
  * AzooKey [zenzaiEffort](https://github.com/azooKey/azooKey) 相当の inferenceLimit マッピング。
- *
- * EfficientNGram / ZenzaiTypoCandidateGenerator は後段フェーズで port 予定。
  */
 enum class AzooKeyZenzaiEffort {
     High,
@@ -17,3 +15,16 @@ enum class AzooKeyZenzaiEffort {
             Low -> 2
         }
 }
+
+/** Swift [EfficientNGram](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 設定（JNI 未接続時は no-op）。 */
+data class AzooKeyEfficientNGramConfig(
+    val prefix: String,
+    val n: Int = 5,
+    val d: Double = 0.75,
+)
+
+/** Swift [ZenzaiTypoCandidateGenerator](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 設定プレースホルダ。 */
+data class AzooKeyZenzaiTypoConfig(
+    val enabled: Boolean = false,
+    val languageModel: AzooKeyEfficientNGramConfig? = null,
+)

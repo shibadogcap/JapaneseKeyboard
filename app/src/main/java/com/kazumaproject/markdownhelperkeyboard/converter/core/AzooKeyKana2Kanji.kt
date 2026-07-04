@@ -186,6 +186,17 @@ class AzooKeyKana2Kanji(
         needTypoCorrection: Boolean,
         useMemory: Boolean,
     ): Pair<AzooKeyMutableLatticeNode, AzooKeyLattice> {
+        // Swift も append は kana2lattice_changed だが、LOUDS movingTowardPrefixSearch 未移植の間は
+        // surface-only 格子で suffix lookup だけでは候補が欠落するため全量再構築する。
+        if (counts.deletedInput == 0 && counts.deletedSurface == 0) {
+            return kana2latticeAll(
+                inputData = inputData,
+                nBest = nBest,
+                needTypoCorrection = needTypoCorrection,
+                useMemory = useMemory,
+            )
+        }
+
         val inputCount = inputData.input.size
         val surfaceCount = inputData.convertTarget.length
         val commonInputCount = previousResult.first.input.size - counts.deletedInput
@@ -193,6 +204,21 @@ class AzooKeyKana2Kanji(
         val indexMap = AzooKeyLatticeDualIndexMap(inputData)
         val latticeIndices = indexMap.indices(inputCount = inputCount, surfaceCount = surfaceCount)
         var lattice = previousResult.second.prefix(inputCount = commonInputCount, surfaceCount = commonSurfaceCount)
+
+        fun isTerminal(node: AzooKeyMutableLatticeNode): Boolean {
+            return when (val end = node.range.endIndex) {
+                is AzooKeyLatticeIndex.Input -> end.value == inputCount
+                is AzooKeyLatticeIndex.Surface -> end.value == surfaceCount
+            }
+        }
+
+        var terminalNodes = AzooKeyLattice(
+            inputCount = inputCount,
+            surfaceCount = surfaceCount,
+            rawNodes = lattice.mapIndexedArrays { array ->
+                (array.inputIndexedNodes + array.surfaceIndexedNodes).filter(::isTerminal)
+            },
+        )
 
         if (!(counts.addedInput == 0 && counts.addedSurface == 0)) {
             val rawNodes = latticeIndices.map { index ->
@@ -229,35 +255,78 @@ class AzooKeyKana2Kanji(
                 surfaceCount = surfaceCount,
                 rawNodes = rawNodes,
             )
-            lattice.merge(addedNodes)
-        }
-
-        lattice.resetNodeStates()
-        val result = AzooKeyMutableLatticeNode.createResultNode()
-        for ((isHead, nodeArray) in lattice.indexedNodes(latticeIndices)) {
-            for (node in nodeArray) {
+            for (node in lattice) {
                 if (node.prevs.isEmpty()) continue
                 if (dicdataStore.shouldBeRemoved(node.entry)) continue
-                val wValue = node.entry.value
-                node.values = if (isHead) {
-                    node.prevs.map { prev ->
-                        prev.totalValue + wValue + dicdataStore.getConnectionCost(
-                            prev.entry.rightId ?: AzooKeyCid.BOS,
-                            node.entry.leftId ?: AzooKeyCid.PROPER_NOUN,
-                        )
-                    }.toMutableList()
-                } else {
-                    node.prevs.map { prev -> prev.totalValue + wValue }.toMutableList()
-                }
                 val nextIndex = indexMap.dualIndex(node.range.endIndex)
-                if (nextIndex.surfaceIndex == surfaceCount) {
-                    updateResultNode(node, result)
-                } else {
-                    updateNextNodes(node, lattice[nextIndex], nBest)
+                if (nextIndex.surfaceIndex != surfaceCount) {
+                    updateNextNodes(node, addedNodes[nextIndex], nBest)
                 }
+            }
+            lattice.merge(addedNodes)
+            terminalNodes.merge(addedNodes)
+        }
+
+        val result = AzooKeyMutableLatticeNode.createResultNode()
+        for (surfaceIndex in 0 until surfaceCount) {
+            val isHead = surfaceIndex == 0
+            for (node in terminalNodes.surfaceBucket(surfaceIndex)) {
+                processChangedTerminalNode(
+                    node = node,
+                    isHead = isHead,
+                    result = result,
+                    terminalNodes = terminalNodes,
+                    indexMap = indexMap,
+                    surfaceCount = surfaceCount,
+                    nBest = nBest,
+                )
+            }
+        }
+        for (inputIndex in 0 until inputCount) {
+            val isHead = surfaceCount == 0 && inputIndex == 0
+            for (node in terminalNodes.inputBucket(inputIndex)) {
+                processChangedTerminalNode(
+                    node = node,
+                    isHead = isHead,
+                    result = result,
+                    terminalNodes = terminalNodes,
+                    indexMap = indexMap,
+                    surfaceCount = surfaceCount,
+                    nBest = nBest,
+                )
             }
         }
         return result to lattice
+    }
+
+    private fun processChangedTerminalNode(
+        node: AzooKeyMutableLatticeNode,
+        isHead: Boolean,
+        result: AzooKeyMutableLatticeNode,
+        terminalNodes: AzooKeyLattice,
+        indexMap: AzooKeyLatticeDualIndexMap,
+        surfaceCount: Int,
+        nBest: Int,
+    ) {
+        if (node.prevs.isEmpty()) return
+        if (dicdataStore.shouldBeRemoved(node.entry)) return
+        val wValue = node.entry.value
+        node.values = if (isHead) {
+            node.prevs.map { prev ->
+                prev.totalValue + wValue + dicdataStore.getConnectionCost(
+                    prev.entry.rightId ?: AzooKeyCid.BOS,
+                    node.entry.leftId ?: AzooKeyCid.PROPER_NOUN,
+                )
+            }.toMutableList()
+        } else {
+            node.prevs.map { prev -> prev.totalValue + wValue }.toMutableList()
+        }
+        val nextIndex = indexMap.dualIndex(node.range.endIndex)
+        if (nextIndex.surfaceIndex == surfaceCount) {
+            updateResultNode(node, result)
+        } else {
+            updateNextNodes(node, terminalNodes[nextIndex], nBest)
+        }
     }
 
     private fun updateResultNode(node: AzooKeyMutableLatticeNode, resultNode: AzooKeyMutableLatticeNode) {

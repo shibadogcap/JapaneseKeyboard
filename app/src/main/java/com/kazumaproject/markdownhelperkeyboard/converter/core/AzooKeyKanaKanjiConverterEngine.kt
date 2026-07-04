@@ -60,6 +60,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var completedData: Candidate? = null,
         var zenzaiCache: AzooKeyZenzaiCache? = null,
         var stablePredictionCache: StablePredictionCandidateCacheEntry? = null,
+        var predictiveInputCache: PredictiveInputCacheEntry? = null,
     )
 
     private val sessions = mutableMapOf<String, SessionState>()
@@ -191,24 +192,14 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
 
         val diff = inputData.differenceSuffix(previousInputData)
-        val result = if (diff.deletedInput == 0 && diff.deletedSurface == 0) {
-            // 追加入力のみ: 増分ラティスに差分があるため、正確性優先で全量再構築する
-            kana2Kanji.kana2latticeAll(
-                inputData = inputData,
-                nBest = options.nBest,
-                needTypoCorrection = needTypoCorrection,
-                useMemory = useMemory,
-            )
-        } else {
-            kana2Kanji.kana2latticeChanged(
-                inputData = inputData,
-                nBest = options.nBest,
-                counts = diff,
-                previousResult = previousInputData to sessionState.lattice,
-                needTypoCorrection = needTypoCorrection,
-                useMemory = useMemory,
-            )
-        }
+        val result = kana2Kanji.kana2latticeChanged(
+            inputData = inputData,
+            nBest = options.nBest,
+            counts = diff,
+            previousResult = previousInputData to sessionState.lattice,
+            needTypoCorrection = needTypoCorrection,
+            useMemory = useMemory,
+        )
         sessionState.previousInputData = inputData
         return ConvertToLatticeResult(result, usedAfterComplete = false)
     }
@@ -227,6 +218,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         val clauseResult = kana2Kanji.getCandidateDataFromResult(latticeResult.first)
         if (clauseResult.isEmpty()) {
             sessionState.stablePredictionCache = null
+            sessionState.predictiveInputCache = null
             val additional = getAdditionalCandidate(inputData, options)
             return AzooKeyStyleConversionResult(mainResults = additional, firstClauseResults = additional)
         }
@@ -252,6 +244,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
 
         if (options.requestQuery == ConvertRequestOptions.RequestQuery.ExactMatch) {
             sessionState.stablePredictionCache = null
+            sessionState.predictiveInputCache = null
             val merged = getUniqueCandidate(wholeSentenceUniqueCandidates + userShortcutsCandidates)
             val mainResults = if (options.zenzaiMode.isEnabled) {
                 merged
@@ -282,6 +275,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             ).orEmpty()
         if (stablePredictionCandidates.isEmpty()) {
             sessionState.stablePredictionCache = null
+            sessionState.predictiveInputCache = null
         }
 
         val bestThreePredictionCandidates: List<Candidate>
@@ -302,6 +296,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             }
         } else {
             sessionState.stablePredictionCache = null
+            sessionState.predictiveInputCache = null
             bestThreePredictionCandidates = emptyList()
         }
 
