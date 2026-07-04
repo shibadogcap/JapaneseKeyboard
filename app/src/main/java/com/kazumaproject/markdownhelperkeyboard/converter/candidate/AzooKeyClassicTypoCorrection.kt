@@ -21,6 +21,18 @@ object AzooKeyClassicTypoCorrection {
         val weight: Float = 3.5f,
     )
 
+    data class DirectTypoVariant(
+        val katakana: String,
+        val weight: Float,
+    )
+
+    fun directTypoVariants(katakanaChar: String): List<DirectTypoVariant> {
+        val normalized = katakanaChar.hiraganaToKatakana()
+        return directPossibleTypo[normalized]?.map { unit ->
+            DirectTypoVariant(katakana = unit.value, weight = unit.weight)
+        }.orEmpty()
+    }
+
     private val directPossibleTypo: Map<String, List<TypoUnit>> = mapOf(
         "カ" to listOf(TypoUnit("ガ", weight = 7.0f)),
         "キ" to listOf(TypoUnit("ギ")),

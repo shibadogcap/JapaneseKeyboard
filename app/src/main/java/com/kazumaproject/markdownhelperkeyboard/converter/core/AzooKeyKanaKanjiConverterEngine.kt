@@ -10,7 +10,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDicti
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyMid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConversionResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleTypoCorrectionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTypoCorrectionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestMode
@@ -80,7 +80,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
 
         val facade = dicdataFacadeSource.create(searchMemory)
         val kana2Kanji = AzooKeyKana2Kanji(facade)
-        val needTypo = options.typoCorrectionMode != AzooKeyStyleTypoCorrectionMode.Disabled
+        val needTypo = AzooKeyTypoCorrectionPolicy.isClassicTypoCorrectionEnabled(options.typoCorrectionMode)
         val useMemory = options.learningType != AzooKeyStyleLearningType.Nothing
 
         val convertResult = convertToLattice(

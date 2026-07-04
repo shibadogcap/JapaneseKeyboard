@@ -43,8 +43,12 @@ class ImeCandidateCoordinator @Inject constructor(
             }
             ?: ImeCandidateRequestFactory.composingText(input)
         conversionSession.liveComposingText = composingText
-        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(preferences, mode)
-            .copy(roman2KanaTransducer = roman2Kana)
+        val inputStyle = composingText.input.lastOrNull()?.inputStyle
+        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(
+            preferences = preferences,
+            mode = mode,
+            inputStyle = inputStyle,
+        ).copy(roman2KanaTransducer = roman2Kana)
         val previousInput = conversionSession.lastConvertTarget
         val previousComposingText = conversionSession.previousComposingText
         val previousLatticeNodes = conversionSession.latticeIncrementalState.latticeNodes
@@ -168,7 +172,11 @@ class ImeCandidateCoordinator @Inject constructor(
 
         val combinedReading = input + predictedReading
         val composingText = ImeCandidateRequestFactory.composingText(combinedReading)
-        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(preferences, mode)
+        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(
+            preferences = preferences,
+            mode = mode,
+            inputStyle = composingText.input.lastOrNull()?.inputStyle,
+        )
         val runtime = ImeCandidateRequestFactory.buildRuntimeContext(preferences)
         val environment = ImeCandidateRequestFactory.buildEnvironment(
             preferences = preferences,
@@ -305,7 +313,11 @@ class ImeCandidateCoordinator @Inject constructor(
     ): com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequest {
         return com.kazumaproject.markdownhelperkeyboard.converter.api.CandidateRequestBridge.toCandidateRequest(
             composingText = composingText ?: ImeCandidateRequestFactory.composingText(input),
-            options = ImeCandidateRequestFactory.buildConvertRequestOptions(preferences, mode),
+            options = ImeCandidateRequestFactory.buildConvertRequestOptions(
+                preferences = preferences,
+                mode = mode,
+                inputStyle = composingText?.input?.lastOrNull()?.inputStyle,
+            ),
             runtime = ImeCandidateRequestFactory.buildRuntimeContext(preferences),
             mode = mode,
         )

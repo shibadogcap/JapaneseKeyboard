@@ -48,7 +48,31 @@ class AzooKeyMustCasesTest {
         }
     }
 
-    // TypoCorrectionGenerator の DicdataStore 統合後に Swift testMustCases typo ブロックを有効化する
-    // @Test fun typoCorrectionFullConversion() ...
-    // @Test fun typoCorrectionGradualConversion() ...
+    private val typoCases = listOf(
+        Case("たいかくせい", "大学生"),
+        Case("きみのことかすき", "君のことが好き"),
+        Case("おへんとうをもつていく", "お弁当を持っていく"),
+    )
+
+    private fun typoRequest(input: String) = AzooKeyParityGoldenFixtures.defaultRequest(input).copy(
+        typoCorrectionMode = AzooKeyStyleTypoCorrectionMode.Enabled,
+    )
+
+    @Test
+    fun typoCorrectionFullConversion() = AzooKeyParityGoldenFixtures.runWithAssets {
+        for (case in typoCases) {
+            val engine = AzooKeyParityGoldenFixtures.engine()
+            val result = AzooKeyParityGoldenFixtures.convert(
+                engine,
+                typoRequest(case.input),
+            )
+            val top = result.mainResults.take(5).map { it.string }
+            org.junit.Assert.assertTrue(
+                "input=${case.input} expect=${case.expect} got=$top",
+                case.expect in top,
+            )
+        }
+    }
+
+    // TypoCorrectionGenerator の DicdataStore 統合後に Swift testMustCases typo gradual を有効化する
 }

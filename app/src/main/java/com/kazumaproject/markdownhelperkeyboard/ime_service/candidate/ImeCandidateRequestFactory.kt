@@ -3,6 +3,7 @@ package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.api.insertRoman2KanaAtCursor
 import com.kazumaproject.markdownhelperkeyboard.ime_service.romaji_kana.RomajiComposingSnapshot
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
@@ -18,27 +19,44 @@ object ImeCandidateRequestFactory {
     fun buildConvertRequestOptions(
         preferences: ImeCandidatePreferences,
         mode: CandidateRequestMode,
+        inputStyle: InputStyle? = null,
     ): ConvertRequestOptions {
         val predictionDisabledBySelection = preferences.isCandidateSelectionActive
+        val effectiveStyle = inputStyle ?: InputStyle.Direct
+        val (japanesePrediction, englishPrediction) = when {
+            predictionDisabledBySelection -> false to false
+            effectiveStyle == InputStyle.Direct -> true to true
+            effectiveStyle == InputStyle.Roman2Kana -> {
+                val japanese = preferences.keyboardLanguage ==
+                    ConvertRequestOptions.KeyboardLanguage.JaJp
+                val english = preferences.keyboardLanguage ==
+                    ConvertRequestOptions.KeyboardLanguage.EnUs
+                japanese to english
+            }
+            else -> {
+                val japanese = preferences.keyboardLanguage ==
+                    ConvertRequestOptions.KeyboardLanguage.JaJp
+                japanese to false
+            }
+        }
         val predictionMode = when (mode) {
             CandidateRequestMode.WithoutPrediction,
             CandidateRequestMode.EnglishKana -> AzooKeyStylePredictionMode.Disabled
             CandidateRequestMode.Normal,
-            CandidateRequestMode.Original -> if (predictionDisabledBySelection) {
-                AzooKeyStylePredictionMode.Disabled
-            } else {
+            CandidateRequestMode.Original -> if (japanesePrediction) {
                 AzooKeyStylePredictionMode.AutoMix
+            } else {
+                AzooKeyStylePredictionMode.Disabled
             }
         }
         val englishPredictionMode = when (mode) {
             CandidateRequestMode.WithoutPrediction,
             CandidateRequestMode.EnglishKana -> AzooKeyStylePredictionMode.Disabled
             CandidateRequestMode.Normal,
-            CandidateRequestMode.Original -> when {
-                predictionDisabledBySelection -> AzooKeyStylePredictionMode.Disabled
-                preferences.keyboardLanguage == ConvertRequestOptions.KeyboardLanguage.EnUs ->
-                    AzooKeyStylePredictionMode.AutoMix
-                else -> AzooKeyStylePredictionMode.AutoMix
+            CandidateRequestMode.Original -> if (englishPrediction) {
+                AzooKeyStylePredictionMode.AutoMix
+            } else {
+                AzooKeyStylePredictionMode.Disabled
             }
         }
         return ConvertRequestOptions(

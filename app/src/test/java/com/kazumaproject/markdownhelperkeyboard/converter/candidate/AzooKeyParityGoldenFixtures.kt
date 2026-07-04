@@ -79,7 +79,7 @@ internal object AzooKeyParityGoldenFixtures {
             japanesePredictionMode = predictionMode,
             englishPredictionMode = AzooKeyStylePredictionMode.Disabled,
             learningType = AzooKeyStyleLearningType.Nothing,
-            typoCorrectionMode = AzooKeyStyleTypoCorrectionMode.Automatic,
+            typoCorrectionMode = AzooKeyStyleTypoCorrectionMode.Disabled,
             specialCandidateProviders = emptyList(),
             composingText = composingText ?: ComposingText.fromConvertTarget(input),
             previousInput = previousInput,
