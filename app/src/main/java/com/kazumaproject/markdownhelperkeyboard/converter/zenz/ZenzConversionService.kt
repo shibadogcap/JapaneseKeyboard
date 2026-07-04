@@ -1,11 +1,12 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.zenz
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.core.domain.extensions.katakanaToHiragana
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRuntimeConversionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequest
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzCandidate
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzRerankFusionPolicy
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyZenzaiValueReorder
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzaiCandidateEvaluationResult
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isAllHiraganaWithSymbols
@@ -18,6 +19,10 @@ class ZenzConversionService @Inject constructor(
 ) {
     companion object {
         private const val ALIGNMENT_SEPARATOR = "\uEE08"
+        /** maxTokens の読み長に対する上限倍率 */
+        private const val MAX_TOKEN_RATIO = 2
+        /** Zenz 生成の最小スコア（生成候補は辞書候補より下位になるよう固定値） */
+        private const val ZENZ_GENERATION_SCORE = 1500
     }
 
     private fun String.isValidZenzInput(): Boolean {
@@ -51,29 +56,24 @@ class ZenzConversionService @Inject constructor(
         return request.insertReading.isValidZenzInput()
     }
 
-    suspend fun generatePredictive(
+    suspend fun getPredictiveReading(
         request: ZenzGenerationRequest,
         policy: AzooKeyRuntimeConversionPolicy,
-    ): List<ZenzCandidate> {
+    ): String? {
         if (!shouldGenerate(request, policy)) {
-            return emptyList()
+            return null
         }
+        val reading = request.insertReading
+        // maxTokens を読み長に比例制限（長文ゴミ抑制）
+        val cappedTokens = minOf(request.config.maxTokens, reading.length * MAX_TOKEN_RATIO)
         val generated = zenzEngine.generateWithContext(
             profile = request.config.profile,
             leftContext = request.leftContext,
-            inputKatakana = request.insertReading.hiraganaToKatakana(),
-            maxTokens = request.config.maxTokens,
+            inputKatakana = reading.hiraganaToKatakana(),
+            maxTokens = cappedTokens,
         )
-        if (generated.isBlank()) return emptyList()
-        return listOf(
-            ZenzCandidate(
-                string = generated,
-                type = CandidateType.ZENZ,
-                length = request.insertReading.length.toUByte(),
-                score = 2000,
-                originalString = request.insertReading,
-            )
-        )
+        if (generated.isBlank()) return null
+        return generated.trim().katakanaToHiragana()
     }
 
     suspend fun evaluateZenzai(
@@ -113,14 +113,6 @@ class ZenzConversionService @Inject constructor(
                     val resolved = ZenzaiAlternativeConstraintPolicy.resolveBestCandidate(
                         request = request,
                         constraints = parsed.alternativeConstraints,
-                        generateWithPrefixContext = { prefix ->
-                            zenzEngine.generateWithContext(
-                                profile = request.config.profile,
-                                leftContext = prefix,
-                                inputKatakana = request.insertReading.hiraganaToKatakana(),
-                                maxTokens = request.config.maxTokens,
-                            )
-                        },
                         toZenzCandidate = { surface, type ->
                             zenzCandidate(request, surface, type)
                         },
@@ -135,27 +127,15 @@ class ZenzConversionService @Inject constructor(
                 val prefix = parsed.prefix
                 val fromPrefix = request.dictionaryCandidates
                     .take(request.nBest)
-                    .firstOrNull { it.startsWith(prefix) }
+                    .firstOrNull { it.string.startsWith(prefix) }
+                    ?.string
                     ?: firstCandidate
                 val engineCandidate = zenzCandidate(
                     request,
                     fromPrefix,
                     CandidateType.ZENZ_CONTEXTUAL,
                 )
-                val generated = zenzEngine.generateWithContext(
-                    profile = request.config.profile,
-                    leftContext = prefix,
-                    inputKatakana = request.insertReading.hiraganaToKatakana(),
-                    maxTokens = request.config.maxTokens,
-                )
-                val neuralCandidate = zenzCandidate(
-                    request,
-                    generated,
-                    CandidateType.ZENZ_SPECIAL,
-                )
-                listOf(neuralCandidate, engineCandidate).maxByOrNull {
-                    it.rank(prefix)
-                }?.let { listOf(it) } ?: listOf(neuralCandidate)
+                listOf(engineCandidate)
             }
         }
     }
@@ -186,11 +166,9 @@ class ZenzConversionService @Inject constructor(
         )
         if (rawScores.size != targets.size) return null
 
-        val rerankedTargets = ZenzRerankFusionPolicy.rerank(
+        val rerankedTargets = AzooKeyZenzaiValueReorder.rerankByZenzScores(
             candidates = targets.map { it.value },
             rawZenzScores = rawScores.toList(),
-            baseWeight = request.config.rerankBaseWeight,
-            zenzWeight = request.config.rerankZenzWeight,
         ) ?: return null
 
         val merged = request.candidates.toMutableList()
@@ -212,9 +190,10 @@ class ZenzConversionService @Inject constructor(
         surface: String,
         type: Byte,
     ): ZenzCandidate {
+        val resolvedType = request.dictionaryCandidates.firstOrNull { it.string == surface }?.type ?: type
         return ZenzCandidate(
             string = surface,
-            type = type,
+            type = resolvedType,
             length = request.insertReading.length.toUByte(),
             score = 2000,
             originalString = request.insertReading,

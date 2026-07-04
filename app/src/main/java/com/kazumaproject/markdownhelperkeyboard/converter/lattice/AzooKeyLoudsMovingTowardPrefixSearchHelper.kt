@@ -16,12 +16,14 @@ class AzooKeyLoudsMovingTowardPrefixSearchHelper(
 
     fun update(target: List<Int>): UpdateResult {
         var updated = false
-        var availableMaxIndex = 0
-        target.forEachIndexed { index, charId ->
+        var availableMaxIndex = -1
+        for (index in target.indices) {
+            val charId = target[index]
             val stacked = stack.getOrNull(index)
             when {
                 stacked != null && stacked.second == charId -> {
                     availableMaxIndex = index
+                    continue
                 }
                 stacked != null && stacked.second != charId -> {
                     while (stack.size > index) {
@@ -30,7 +32,7 @@ class AzooKeyLoudsMovingTowardPrefixSearchHelper(
                 }
             }
             val parentNode = stack.lastOrNull()?.first ?: ROOT_NODE_INDEX
-            val child = louds.searchCharNodeIndex(parentNode, charId) ?: return@forEachIndexed
+            val child = louds.searchCharNodeIndex(parentNode, charId) ?: break
             indices += index to child
             updated = true
             availableMaxIndex = index

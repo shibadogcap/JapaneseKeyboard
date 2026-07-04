@@ -9,7 +9,7 @@ import javax.inject.Singleton
 
 /**
  * Lazily loads AzooKey LOUDS / emoji dictionary assets from the app APK.
- * Shared across [DefaultCandidateService] and IME post-commit prediction.
+ * Shared across conversion engine and IME post-commit prediction.
  */
 @Singleton
 class AzooKeyDictionaryAssetProvider @Inject constructor(

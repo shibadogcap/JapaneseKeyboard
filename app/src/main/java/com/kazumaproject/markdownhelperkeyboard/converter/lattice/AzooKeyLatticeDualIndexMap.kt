@@ -35,21 +35,21 @@ class AzooKeyLatticeDualIndexMap(
     fun dualIndex(latticeIndex: AzooKeyLatticeIndex): DualIndex {
         return when (latticeIndex) {
             is AzooKeyLatticeIndex.Input -> {
-                val surface = inputIndexToSurfaceIndexMap[latticeIndex.index]
+                val surface = inputIndexToSurfaceIndexMap[latticeIndex.value]
                 if (surface != null) {
-                    DualIndex.BothIndex(inputIdx = latticeIndex.index, surfaceIdx = surface)
+                    DualIndex.BothIndex(inputIdx = latticeIndex.value, surfaceIdx = surface)
                 } else {
-                    DualIndex.InputIndex(latticeIndex.index)
+                    DualIndex.InputIndex(latticeIndex.value)
                 }
             }
             is AzooKeyLatticeIndex.Surface -> {
                 val input = inputIndexToSurfaceIndexMap.entries
-                    .firstOrNull { it.value == latticeIndex.index }
+                    .firstOrNull { it.value == latticeIndex.value }
                     ?.key
                 if (input != null) {
-                    DualIndex.BothIndex(inputIdx = input, surfaceIdx = latticeIndex.index)
+                    DualIndex.BothIndex(inputIdx = input, surfaceIdx = latticeIndex.value)
                 } else {
-                    DualIndex.SurfaceIndex(latticeIndex.index)
+                    DualIndex.SurfaceIndex(latticeIndex.value)
                 }
             }
         }
@@ -79,15 +79,4 @@ class AzooKeyLatticeDualIndexMap(
         }
         return result
     }
-}
-
-sealed class AzooKeyLatticeIndex {
-    data class Input(val index: Int) : AzooKeyLatticeIndex()
-    data class Surface(val index: Int) : AzooKeyLatticeIndex()
-
-    val isZero: Boolean
-        get() = when (this) {
-            is Input -> index == 0
-            is Surface -> index == 0
-        }
 }

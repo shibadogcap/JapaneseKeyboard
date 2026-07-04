@@ -50,6 +50,7 @@ class ImeCandidatePresentationCoordinatorTest {
                 override suspend fun applyLiveConversion(
                     insertString: String,
                     candidates: List<Candidate>,
+                    firstClauseResults: List<Candidate>,
                 ) {}
                 override fun updateBunsetsuSpaceKeyIfNeeded(
                     mainView: MainLayoutBinding,
@@ -96,6 +97,7 @@ class ImeCandidatePresentationCoordinatorTest {
                 override suspend fun applyLiveConversion(
                     insertString: String,
                     candidates: List<Candidate>,
+                    firstClauseResults: List<Candidate>,
                 ) {}
                 override fun updateBunsetsuSpaceKeyIfNeeded(
                     mainView: MainLayoutBinding,
@@ -148,6 +150,7 @@ class ImeCandidatePresentationCoordinatorTest {
                 override suspend fun applyLiveConversion(
                     insertString: String,
                     candidates: List<Candidate>,
+                    firstClauseResults: List<Candidate>,
                 ) {
                     events += "live"
                 }

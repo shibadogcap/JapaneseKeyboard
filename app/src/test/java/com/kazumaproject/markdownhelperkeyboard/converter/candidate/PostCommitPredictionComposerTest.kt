@@ -20,8 +20,8 @@ class PostCommitPredictionComposerTest {
         val result = PostCommitPredictionComposer.compose(
             committedText = "今日は",
             learnedTransitions = listOf(
-                candidate("晴れ", score = 100),
-                candidate("雨", score = 200)
+                candidate("晴れ", score = 200),
+                candidate("雨", score = 100)
             )
         )
 
@@ -38,7 +38,7 @@ class PostCommitPredictionComposerTest {
                 candidate("", score = 200),
                 candidate("駅", score = 300)
             ),
-            zeroHintCandidates = listOf(zeroHint("駅", score = 100), zeroHint("で", score = 90))
+            zeroHintCandidates = listOf(zeroHint("駅", score = 90), zeroHint("で", score = 100))
         )
 
         assertEquals(listOf("駅", "で"), result.map { it.string })
@@ -49,10 +49,10 @@ class PostCommitPredictionComposerTest {
         val result = PostCommitPredictionComposer.compose(
             committedText = "明日",
             learnedTransitions = listOf(
-                candidate("行く", score = 100),
-                candidate("見る", score = 200)
+                candidate("行く", score = 150),
+                candidate("見る", score = 70)
             ),
-            zeroHintCandidates = listOf(zeroHint("は", score = 80), zeroHint("に", score = 70)),
+            zeroHintCandidates = listOf(zeroHint("は", score = 80), zeroHint("に", score = 90)),
             limit = 3
         )
 
@@ -77,11 +77,11 @@ class PostCommitPredictionComposerTest {
             committedText = "東京",
             learnedTransitions = emptyList(),
             zeroHintCandidates = listOf(
-                zeroHint("は", score = 100),
-                zeroHint("が", score = 90),
+                zeroHint("は", score = 60),
+                zeroHint("が", score = 70),
                 zeroHint("の", score = 80),
-                zeroHint("に", score = 70),
-                zeroHint("駅", score = 60),
+                zeroHint("に", score = 90),
+                zeroHint("駅", score = 100),
             ),
             limit = 10,
             particleLimit = 3
@@ -101,17 +101,17 @@ class PostCommitPredictionComposerTest {
                 emoji("🐾", score = -5)
             ),
             learnedTransitions = listOf(
-                candidate("かわいい", score = 90),
-                candidate("です", score = 80),
+                candidate("かわいい", score = 50),
+                candidate("です", score = 60),
                 candidate("が", score = 70),
-                candidate("を", score = 60),
-                candidate("と", score = 50)
+                candidate("を", score = 80),
+                candidate("と", score = 90)
             ),
             zeroHintCandidates = listOf(
-                zeroHint("。", score = 1000),
-                zeroHint("！", score = 900),
-                zeroHint("？", score = 800),
-                zeroHint("です", score = 700)
+                zeroHint("。", score = 700),
+                zeroHint("！", score = 800),
+                zeroHint("？", score = 900),
+                zeroHint("です", score = 1000)
             ),
             particleLimit = 0,
             limit = 10
@@ -156,7 +156,7 @@ class PostCommitPredictionComposerTest {
             type = CandidateType.ZERO_HINT_PREDICTION,
             length = string.length.toUByte(),
             score = score,
-            value = score.toFloat(),
+            value = -score.toFloat(),
         )
     }
 }

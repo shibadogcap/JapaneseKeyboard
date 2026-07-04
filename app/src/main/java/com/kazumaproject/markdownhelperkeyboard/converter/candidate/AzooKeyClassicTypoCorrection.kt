@@ -64,6 +64,9 @@ object AzooKeyClassicTypoCorrection {
         "ヨ" to listOf(TypoUnit("ョ")),
     )
 
+    fun roman2KanaTypoVariants(romanKey: String): List<String> =
+        roman2KanaPossibleTypo[romanKey.lowercase()].orEmpty()
+
     private val roman2KanaPossibleTypo: Map<String, List<String>> = mapOf(
         "bs" to listOf("ba"),
         "no" to listOf("bo"),

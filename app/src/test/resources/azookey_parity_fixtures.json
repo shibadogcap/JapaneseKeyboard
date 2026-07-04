@@ -2,7 +2,7 @@
   {
     "id": "nihon",
     "input": "にほん",
-    "top5": ["日本", "2本", "二本", "ニホン", "仁本"],
+    "top5": ["日本", "2本", "二本", "ニホン", "に本"],
     "exactReadingInTop3": true
   },
   {
@@ -14,13 +14,13 @@
   {
     "id": "2000en",
     "input": "2000えん",
-    "top1": "2000えん",
+    "top1": "2000円",
     "exactReadingInTop3": true
   },
   {
     "id": "2000en_kata",
     "input": "2000エン",
-    "top1": "2000えん",
+    "top1": "2000円",
     "exactReadingInTop3": true
   },
   {

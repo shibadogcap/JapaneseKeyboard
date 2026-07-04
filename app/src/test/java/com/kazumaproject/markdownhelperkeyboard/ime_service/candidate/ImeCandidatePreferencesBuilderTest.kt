@@ -2,6 +2,8 @@ package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
 import androidx.preference.PreferenceManager
 import androidx.test.core.app.ApplicationProvider
+import com.kazumaproject.core.domain.state.TenKeyQWERTYMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
 import com.kazumaproject.markdownhelperkeyboard.ime_service.ImePreferencesSnapshot
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
@@ -23,13 +25,47 @@ class ImeCandidatePreferencesBuilderTest {
     }
 
     @Test
-    fun learningTypeIsOnlyOutputWhenPredictionLearnEnabled() {
-        val snapshot = ImePreferencesSnapshot.from(
+    fun nBestMatchesAzooKeyDefault() {
+        val snapshot = baseSnapshot()
+        val prefs = ImeCandidatePreferencesBuilder.build(
+            snapshot = snapshot,
+            runtime = ImeCandidateRuntimeSession(
+                isPrivateMode = false,
+                suppressSuggestions = false,
+                isCandidateSelectionActive = false,
+                isConverting = false,
+                isDirectInputMode = false,
+                qwertyMode = TenKeyQWERTYMode.Default,
+                currentQwertyRomajiMode = false,
+            ),
             appPreference = AppPreference,
-            dictionarySourceResolver = null,
-            customThemeCandidateItemPressedBgColorDefault = 0,
-        ).copy(enablePredictionSearchLearnDictionaryPreference = true)
+            ngWords = emptyList(),
+            ngWordPattern = Regex(""),
+            romanize = { null },
+            toHankakuAlphabet = { it },
+            zenzaiEnabled = false,
+        )
+        assertEquals(AzooKeyConversionDefaults.N_BEST, prefs.nBest)
+    }
 
+    @Test
+    fun learningTypeIsInputAndOutputByDefault() {
+        val snapshot = baseSnapshot().copy(
+            isLearnDictionaryMode = true,
+            learningTypePreference = "input_and_output",
+        )
+        assertEquals(
+            AzooKeyStyleLearningType.InputAndOutput,
+            ImeCandidatePreferencesBuilder.learningTypeFromSnapshot(snapshot),
+        )
+    }
+
+    @Test
+    fun learningTypeIsOnlyOutputWhenConfigured() {
+        val snapshot = baseSnapshot().copy(
+            isLearnDictionaryMode = true,
+            learningTypePreference = "only_output",
+        )
         assertEquals(
             AzooKeyStyleLearningType.OnlyOutput,
             ImeCandidatePreferencesBuilder.learningTypeFromSnapshot(snapshot),
@@ -37,16 +73,22 @@ class ImeCandidatePreferencesBuilderTest {
     }
 
     @Test
-    fun learningTypeIsNothingWhenPredictionLearnDisabled() {
-        val snapshot = ImePreferencesSnapshot.from(
-            appPreference = AppPreference,
-            dictionarySourceResolver = null,
-            customThemeCandidateItemPressedBgColorDefault = 0,
-        ).copy(enablePredictionSearchLearnDictionaryPreference = false)
-
+    fun learningTypeIsNothingWhenLearnDictionaryDisabled() {
+        val snapshot = baseSnapshot().copy(
+            isLearnDictionaryMode = false,
+            learningTypePreference = "input_and_output",
+        )
         assertEquals(
             AzooKeyStyleLearningType.Nothing,
             ImeCandidatePreferencesBuilder.learningTypeFromSnapshot(snapshot),
+        )
+    }
+
+    private fun baseSnapshot(): ImePreferencesSnapshot {
+        return ImePreferencesSnapshot.from(
+            appPreference = AppPreference,
+            dictionarySourceResolver = null,
+            customThemeCandidateItemPressedBgColorDefault = 0,
         )
     }
 }

@@ -11,10 +11,9 @@ import com.kazumaproject.markdownhelperkeyboard.candidate_order.database.Candida
 import com.kazumaproject.markdownhelperkeyboard.clicked_symbol.database.ClickedSymbolDao
 import com.kazumaproject.markdownhelperkeyboard.clipboard_history.database.ClipboardHistoryDao
 import com.kazumaproject.markdownhelperkeyboard.converter.bitset.SuccinctBitVector
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.EnglishEngine
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
-import com.kazumaproject.markdownhelperkeyboard.converter.graph.GraphBuilder
-import com.kazumaproject.markdownhelperkeyboard.converter.path_algorithm.FindPath
 import com.kazumaproject.markdownhelperkeyboard.custom_keyboard.database.KeyboardLayoutDao
 import com.kazumaproject.markdownhelperkeyboard.custom_romaji.database.RomajiMapDao
 import com.kazumaproject.markdownhelperkeyboard.database.AppDatabase
@@ -56,13 +55,13 @@ import com.kazumaproject.markdownhelperkeyboard.database.AppDatabase.Companion.M
 import com.kazumaproject.markdownhelperkeyboard.delete_key_flick.database.DeleteKeyFlickDeleteTargetDao
 import com.kazumaproject.markdownhelperkeyboard.dictionary_override.DictionaryBinaryReader
 import com.kazumaproject.markdownhelperkeyboard.dictionary_override.DictionaryFileKey
+import com.kazumaproject.markdownhelperkeyboard.dictionary_override.DictionarySourceResolver
 import com.kazumaproject.markdownhelperkeyboard.gemma.database.GemmaPromptTemplateDao
 import com.kazumaproject.markdownhelperkeyboard.ime_service.clipboard.ClipboardUtil
 import com.kazumaproject.markdownhelperkeyboard.ime_service.models.PressedKeyStatus
 import com.kazumaproject.markdownhelperkeyboard.learning.database.LearnDao
 import com.kazumaproject.markdownhelperkeyboard.learning.multiple.LearnMultiple
 import com.kazumaproject.markdownhelperkeyboard.ng_word.database.NgWordDao
-import com.kazumaproject.markdownhelperkeyboard.ngram_rule.NgramRuleScorerManager
 import com.kazumaproject.markdownhelperkeyboard.ngram_rule.database.NgramRuleDao
 import com.kazumaproject.markdownhelperkeyboard.physical_keyboard.shortcut.database.PhysicalKeyboardShortcutDao
 import com.kazumaproject.markdownhelperkeyboard.repository.RomajiMapRepository
@@ -241,104 +240,6 @@ object AppModule {
     fun providesClipboardUtil(@ApplicationContext context: Context): ClipboardUtil =
         ClipboardUtil(context)
 
-    @Singleton
-    @Provides
-    @ConnectionIds
-    fun provideConnectionIds(reader: DictionaryBinaryReader): ShortArray {
-        return reader.loadConnectionIds(DictionaryFileKey.CONNECTION_ID)
-    }
-
-    @SystemTangoTrie
-    @Singleton
-    @Provides
-    fun provideTangoTrie(reader: DictionaryBinaryReader): LOUDS {
-        return reader.loadLouds(DictionaryFileKey.SYSTEM_TANGO)
-    }
-
-    @SystemYomiTrie
-    @Singleton
-    @Provides
-    fun provideYomiTrie(reader: DictionaryBinaryReader): LOUDSWithTermId {
-        return reader.loadLoudsWithTermId(DictionaryFileKey.SYSTEM_YOMI)
-    }
-
-    @SystemTokenArray
-    @Singleton
-    @Provides
-    fun providesTokenArray(reader: DictionaryBinaryReader): TokenArray {
-        return reader.loadTokenArray(DictionaryFileKey.SYSTEM_TOKEN)
-    }
-
-    @Singleton
-    @Provides
-    @SystemSuccinctBitVectorLBSYomi
-    fun provideSuccinctBitVectorLBSYomi(@SystemYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.LBS)
-
-    @Singleton
-    @Provides
-    @SystemSuccinctBitVectorIsLeafYomi
-    fun provideSuccinctBitVectorIsLeaf(@SystemYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.isLeaf)
-
-    @Singleton
-    @Provides
-    @SystemSuccinctBitVectorTokenArray
-    fun provideSystemSuccinctBitVectorTokenArray(@SystemTokenArray tokenArray: TokenArray): SuccinctBitVector =
-        SuccinctBitVector(tokenArray.bitvector)
-
-    @Singleton
-    @Provides
-    @SystemSuccinctBitVectorTangoLBS
-    fun provideSystemSuccinctBitVectorTangoLBS(@SystemTangoTrie tangoTrie: LOUDS): SuccinctBitVector =
-        SuccinctBitVector(tangoTrie.LBS)
-
-
-    @SingleKanjiTangoTrie
-    @Singleton
-    @Provides
-    fun provideSingleKanjiTangoTrie(reader: DictionaryBinaryReader): LOUDS {
-        return reader.loadLouds(DictionaryFileKey.SINGLE_KANJI_TANGO)
-    }
-
-    @SingleKanjiYomiTrie
-    @Singleton
-    @Provides
-    fun provideSingleKanjiYomiTrie(reader: DictionaryBinaryReader): LOUDSWithTermId {
-        return reader.loadLoudsWithTermId(DictionaryFileKey.SINGLE_KANJI_YOMI)
-    }
-
-    @SingleKanjiTokenArray
-    @Singleton
-    @Provides
-    fun providesSingleKanjiTokenArray(reader: DictionaryBinaryReader): TokenArray {
-        return reader.loadTokenArray(DictionaryFileKey.SINGLE_KANJI_TOKEN)
-    }
-
-    @Singleton
-    @Provides
-    @SingleKanjiSuccinctBitVectorLBSYomi
-    fun provideSingleKanjiSuccinctBitVectorLBSYomi(@SingleKanjiYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.LBS)
-
-    @Singleton
-    @Provides
-    @SingleKanjiSuccinctBitVectorIsLeafYomi
-    fun provideSingleKanjiSuccinctBitVectorIsLeafYomi(@SingleKanjiYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.isLeaf)
-
-    @Singleton
-    @Provides
-    @SingleKanjiSuccinctBitVectorTokenArray
-    fun provideSingleKanjiSuccinctBitVectorTokenArray(@SingleKanjiTokenArray tokenArray: TokenArray): SuccinctBitVector =
-        SuccinctBitVector(tokenArray.bitvector)
-
-    @Singleton
-    @Provides
-    @SingleKanjiSuccinctBitVectorTangoLBS
-    fun provideSSingleKanjiSuccinctBitVectorTangoLBS(@SingleKanjiTangoTrie tangoTrie: LOUDS): SuccinctBitVector =
-        SuccinctBitVector(tangoTrie.LBS)
-
     @EmojiTangoTrie
     @Singleton
     @Provides
@@ -475,117 +376,10 @@ object AppModule {
         SuccinctBitVector(tangoTrie.LBS)
 
 
-    @ReadingCorrectionTangoTrie
-    @Singleton
-    @Provides
-    fun provideReadingCorrectionTangoTrie(reader: DictionaryBinaryReader): LOUDS {
-        return reader.loadLouds(DictionaryFileKey.READING_CORRECTION_TANGO)
-    }
-
-    @ReadingCorrectionYomiTrie
-    @Singleton
-    @Provides
-    fun provideReadingCorrectionYomiTrie(reader: DictionaryBinaryReader): LOUDSWithTermId {
-        return reader.loadLoudsWithTermId(DictionaryFileKey.READING_CORRECTION_YOMI)
-    }
-
-    @ReadingCorrectionTokenArray
-    @Singleton
-    @Provides
-    fun providesReadingCorrectionTokenArray(reader: DictionaryBinaryReader): TokenArray {
-        return reader.loadTokenArray(DictionaryFileKey.READING_CORRECTION_TOKEN)
-    }
-
-    @Singleton
-    @Provides
-    @ReadingCorrectionSuccinctBitVectorLBSYomi
-    fun provideReadingCorrectionSuccinctBitVectorLBSYomi(@ReadingCorrectionYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.LBS)
-
-    @Singleton
-    @Provides
-    @ReadingCorrectionSuccinctBitVectorIsLeafYomi
-    fun provideReadingCorrectionSuccinctBitVectorIsLeafYomi(@ReadingCorrectionYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.isLeaf)
-
-    @Singleton
-    @Provides
-    @ReadingCorrectionSuccinctBitVectorTokenArray
-    fun provideReadingCorrectionSuccinctBitVectorTokenArray(@ReadingCorrectionTokenArray tokenArray: TokenArray): SuccinctBitVector =
-        SuccinctBitVector(tokenArray.bitvector)
-
-    @Singleton
-    @Provides
-    @ReadingCorrectionSuccinctBitVectorTangoLBS
-    fun provideReadingCorrectionSuccinctBitVectorTangoLBS(@ReadingCorrectionTangoTrie tangoTrie: LOUDS): SuccinctBitVector =
-        SuccinctBitVector(tangoTrie.LBS)
-
-    @KotowazaTangoTrie
-    @Singleton
-    @Provides
-    fun provideKotowazaTangoTrie(reader: DictionaryBinaryReader): LOUDS {
-        return reader.loadLouds(DictionaryFileKey.KOTOWAZA_TANGO)
-    }
-
-    @KotowazaYomiTrie
-    @Singleton
-    @Provides
-    fun provideKotowazaYomiTrie(reader: DictionaryBinaryReader): LOUDSWithTermId {
-        return reader.loadLoudsWithTermId(DictionaryFileKey.KOTOWAZA_YOMI)
-    }
-
-    @KotowazaTokenArray
-    @Singleton
-    @Provides
-    fun providesKotowazaTokenArray(reader: DictionaryBinaryReader): TokenArray {
-        return reader.loadTokenArray(DictionaryFileKey.KOTOWAZA_TOKEN)
-    }
-
-    @Singleton
-    @Provides
-    @KotowazaSuccinctBitVectorLBSYomi
-    fun provideKotowazaSuccinctBitVectorLBSYomi(@KotowazaYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.LBS)
-
-    @Singleton
-    @Provides
-    @KotowazaSuccinctBitVectorIsLeafYomi
-    fun provideKotowazaSuccinctBitVectorIsLeafYomi(@KotowazaYomiTrie yomiTrie: LOUDSWithTermId): SuccinctBitVector =
-        SuccinctBitVector(yomiTrie.isLeaf)
-
-    @Singleton
-    @Provides
-    @KotowazaSuccinctBitVectorTokenArray
-    fun provideKotowazaSuccinctBitVectorTokenArray(@KotowazaTokenArray tokenArray: TokenArray): SuccinctBitVector =
-        SuccinctBitVector(tokenArray.bitvector)
-
-    @Singleton
-    @Provides
-    @KotowazaSuccinctBitVectorTangoLBS
-    fun provideKotowazaSuccinctBitVectorTangoLBS(@KotowazaTangoTrie tangoTrie: LOUDS): SuccinctBitVector =
-        SuccinctBitVector(tangoTrie.LBS)
 
     @Singleton
     @Provides
     fun provideKanaKanjiHenkanEngine(
-        @ConnectionIds connectionIds: ShortArray,
-
-        @SystemTangoTrie systemTangoTrie: LOUDS,
-        @SystemYomiTrie systemYomiTrie: LOUDSWithTermId,
-        @SystemTokenArray systemTokenArray: TokenArray,
-        @SystemSuccinctBitVectorLBSYomi systemSuccinctBitVectorLBSYomi: SuccinctBitVector,
-        @SystemSuccinctBitVectorIsLeafYomi systemSuccinctBitVectorIsLeafYomi: SuccinctBitVector,
-        @SystemSuccinctBitVectorTokenArray systemSuccinctBitVectorTokenArray: SuccinctBitVector,
-        @SystemSuccinctBitVectorTangoLBS systemSuccinctBitVectorTangoLBS: SuccinctBitVector,
-
-        @SingleKanjiTangoTrie singleKanjiTangoTrie: LOUDS,
-        @SingleKanjiYomiTrie singleKanjiYomiTrie: LOUDSWithTermId,
-        @SingleKanjiTokenArray singleKanjiTokenArray: TokenArray,
-        @SingleKanjiSuccinctBitVectorLBSYomi singleKanjiSuccinctBitVectorLBSYomi: SuccinctBitVector,
-        @SingleKanjiSuccinctBitVectorIsLeafYomi singleKanjiSuccinctBitVectorIsLeafYomi: SuccinctBitVector,
-        @SingleKanjiSuccinctBitVectorTokenArray singleKanjiSuccinctBitVectorTokenArray: SuccinctBitVector,
-        @SingleKanjiSuccinctBitVectorTangoLBS singleKanjiSuccinctBitVectorTangoLBS: SuccinctBitVector,
-
         @EmojiTangoTrie emojiTangoTrie: LOUDS,
         @EmojiYomiTrie emojiYomiTrie: LOUDSWithTermId,
         @EmojiTokenArray emojiTokenArray: TokenArray,
@@ -610,92 +404,32 @@ object AppModule {
         @SymbolSuccinctBitVectorTokenArray symbolSuccinctBitVectorTokenArray: SuccinctBitVector,
         @SymbolSuccinctBitVectorTangoLBS symbolSuccinctBitVectorTangoLBS: SuccinctBitVector,
 
-        @ReadingCorrectionTangoTrie readingCorrectionTangoTrie: LOUDS,
-        @ReadingCorrectionYomiTrie readingCorrectionYomiTrie: LOUDSWithTermId,
-        @ReadingCorrectionTokenArray readingCorrectionTokenArray: TokenArray,
-        @ReadingCorrectionSuccinctBitVectorLBSYomi readingCorrectionSuccinctBitVectorLBSYomi: SuccinctBitVector,
-        @ReadingCorrectionSuccinctBitVectorIsLeafYomi readingCorrectionSuccinctBitVectorIsLeafYomi: SuccinctBitVector,
-        @ReadingCorrectionSuccinctBitVectorTokenArray readingCorrectionSuccinctBitVectorTokenArray: SuccinctBitVector,
-        @ReadingCorrectionSuccinctBitVectorTangoLBS readingCorrectionSuccinctBitVectorTangoLBS: SuccinctBitVector,
-
-        @KotowazaTangoTrie kotowazaTangoTrie: LOUDS,
-        @KotowazaYomiTrie kotowazaYomiTrie: LOUDSWithTermId,
-        @KotowazaTokenArray kotowazaTokenArray: TokenArray,
-        @KotowazaSuccinctBitVectorLBSYomi kotowazaSuccinctBitVectorLBSYomi: SuccinctBitVector,
-        @KotowazaSuccinctBitVectorIsLeafYomi kotowazaSuccinctBitVectorIsLeafYomi: SuccinctBitVector,
-        @KotowazaSuccinctBitVectorTokenArray kotowazaSuccinctBitVectorTokenArray: SuccinctBitVector,
-        @KotowazaSuccinctBitVectorTangoLBS kotowazaSuccinctBitVectorTangoLBS: SuccinctBitVector,
         englishEngine: EnglishEngine,
-        ngramRuleScorerManager: NgramRuleScorerManager,
         dictionaryBinaryReader: DictionaryBinaryReader,
+        dictionaryAssetProvider: AzooKeyDictionaryAssetProvider,
+        dictionarySourceResolver: DictionarySourceResolver,
     ): KanaKanjiEngine {
         val kanaKanjiEngine = KanaKanjiEngine()
-        val graphBuilder = GraphBuilder()
-        val findPath = FindPath(ngramRuleScorerProvider = ngramRuleScorerManager::currentScorer)
 
-        kanaKanjiEngine.buildEngine(
-            graphBuilder = graphBuilder,
-            findPath = findPath,
-            connectionIdList = connectionIds,
-
-            systemTangoTrie = systemTangoTrie,
-            systemYomiTrie = systemYomiTrie,
-            systemTokenArray = systemTokenArray,
-            systemSuccinctBitVectorLBSYomi = systemSuccinctBitVectorLBSYomi,
-            systemSuccinctBitVectorIsLeafYomi = systemSuccinctBitVectorIsLeafYomi,
-            systemSuccinctBitVectorTokenArray = systemSuccinctBitVectorTokenArray,
-            systemSuccinctBitVectorTangoLBS = systemSuccinctBitVectorTangoLBS,
-
-            singleKanjiTangoTrie = singleKanjiTangoTrie,
-            singleKanjiYomiTrie = singleKanjiYomiTrie,
-            singleKanjiTokenArray = singleKanjiTokenArray,
-            singleKanjiSuccinctBitVectorLBSYomi = singleKanjiSuccinctBitVectorLBSYomi,
-            singleKanjiSuccinctBitVectorIsLeafYomi = singleKanjiSuccinctBitVectorIsLeafYomi,
-            singleKanjiSuccinctBitVectorTokenArray = singleKanjiSuccinctBitVectorTokenArray,
-            singleKanjiSuccinctBitVectorTangoLBS = singleKanjiSuccinctBitVectorTangoLBS,
-
-            emojiTangoTrie = emojiTangoTrie,
-            emojiYomiTrie = emojiYomiTrie,
-            emojiTokenArray = emojiTokenArray,
-            emojiSuccinctBitVectorLBSYomi = emojiSuccinctBitVectorLBSYomi,
-            emojiSuccinctBitVectorIsLeafYomi = emojiSuccinctBitVectorIsLeafYomi,
-            emojiSuccinctBitVectorTokenArray = emojiSuccinctBitVectorTokenArray,
-            emojiSuccinctBitVectorTangoLBS = emojiSuccinctBitVectorTangoLBS,
-
-            emoticonTangoTrie = emoticonTangoTrie,
-            emoticonYomiTrie = emoticonYomiTrie,
-            emoticonTokenArray = emoticonTokenArray,
-            emoticonSuccinctBitVectorLBSYomi = emoticonSuccinctBitVectorLBSYomi,
-            emoticonSuccinctBitVectorIsLeafYomi = emoticonSuccinctBitVectorIsLeafYomi,
-            emoticonSuccinctBitVectorTokenArray = emoticonSuccinctBitVectorTokenArray,
-            emoticonSuccinctBitVectorTangoLBS = emoticonSuccinctBitVectorTangoLBS,
-
-            symbolTangoTrie = symbolTangoTrie,
-            symbolYomiTrie = symbolYomiTrie,
-            symbolTokenArray = symbolTokenArray,
-            symbolSuccinctBitVectorLBSYomi = symbolSuccinctBitVectorLBSYomi,
-            symbolSuccinctBitVectorIsLeafYomi = symbolSuccinctBitVectorIsLeafYomi,
-            symbolSuccinctBitVectorTokenArray = symbolSuccinctBitVectorTokenArray,
-            symbolSuccinctBitVectorTangoLBS = symbolSuccinctBitVectorTangoLBS,
-
-            readingCorrectionTangoTrie = readingCorrectionTangoTrie,
-            readingCorrectionYomiTrie = readingCorrectionYomiTrie,
-            readingCorrectionTokenArray = readingCorrectionTokenArray,
-            readingCorrectionSuccinctBitVectorLBSYomi = readingCorrectionSuccinctBitVectorLBSYomi,
-            readingCorrectionSuccinctBitVectorIsLeafYomi = readingCorrectionSuccinctBitVectorIsLeafYomi,
-            readingCorrectionSuccinctBitVectorTokenArray = readingCorrectionSuccinctBitVectorTokenArray,
-            readingCorrectionSuccinctBitVectorTangoLBS = readingCorrectionSuccinctBitVectorTangoLBS,
-
-            kotowazaTangoTrie = kotowazaTangoTrie,
-            kotowazaYomiTrie = kotowazaYomiTrie,
-            kotowazaTokenArray = kotowazaTokenArray,
-            kotowazaSuccinctBitVectorLBSYomi = kotowazaSuccinctBitVectorLBSYomi,
-            kotowazaSuccinctBitVectorIsLeafYomi = kotowazaSuccinctBitVectorIsLeafYomi,
-            kotowazaSuccinctBitVectorTokenArray = kotowazaSuccinctBitVectorTokenArray,
-            kotowazaSuccinctBitVectorTangoLBS = kotowazaSuccinctBitVectorTangoLBS,
-            engineEngine = englishEngine
+        kanaKanjiEngine.assignEmojiDictionary(
+            emojiTangoTrie, emojiYomiTrie, emojiTokenArray,
+            emojiSuccinctBitVectorLBSYomi, emojiSuccinctBitVectorIsLeafYomi,
+            emojiSuccinctBitVectorTokenArray, emojiSuccinctBitVectorTangoLBS
         )
+        kanaKanjiEngine.assignEmoticonDictionary(
+            emoticonTangoTrie, emoticonYomiTrie, emoticonTokenArray,
+            emoticonSuccinctBitVectorLBSYomi, emoticonSuccinctBitVectorIsLeafYomi,
+            emoticonSuccinctBitVectorTokenArray, emoticonSuccinctBitVectorTangoLBS
+        )
+        kanaKanjiEngine.assignSymbolDictionary(
+            symbolTangoTrie, symbolYomiTrie, symbolTokenArray,
+            symbolSuccinctBitVectorLBSYomi, symbolSuccinctBitVectorIsLeafYomi,
+            symbolSuccinctBitVectorTokenArray, symbolSuccinctBitVectorTangoLBS
+        )
+        kanaKanjiEngine.assignEnglishEngine(englishEngine)
         kanaKanjiEngine.setDictionaryBinaryReader(dictionaryBinaryReader)
+        kanaKanjiEngine.assignDictionaryAssetProvider(dictionaryAssetProvider)
+        kanaKanjiEngine.assignDictionarySourceResolver(dictionarySourceResolver)
 
         return kanaKanjiEngine
     }

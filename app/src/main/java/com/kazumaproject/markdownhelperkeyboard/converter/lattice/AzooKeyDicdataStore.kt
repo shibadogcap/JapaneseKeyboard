@@ -257,9 +257,9 @@ class AzooKeyLoudsBackedDicdataStore(
                 val adjusted = AzooKeyLatticeTypoPenalty.adjustedEntryOrNull(
                     entry = entry,
                     penaltyUsed = penaltyUsed,
-                    wordLength = entry.surface.length,
+                    wordLength = entry.reading.length,
                 ) ?: return
-                if (shouldRemove(adjusted.value, entry.surface.length)) return
+                if (shouldRemove(adjusted.value, entry.reading.length)) return
                 nodes += AzooKeyLatticeNode(
                     entry = adjusted,
                     startIndex = start,
@@ -270,20 +270,18 @@ class AzooKeyLoudsBackedDicdataStore(
             entries.values.forEach { appendEntry(it) }
 
             if (enableTypoCorrection && prefix.length > 2 && composingText != null) {
-                val typoReadings = AzooKeyTypoCorrectionGenerator.generateDirectTypoReadings(
+                val typoReadings = AzooKeyTypoCorrectionGenerator.collectTypoReadings(
                     composingText = composingText,
-                    range = AzooKeyTypoCorrectionGenerator.ProcessRange(
-                        leftIndex = start,
-                        rightIndexExclusive = start + prefix.length,
-                    ),
+                    surfaceStart = start,
+                    surfaceEndExclusive = start + prefix.length,
                 )
                 typoReadings.forEach { typo ->
                     loudsLookups.forEach { lookup ->
                         lookup.exactEntries(typo.katakana).forEach {
-                            appendEntry(it, typo.penalty, typo.katakana)
+                            appendEntry(it, typo.penalty.toInt(), typo.katakana)
                         }
                         lookup.commonPrefixEntries(typo.katakana).forEach {
-                            appendEntry(it, typo.penalty, typo.katakana)
+                            appendEntry(it, typo.penalty.toInt(), typo.katakana)
                         }
                     }
                 }

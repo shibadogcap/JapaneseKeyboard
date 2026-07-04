@@ -17,7 +17,7 @@ data class AzooKeyDictionaryEntry(
     val rightId: Int?,
     val mid: Int,
     val wordCost: Int,
-    val value: AzooKeyPValue = wordCost.toFloat(),
+    val value: AzooKeyPValue = -wordCost.toFloat(),
     val sourceKind: AzooKeyDictionarySourceKind,
     val legacyPosIndex: Int? = null,
     val metadata: Set<AzooKeyDictionaryMetadata> = emptySet(),

@@ -5,20 +5,10 @@ import org.junit.Test
 
 class CandidateRequestSearchWidthTest {
     @Test
-    fun effectiveSearchNBestTreatsPreferenceAsSearchWidthFloorForShortInput() {
-        assertEquals(24, request(input = "あずき", nBest = 4).effectiveSearchNBest)
-    }
-
-    @Test
-    fun effectiveSearchNBestExpandsForLongComposingText() {
-        assertEquals(48, request(input = "きょうはいいてん", nBest = 4).effectiveSearchNBest)
-        assertEquals(64, request(input = "きょうはいいてんきですねよろしく", nBest = 4).effectiveSearchNBest)
-    }
-
-    @Test
-    fun effectiveSearchNBestHonorsLargeUserPreferenceButCapsRunawaySearch() {
-        assertEquals(72, request(input = "あずき", nBest = 72).effectiveSearchNBest)
-        assertEquals(80, request(input = "きょうはいいてんきですねよろしく", nBest = 120).effectiveSearchNBest)
+    fun effectiveSearchNBestUsesUserPreferenceDirectly() {
+        assertEquals(4, request(input = "あずき", nBest = 4).effectiveSearchNBest)
+        assertEquals(10, request(input = "あずき", nBest = 10).effectiveSearchNBest)
+        assertEquals(40, request(input = "きょうはいいてんきですねよろしく", nBest = 40).effectiveSearchNBest)
     }
 
     private fun request(

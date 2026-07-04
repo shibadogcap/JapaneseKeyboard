@@ -41,7 +41,13 @@ class AzooKeyTypoCorrectionGeneratorTest {
             range = range,
             roman2Kana = com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.Identity,
         )
-        generator.setUnreachablePath("タイ")
+        while (true) {
+            val next = generator.next() ?: break
+            if (next.penalty == 0f && next.katakana == "タイ") {
+                generator.setUnreachablePath("タイ")
+                break
+            }
+        }
         val readings = buildList {
             while (true) {
                 add(generator.next() ?: break)

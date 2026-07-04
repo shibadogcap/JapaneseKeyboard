@@ -21,7 +21,7 @@ class AzooKeyDictionaryEntryIndexTest {
             limit = 10,
         )
 
-        assertEquals(listOf("🍺", "🍻"), result.map { it.surface })
+        assertEquals(listOf("🍻", "🍺"), result.map { it.surface })
     }
 
     @Test

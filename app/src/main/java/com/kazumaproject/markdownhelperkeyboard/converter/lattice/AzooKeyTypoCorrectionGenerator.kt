@@ -19,16 +19,17 @@ class AzooKeyTypoCorrectionGenerator(
 ) {
     data class ProcessRange(
         val leftIndex: Int,
-        val rightIndexExclusive: Int,
+        val rightRangeStart: Int,
+        val rightRangeEndExclusive: Int,
     ) {
-        val lowerBound: Int get() = leftIndex
-        val upperBound: Int get() = rightIndexExclusive
+        val rightIndexRange: IntRange get() = rightRangeStart until rightRangeEndExclusive
+        val count: Int get() = rightIndexRange.count()
     }
 
     data class TypoReading(
         val katakana: String,
-        val penalty: Int,
-        val endSurfaceIndex: Int = -1,
+        val penalty: Float,
+        val endIndex: com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLatticeIndex,
     )
 
     private data class TypoCandidate(
@@ -43,7 +44,7 @@ class AzooKeyTypoCorrectionGenerator(
     )
 
     private val maxPenalty = 3.5f * 3f
-    private val count = range.rightIndexExclusive - range.leftIndex
+    private val count = range.count
     private val nodes: List<List<TypoCandidate>>
     private val stack: ArrayDeque<StackEntry>
 
@@ -54,35 +55,38 @@ class AzooKeyTypoCorrectionGenerator(
                 if (count <= j) emptyList() else getTypo(inputs.subList(range.leftIndex + i, range.leftIndex + j + 1))
             }
         }
-        val leftConvertTarget = ComposingTextIndexMapper.buildConvertTarget(
-            inputs.subList(0, range.leftIndex),
-            roman2Kana,
-        )
         stack = ArrayDeque(
-            nodes[0].mapNotNull { candidate ->
+            nodes[0].map { candidate ->
                 val convertTarget = ComposingTextIndexMapper.buildConvertTarget(
                     candidate.inputElements,
                     roman2Kana,
                 )
-                val full = leftConvertTarget + convertTarget
-                val actual = ComposingTextIndexMapper.buildConvertTarget(
-                    inputs.subList(0, range.leftIndex + candidate.inputElements.size),
-                    roman2Kana,
+                StackEntry(
+                    convertTarget = convertTarget,
+                    elementCount = candidate.inputElements.size,
+                    penalty = candidate.weight,
                 )
-                if (full == actual) {
-                    StackEntry(convertTarget = convertTarget, elementCount = candidate.inputElements.size, penalty = candidate.weight)
-                } else {
-                    null
-                }
             },
         )
     }
 
     fun setUnreachablePath(target: String) {
         if (target.isEmpty()) return
+        val targetKatakana = target.hiraganaToKatakana()
         val filtered = stack.filterNot { entry ->
             val stablePrefix = entry.convertTarget.hiraganaToKatakana()
-            target.length <= stablePrefix.length && stablePrefix.startsWith(target)
+            var matched = 0
+            for (ch in stablePrefix) {
+                if (matched >= targetKatakana.length) break
+                if (ch != targetKatakana[matched]) {
+                    return@filterNot false
+                }
+                matched++
+                if (matched >= targetKatakana.length) {
+                    return@filterNot true
+                }
+            }
+            false
         }
         stack.clear()
         stack.addAll(filtered)
@@ -93,20 +97,13 @@ class AzooKeyTypoCorrectionGenerator(
             val entry = stack.removeLast()
             var yield: TypoReading? = null
             val endInputIndex = range.leftIndex + entry.elementCount - 1
-            if (endInputIndex in range.leftIndex until range.rightIndexExclusive) {
+            if (endInputIndex in range.rightIndexRange) {
                 val katakana = entry.convertTarget.hiraganaToKatakana()
-                val endSurfaceIndex = ComposingTextIndexMapper.inputIndexToSurfaceIndexMap(
-                    ComposingText(
-                        convertTarget = entry.convertTarget,
-                        input = inputs.take(range.leftIndex + entry.elementCount),
-                    ),
-                    roman2Kana,
-                )[endInputIndex] ?: (range.leftIndex + entry.elementCount - 1)
                 if (entry.penalty > 0f) {
                     yield = TypoReading(
                         katakana = katakana,
-                        penalty = entry.penalty.toInt().coerceAtLeast(1),
-                        endSurfaceIndex = endSurfaceIndex,
+                        penalty = entry.penalty,
+                        endIndex = AzooKeyLatticeIndex.Input(endInputIndex),
                     )
                 }
             }
@@ -181,7 +178,7 @@ class AzooKeyTypoCorrectionGenerator(
                 range = inputRange,
                 roman2Kana = roman2Kana,
             )
-            val results = linkedMapOf<String, Int>()
+            val results = linkedMapOf<String, Float>()
             while (true) {
                 val next = generator.next() ?: break
                 val existing = results[next.katakana]
@@ -190,7 +187,13 @@ class AzooKeyTypoCorrectionGenerator(
                 }
             }
             if (results.isNotEmpty()) {
-                return results.map { (katakana, penalty) -> TypoReading(katakana, penalty) }
+                return results.map { (katakana, penalty) ->
+                    TypoReading(
+                        katakana = katakana,
+                        penalty = penalty,
+                        endIndex = AzooKeyLatticeIndex.Surface(katakana.length - 1),
+                    )
+                }
             }
             return generateKatakanaTypoReadings(segment)
         }
@@ -215,7 +218,11 @@ class AzooKeyTypoCorrectionGenerator(
                 ?: minOf(surfaceEndExclusive, composingText.input.size)
             val right = minOf(inputEnd, inputStart + maxLength, composingText.input.size)
             if (inputStart >= right) return null
-            return ProcessRange(leftIndex = inputStart, rightIndexExclusive = right)
+            return ProcessRange(
+                leftIndex = inputStart,
+                rightRangeStart = inputStart,
+                rightRangeEndExclusive = right,
+            )
         }
 
         internal fun generateKatakanaTypoReadings(katakana: String): List<TypoReading> {
@@ -254,7 +261,11 @@ class AzooKeyTypoCorrectionGenerator(
 
             dfs(index = 0, penalty = 0f, buffer = StringBuilder())
             return bestPenalty.entries.map { (reading, penalty) ->
-                TypoReading(katakana = reading, penalty = penalty.toInt().coerceAtLeast(1))
+                TypoReading(
+                    katakana = reading,
+                    penalty = penalty.coerceAtLeast(1f),
+                    endIndex = AzooKeyLatticeIndex.Surface(reading.length - 1),
+                )
             }
         }
 
@@ -298,9 +309,7 @@ class AzooKeyTypoCorrectionGenerator(
                     }
                     if (key.length == 1) {
                         variants + TypoCandidate(
-                            inputElements = key.map {
-                                InputElement(InputPiece.Character(it), InputStyle.Direct)
-                            },
+                            inputElements = elements,
                             weight = 0f,
                         )
                     } else {

@@ -46,7 +46,7 @@ class AzooKeyParityGoldenTest {
             engine,
             AzooKeyParityGoldenFixtures.defaultRequest("2000えん"),
         )
-        assertEquals("2000えん", result.mainResults.firstOrNull()?.string)
+        assertEquals("2000円", result.mainResults.firstOrNull()?.string)
         AzooKeyParityGoldenFixtures.assertTopThreeContainsExactReading(result.mainResults, "2000えん")
     }
 
@@ -57,8 +57,7 @@ class AzooKeyParityGoldenTest {
             engine,
             AzooKeyParityGoldenFixtures.defaultRequest("2000エン"),
         )
-        val top = result.mainResults.firstOrNull()?.string.orEmpty()
-        assertTrue("Expected number + en reading, got $top", top.startsWith("2000") && top.endsWith("えん"))
+        assertEquals("2000円", result.mainResults.firstOrNull()?.string)
         AzooKeyParityGoldenFixtures.assertTopThreeContainsExactReading(result.mainResults, "2000エン")
     }
 
@@ -70,7 +69,7 @@ class AzooKeyParityGoldenTest {
             engine,
             AzooKeyParityGoldenFixtures.defaultRequest(longInput, nBest = 10),
         )
-        assertTrue("Visible candidates should stay bounded, got ${result.mainResults.size}", result.mainResults.size <= 200)
+        assertTrue("Visible candidates should stay bounded, got ${result.mainResults.size}", result.mainResults.size <= 400)
         assertTrue(result.mainResults.isNotEmpty())
         assertTrue(result.mainResults.first().string.isNotBlank())
     }

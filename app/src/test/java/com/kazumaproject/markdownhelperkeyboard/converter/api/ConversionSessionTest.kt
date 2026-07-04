@@ -10,15 +10,23 @@ import org.junit.Test
 
 class ConversionSessionTest {
     @Test
-    fun recordConversionTracksComposingAndClearsCompletedCandidate() {
+    fun recordConversionTracksComposingWithoutClearingCompletedCandidate() {
         val session = ConversionSession()
-        session.completedCandidate = committed("前回")
+        session.setCompletedData(committed("前回"))
         val composing = ComposingText.fromConvertTarget("しかい")
 
         session.recordConversion(composing, bunsetsuResult = null)
 
         assertEquals(composing, session.previousComposingText)
         assertEquals("しかい", session.lastConvertTarget)
+        assertEquals(committed("前回"), session.completedCandidate)
+    }
+
+    @Test
+    fun consumeCompletedDataClearsPartialCommitSeed() {
+        val session = ConversionSession()
+        session.setCompletedData(committed("今日"))
+        session.consumeCompletedData()
         assertNull(session.completedCandidate)
     }
 
@@ -95,6 +103,52 @@ class ConversionSessionTest {
         assertNull(session.getZenzRerank("k"))
         assertNull(session.latticeIncrementalState.normalizedInput)
         assertTrue(session.latticeIncrementalState.latticeNodes.isEmpty())
+    }
+
+    @Test
+    fun leftSideContextTracksCommitsAndClearsOnReset() {
+        val session = ConversionSession()
+        assertEquals("", session.leftSideContext)
+
+        // First commit
+        session.recordCommit(
+            surface = "こんにちは",
+            tapped = Candidate(
+                string = "こんにちは",
+                type = CandidateType.NBEST,
+                length = 5.toUByte(),
+                score = 10,
+                value = -10f,
+                yomi = "こんにちは",
+            ),
+        )
+        assertEquals("こんにちは", session.leftSideContext)
+
+        // Second commit
+        session.recordCommit(
+            surface = "世界",
+            tapped = Candidate(
+                string = "世界",
+                type = CandidateType.NBEST,
+                length = 2.toUByte(),
+                score = 10,
+                value = -10f,
+                yomi = "せかい",
+            ),
+        )
+        assertEquals("こんにちは世界", session.leftSideContext)
+
+        // Clear composition drops context
+        session.stopComposition(keepCommitted = false)
+        assertEquals("", session.leftSideContext)
+
+        // Re-commit
+        session.recordCommit(surface = "テスト", fallbackReading = "てすと")
+        assertEquals("テスト", session.leftSideContext)
+
+        // Reset completely drops context
+        session.reset()
+        assertEquals("", session.leftSideContext)
     }
 
     private fun committed(string: String): Candidate {

@@ -1,9 +1,32 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import java.util.concurrent.ConcurrentHashMap
+
 class AzooKeyDictionaryShardLoader(
     private val readBytes: (path: String) -> ByteArray?,
     private val loudsDirectory: String = "louds",
 ) {
+    private val rawBytesCache = ConcurrentHashMap<String, ByteArray>()
+    private val textShardCache = ConcurrentHashMap<String, List<AzooKeyDictionaryEntry>>()
+    private val binaryPayloadCache = ConcurrentHashMap<String, List<AzooKeyDictionaryEntry>>()
+
+    private fun readBytesCached(path: String): ByteArray? {
+        val cached = rawBytesCache[path]
+        if (cached != null) return cached
+        val bytes = readBytes(path) ?: return null
+        rawBytesCache[path] = bytes
+        return bytes
+    }
+
+    private fun ByteArray.readUInt32LE(offset: Int): Int {
+        if (offset + 4 > size) {
+            return 0
+        }
+        return (this[offset].toInt() and 0xFF) or
+                ((this[offset + 1].toInt() and 0xFF) shl 8) or
+                ((this[offset + 2].toInt() and 0xFF) shl 16) or
+                ((this[offset + 3].toInt() and 0xFF) shl 24)
+    }
     fun loadLoudstxt3Entries(
         identifier: String,
         shardIndices: IntRange,
@@ -29,16 +52,41 @@ class AzooKeyDictionaryShardLoader(
             AzooKeyDictionaryShardName.rawLoudstxt3FileName(identifier, shardIndex),
         ) ?: return emptyList()
         return if (looksLikeBinaryLoudstxt3(bytes)) {
-            AzooKeyLoudstxt3BinaryParser.parseFile(
-                bytes = bytes,
-                sourceKind = sourceKind,
-                indices = indices,
-            )
+            val count = if (bytes.size >= 2) {
+                (bytes[0].toInt() and 0xFF) or ((bytes[1].toInt() and 0xFF) shl 8)
+            } else 0
+            if (count == 0) return emptyList()
+
+            val selectedIndices = indices ?: (0 until count).toSet()
+            selectedIndices.flatMap { index ->
+                if (index !in 0 until count) return@flatMap emptyList()
+                val cacheKey = "$identifier/$shardIndex/$index/$sourceKind"
+                binaryPayloadCache.getOrPut(cacheKey) {
+                    val start = bytes.readUInt32LE(2 + index * 4)
+                    val end = if (index == count - 1) {
+                        bytes.size
+                    } else {
+                        bytes.readUInt32LE(2 + (index + 1) * 4)
+                    }
+                    val headerSize = 2 + count * 4
+                    if (start !in headerSize..bytes.size || end !in start..bytes.size) {
+                        emptyList()
+                    } else {
+                        AzooKeyLoudstxt3BinaryParser.parsePayload(
+                            bytes = bytes.copyOfRange(start, end),
+                            sourceKind = sourceKind,
+                        )
+                    }
+                }
+            }
         } else {
-            val entries = AzooKeyDicdataElementTextParser.parseLines(
-                text = bytes.toString(Charsets.UTF_8),
-                sourceKind = sourceKind,
-            )
+            val cacheKey = "$identifier/$shardIndex/$sourceKind"
+            val entries = textShardCache.getOrPut(cacheKey) {
+                AzooKeyDicdataElementTextParser.parseLines(
+                    text = bytes.toString(Charsets.UTF_8),
+                    sourceKind = sourceKind,
+                )
+            }
             if (indices == null) entries else entries.filterIndexed { index, _ -> index in indices }
         }
     }
@@ -58,14 +106,14 @@ class AzooKeyDictionaryShardLoader(
     }
 
     fun loadCharIdMap(): AzooKeyCharIdMap? {
-        val bytes = readBytes("$loudsDirectory/charID.chid") ?: return null
+        val bytes = readBytesCached("$loudsDirectory/charID.chid") ?: return null
         return AzooKeyCharIdMap.parse(bytes.toString(Charsets.UTF_8))
     }
 
     fun loadIdentifierManifest(
         fileName: String = AzooKeyLoudsIdentifierManifest.DefaultFileName,
     ): Set<String> {
-        val bytes = readBytes("$loudsDirectory/$fileName") ?: return emptySet()
+        val bytes = readBytesCached("$loudsDirectory/$fileName") ?: return emptySet()
         return AzooKeyLoudsIdentifierManifest.parse(bytes.toString(Charsets.UTF_8))
     }
 
@@ -122,7 +170,7 @@ class AzooKeyDictionaryShardLoader(
     private fun readFirst(vararg fileNames: String): ByteArray? {
         return fileNames
             .distinct()
-            .firstNotNullOfOrNull { fileName -> readBytes("$loudsDirectory/$fileName") }
+            .firstNotNullOfOrNull { fileName -> readBytesCached("$loudsDirectory/$fileName") }
     }
 
     private fun looksLikeBinaryLoudstxt3(bytes: ByteArray): Boolean {

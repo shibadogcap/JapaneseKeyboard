@@ -36,6 +36,27 @@ class AzooKeyTemporalLearningMemoryTrie {
         return true
     }
 
+    fun movingTowardPrefixSearch(
+        charIds: List<Byte>,
+        depth: IntRange = 0..Int.MAX_VALUE,
+    ): Pair<Map<Int, List<AzooKeyDictionaryEntry>>, Int> {
+        var nodeIndex = 0
+        var availableMaxIndex = -1
+        val depthToDataIndices = mutableMapOf<Int, List<Int>>()
+        for ((offset, charId) in charIds.withIndex()) {
+            val nextIndex = nodes[nodeIndex].children[charId] ?: break
+            availableMaxIndex = offset
+            nodeIndex = nextIndex
+            if (offset in depth) {
+                depthToDataIndices[offset] = nodes[nodeIndex].dataIndices.toList()
+            }
+        }
+        val dicdata = depthToDataIndices.mapValues { (_, indices) ->
+            indices.map { entries[it] }
+        }
+        return dicdata to availableMaxIndex
+    }
+
     fun prefixMatch(charIds: List<Byte>): List<AzooKeyDictionaryEntry> {
         var nodeIndex = 0
         for (charId in charIds) {
@@ -67,11 +88,11 @@ class AzooKeyTemporalLearningMemoryTrie {
         get() = nodes.size
 
     fun rootChildrenSorted(): List<Pair<Byte, Int>> {
-        return nodes[0].children.entries.sortedBy { it.key }.map { it.key to it.value }
+        return nodes[0].children.entries.sortedBy { it.key.toInt() and 0xFF }.map { it.key to it.value }
     }
 
     fun childrenSorted(nodeIndex: Int): List<Pair<Byte, Int>> {
-        return nodes[nodeIndex].children.entries.sortedBy { it.key }.map { it.key to it.value }
+        return nodes[nodeIndex].children.entries.sortedBy { it.key.toInt() and 0xFF }.map { it.key to it.value }
     }
 
     fun rubyGroupAtNode(nodeIndex: Int): AzooKeyLoudstxt3BinaryBuilder.RubyGroup {

@@ -11,6 +11,9 @@ object CandidateType {
     const val PART_OF_LETTERS: Byte = 2
     const val HIRAGANA: Byte = 3
     const val KATAKANA: Byte = 4
+    const val EMOJI_LEGACY: Byte = 11
+    const val EMOTICON_LEGACY: Byte = 12
+    const val SYMBOL_LEGACY: Byte = 13
     const val USER_DICTIONARY: Byte = 28
     const val ENGLISH: Byte = 29
     const val ZENZ: Byte = 33
@@ -31,6 +34,7 @@ object CandidateType {
     const val POST_COMMIT_PREDICTION: Byte = 51
     const val ZERO_HINT_PREDICTION: Byte = 52
     const val EMOJI_SUFFIX: Byte = 53
+    const val HALF_WIDTH_KATAKANA_SPECIAL: Byte = 54
 
     fun laneOf(candidate: Candidate): CandidateLane {
         return when (candidate.type) {
@@ -54,7 +58,11 @@ object CandidateType {
             EMAIL_ADDRESS_SPECIAL,
             SYMBOL_SPECIAL,
             VERSION_SPECIAL,
-            EMOJI_SUFFIX -> CandidateLane.Special
+            EMOJI_SUFFIX,
+            HALF_WIDTH_KATAKANA_SPECIAL,
+            EMOJI_LEGACY,
+            EMOTICON_LEGACY,
+            SYMBOL_LEGACY -> CandidateLane.Special
             else -> CandidateLane.System
         }
     }

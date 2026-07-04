@@ -27,14 +27,14 @@ data class ZenzRerankRequest(
 
 data class ZenzPredictiveRequest(
     val insertReading: String,
-    val dictionaryCandidates: List<String>,
+    val dictionaryCandidates: List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate>,
     val leftContext: String,
     val nBest: Int,
     val config: ZenzConversionConfig,
     val cursorPosition: Int? = null,
 ) {
     val topDictionaryCandidate: String
-        get() = dictionaryCandidates.firstOrNull().orEmpty()
+        get() = dictionaryCandidates.firstOrNull()?.string.orEmpty()
 }
 
 data class ZenzGenerationRequest(

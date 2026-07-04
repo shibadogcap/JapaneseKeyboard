@@ -29,7 +29,7 @@ class AzooKeyLoudsDictionaryLookup(
             charIdMap.encode(reading.hiraganaToKatakana()) ?: return emptyList(),
         )
             ?: return emptyList()
-        return entriesAtNodeIndices(listOf(nodeIndex))
+        return loadEntriesAtNodeIndices(listOf(nodeIndex))
     }
 
     fun prefixEntries(reading: String): List<AzooKeyDictionaryEntry> {
@@ -50,20 +50,27 @@ class AzooKeyLoudsDictionaryLookup(
             maxDepth = maxDepth,
             maxCount = maxCount,
         )
-        return entriesAtNodeIndices(nodeIndices)
+        return loadEntriesAtNodeIndices(nodeIndices)
     }
 
     override fun commonPrefixEntries(reading: String): List<AzooKeyDictionaryEntry> {
         val nodeIndices = loudsTrie.commonPrefixNodeIndices(
             charIds = charIdMap.encode(reading.hiraganaToKatakana()) ?: return emptyList()
         )
-        return entriesAtNodeIndices(nodeIndices)
+        return loadEntriesAtNodeIndices(nodeIndices)
     }
 
     fun typoSearcher(): AzooKeyLoudsTypoSearcher =
         AzooKeyLoudsTrieTypoSearcher(loudsTrie, charIdMap)
 
-    private fun entriesAtNodeIndices(nodeIndices: List<Int>): List<AzooKeyDictionaryEntry> {
+    fun entriesAtNodeIndices(nodeIndices: Collection<Int>): List<AzooKeyDictionaryEntry> {
+        return loadEntriesAtNodeIndices(nodeIndices.toList())
+    }
+
+    fun trieTypoSearcher(): AzooKeyLoudsTrieTypoSearcher =
+        AzooKeyLoudsTrieTypoSearcher(loudsTrie, charIdMap)
+
+    private fun loadEntriesAtNodeIndices(nodeIndices: List<Int>): List<AzooKeyDictionaryEntry> {
         if (nodeIndices.isEmpty()) return emptyList()
         return nodeIndices
             .groupBy { it shr shardShift }

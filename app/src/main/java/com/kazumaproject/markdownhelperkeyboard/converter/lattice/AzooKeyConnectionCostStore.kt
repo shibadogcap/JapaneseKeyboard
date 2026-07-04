@@ -15,14 +15,18 @@ class AzooKeyConnectionCostStore private constructor(
     private val mmValues: FloatArray? = morphologicalValues
 
     fun getConnectionCost(formerRightId: Int, latterLeftId: Int): AzooKeyPValue {
+        return getCCLatter(formerRightId).getOrNull(latterLeftId)
+            ?: AzooKeyConnectionCostBinaryParser.DEFAULT_UNKNOWN_COST
+    }
+
+    fun getCCLatter(formerRightId: Int): FloatArray {
         if (formerRightId !in 0 until AzooKeyConnectionCostBinaryParser.CID_COUNT) {
-            return AzooKeyConnectionCostBinaryParser.DEFAULT_UNKNOWN_COST
+            return DEFAULT_CC_LINE
         }
         if (!ccParsed[formerRightId]) {
             loadConnectionLine(formerRightId)
         }
-        return ccLines[formerRightId]?.getOrNull(latterLeftId)
-            ?: AzooKeyConnectionCostBinaryParser.DEFAULT_UNKNOWN_COST
+        return ccLines[formerRightId] ?: DEFAULT_CC_LINE
     }
 
     fun getMorphologicalCost(formerMid: Int, latterMid: Int): AzooKeyPValue {
@@ -51,6 +55,10 @@ class AzooKeyConnectionCostStore private constructor(
         const val ASSET_CB_DIRECTORY: String = "azookey/cb"
         const val ASSET_MM_FILE: String = "azookey/mm.binary"
         const val MID_GENERAL: Int = 500
+
+        private val DEFAULT_CC_LINE: FloatArray = FloatArray(AzooKeyConnectionCostBinaryParser.CID_COUNT) {
+            AzooKeyConnectionCostBinaryParser.DEFAULT_UNKNOWN_COST
+        }
 
         fun fromDirectory(root: java.io.File): AzooKeyConnectionCostStore? {
             val cbDir = java.io.File(root, "cb")

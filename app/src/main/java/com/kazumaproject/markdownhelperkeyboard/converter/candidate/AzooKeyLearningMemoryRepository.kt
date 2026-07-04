@@ -2,8 +2,11 @@ package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.learning.database.LearnEntity
 import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Room + LOUDS memory の二層（AzooKey LearningManager 相当）。
@@ -38,12 +41,17 @@ class AzooKeyLearningMemoryRepository @Inject constructor(
             rightId = rightId,
         )
         val entry = AzooKeyLearningMemoryValue.entryFromLearnEntity(entity)
+        learningMemoryStore.memorizeSession(entry)
         try {
             learningMemoryStore.commitPersistedEntry(entry) {
                 learnRepository.upsertLearnedData(entity)
             }
         } catch (_: Exception) {
-            rebuildLoudsFromRoom()
+            try {
+                rebuildLoudsFromRoom()
+            } catch (rebuildError: Exception) {
+                // Ignore
+            }
         }
     }
 
@@ -67,14 +75,56 @@ class AzooKeyLearningMemoryRepository @Inject constructor(
         candidate: Candidate,
         position: Int,
     ) {
-        if (reading.isBlank()) return
-        commitWord(
-            reading = reading,
-            surface = candidate.string,
-            leftId = candidate.leftId,
-            rightId = candidate.rightId,
-            initialScore = tappedCandidateScore(candidate, position),
-        )
+        if (reading.isBlank() || !candidate.isLearningTarget) return
+        val score = tappedCandidateScore(candidate, position)
+
+        // 1) 構成要素 (形態素) の個別学習 (unigram)
+        for (item in candidate.data) {
+            commitWord(
+                reading = item.reading,
+                surface = item.surface,
+                leftId = item.leftId?.toShort(),
+                rightId = item.rightId?.toShort(),
+                initialScore = score,
+            )
+        }
+
+        // 2) 文節境界での bigram 学習（AzooKey LearningManager 相当）
+        val data = candidate.data
+        for (i in 0 until data.size - 1) {
+            val prevRcid = data[i].rightId ?: continue
+            val nextLcid = data[i + 1].leftId ?: continue
+            if (com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyDicdataStoreUtils.isClause(
+                    prevRcid,
+                    nextLcid,
+                )
+            ) {
+                commitWord(
+                    reading = data[i].reading + data[i + 1].reading,
+                    surface = data[i].surface + data[i + 1].surface,
+                    initialScore = 3000,
+                )
+            }
+        }
+
+        // 3) フレーズ全体の学習
+        if (data.isNotEmpty()) {
+            commitWord(
+                reading = data.joinToString(separator = "") { it.reading },
+                surface = candidate.string,
+                leftId = data.first().leftId?.toShort(),
+                rightId = data.last().rightId?.toShort(),
+                initialScore = score,
+            )
+        } else {
+            commitWord(
+                reading = reading,
+                surface = candidate.string,
+                leftId = candidate.leftId,
+                rightId = candidate.rightId,
+                initialScore = score,
+            )
+        }
     }
 
     /** 確定語同士のつながり学習（AzooKeyスタイル：隣接文節結合unigram学習）。 */
@@ -82,12 +132,21 @@ class AzooKeyLearningMemoryRepository @Inject constructor(
         previousCandidate: Candidate,
         currentCandidate: Candidate,
     ) {
-        val prevReading = previousCandidate.yomi
-        val currReading = currentCandidate.yomi
-        if (prevReading.isNullOrBlank() || currReading.isNullOrBlank()) return
+        if (!previousCandidate.isLearningTarget || !currentCandidate.isLearningTarget) return
+        val prevLast = previousCandidate.data.lastOrNull()
+        val currFirst = currentCandidate.data.firstOrNull()
+        val prevReading = prevLast?.reading
+            ?: previousCandidate.yomi?.takeIf { it.isNotBlank() }
+            ?: return
+        val currReading = currFirst?.reading
+            ?: currentCandidate.yomi?.takeIf { it.isNotBlank() }
+            ?: return
+        val prevSurface = prevLast?.surface ?: previousCandidate.string
+        val currSurface = currFirst?.surface ?: currentCandidate.string
+
         commitWord(
             reading = prevReading + currReading,
-            surface = previousCandidate.string + currentCandidate.string,
+            surface = prevSurface + currSurface,
             initialScore = 3000,
         )
     }
@@ -108,7 +167,19 @@ class AzooKeyLearningMemoryRepository @Inject constructor(
     }
 
     private suspend fun loadAllEntriesFromRoom(): List<AzooKeyDictionaryEntry> {
-        return learnRepository.allSuspend()
-            .map(AzooKeyLearningMemoryValue::entryFromLearnEntity)
+        val today = AzooKeyLearningMemoryDecay.todayEpochDay()
+        return AzooKeyLearningMemoryDecay.trimToMaxCount(
+            learnRepository.allSuspend()
+                .mapNotNull { entity ->
+                    val decayed = AzooKeyLearningMemoryDecay.applyDecayToScore(
+                        score = entity.score.toInt(),
+                        lastUpdatedDay = today,
+                        lastUsedDay = today,
+                    ) ?: return@mapNotNull null
+                    AzooKeyLearningMemoryValue.entryFromLearnEntity(
+                        entity.copy(score = decayed.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()),
+                    )
+                },
+        )
     }
 }

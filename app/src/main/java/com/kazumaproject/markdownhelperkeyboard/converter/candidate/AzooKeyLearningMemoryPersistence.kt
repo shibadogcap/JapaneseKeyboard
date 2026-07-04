@@ -37,6 +37,8 @@ object AzooKeyLearningMemoryPersistence {
             directory.mkdirs()
             return false
         }
+        directory.mkdirs()
+        File(directory, AzooKeyLearningMemoryDecay.PAUSE_MARKER_FILE).writeText("")
         deleteMemoryShards(directory)
         val export = AzooKeyLoudsBinaryBuilder.exportFromTrie(trie)
         writeLoudsExport(directory, export)

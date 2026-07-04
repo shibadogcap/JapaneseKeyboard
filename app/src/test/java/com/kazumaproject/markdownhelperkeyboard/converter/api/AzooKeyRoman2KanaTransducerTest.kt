@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.api
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AzooKeyRoman2KanaTransducerTest {
@@ -33,5 +34,11 @@ class AzooKeyRoman2KanaTransducerTest {
         val text = ComposingText.fromConvertTarget("か")
             .insertRoman2KanaAtCursor("shikai", transducer)
         assertEquals("かしかい", text.convertTarget)
+    }
+
+    @Test
+    fun possibleNextsMatchesInputTableSemantics() {
+        assertTrue(transducer.possibleNexts("k").contains("カ"))
+        assertTrue(transducer.possibleNexts("s").contains("シ"))
     }
 }

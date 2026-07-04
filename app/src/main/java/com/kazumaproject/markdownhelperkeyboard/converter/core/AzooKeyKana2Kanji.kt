@@ -186,17 +186,6 @@ class AzooKeyKana2Kanji(
         needTypoCorrection: Boolean,
         useMemory: Boolean,
     ): Pair<AzooKeyMutableLatticeNode, AzooKeyLattice> {
-        // Swift も append は kana2lattice_changed だが、LOUDS movingTowardPrefixSearch 未移植の間は
-        // surface-only 格子で suffix lookup だけでは候補が欠落するため全量再構築する。
-        if (counts.deletedInput == 0 && counts.deletedSurface == 0) {
-            return kana2latticeAll(
-                inputData = inputData,
-                nBest = nBest,
-                needTypoCorrection = needTypoCorrection,
-                useMemory = useMemory,
-            )
-        }
-
         val inputCount = inputData.input.size
         val surfaceCount = inputData.convertTarget.length
         val commonInputCount = previousResult.first.input.size - counts.deletedInput

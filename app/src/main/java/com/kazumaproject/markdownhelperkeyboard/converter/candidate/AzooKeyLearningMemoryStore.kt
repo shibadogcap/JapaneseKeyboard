@@ -92,17 +92,17 @@ class AzooKeyLearningMemoryStore @Inject constructor(
     ): List<AzooKeyDictionaryEntry> {
         val charIdMap = assetProvider.charIdMap ?: return emptyList()
         val charIds = charIdMap.encode(reading) ?: return emptyList()
-        return commitMutex.withLock {
-            ensureLoudsLoadedWhileLocked(seedEntries, charIdMap)
-            val session = sessionTrie.prefixMatch(charIds.map { it.toByte() })
-            val louds = loudsSearcher
-                ?.prefixEntries(reading, maxDepth = maxPrefixDepth, maxCount = limit)
-                ?: emptyList()
-            (session + louds)
-                .distinctBy { it.reading to it.surface }
-                .sortedByDescending { it.value }
-                .take(limit)
+        ensureLoudsLoaded(seedEntries)
+        val session = synchronized(sessionTrie) {
+            sessionTrie.prefixMatch(charIds.map { it.toByte() })
         }
+        val louds = loudsSearcher
+            ?.prefixEntries(reading, maxDepth = maxPrefixDepth, maxCount = limit)
+            ?: emptyList()
+        return (session + louds)
+            .distinctBy { it.reading to it.surface }
+            .sortedByDescending { it.value }
+            .take(limit)
     }
 
     suspend fun persistSessionAndRoomEntries(
@@ -120,9 +120,16 @@ class AzooKeyLearningMemoryStore @Inject constructor(
         diskTrie = AzooKeyTemporalLearningMemoryTrie()
     }
 
+    fun memorizeSession(entry: AzooKeyDictionaryEntry) {
+        val charIdMap = assetProvider.charIdMap ?: return
+        memorizeSessionLocked(entry, charIdMap)
+    }
+
     private fun memorizeSessionLocked(entry: AzooKeyDictionaryEntry, charIdMap: AzooKeyCharIdMap) {
         val charIds = charIdMap.encode(entry.reading)?.map { it.toByte() } ?: return
-        sessionTrie.memorize(entry, charIds)
+        synchronized(sessionTrie) {
+            sessionTrie.memorize(entry, charIds)
+        }
     }
 
     private fun persistDiskEntriesLocked(

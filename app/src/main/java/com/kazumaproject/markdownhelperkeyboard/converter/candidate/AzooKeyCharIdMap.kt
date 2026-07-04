@@ -18,7 +18,13 @@ class AzooKeyCharIdMap private constructor(
         return text.hiraganaToKatakana().map { char -> charToId[char] ?: return null }
     }
 
+    /** Swift [DicdataStore.character2charId](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当（未知文字は 255）。 */
+    fun encodeAllowingUnknown(text: String): List<Int> {
+        return text.hiraganaToKatakana().map { char -> charToId[char] ?: UNKNOWN_CHAR_ID }
+    }
+
     companion object {
+        const val UNKNOWN_CHAR_ID: Int = 255
         fun parse(text: String): AzooKeyCharIdMap {
             val chars = text.toList()
             return AzooKeyCharIdMap(

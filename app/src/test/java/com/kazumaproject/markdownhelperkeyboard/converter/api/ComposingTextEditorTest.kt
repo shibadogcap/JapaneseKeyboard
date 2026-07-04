@@ -1,6 +1,8 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.api
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ComposingTextEditorTest {
@@ -54,5 +56,46 @@ class ComposingTextEditorTest {
             .prefixToCursorPosition()
         assertEquals("しか", text.convertTarget)
         assertEquals(2, text.convertTargetCursorPosition)
+    }
+
+    @Test
+    fun prefixCompleteCompositeAppliesLeftBeforeRight() {
+        val transducer = AzooKeyRoman2KanaTransducer.fromMap(
+            mapOf("ka" to ("か" to 2), "n" to ("ん" to 1)),
+        )
+        val text = ComposingText.fromConvertTarget("")
+            .insertRoman2KanaAtCursor("kan", transducer)
+        val leftFirst = text.prefixComplete(
+            ComposingCount.Composite(
+                left = ComposingCount.SurfaceCount(1),
+                right = ComposingCount.InputCount(1),
+            ),
+            transducer,
+        )
+        val rightFirst = text.prefixComplete(
+            ComposingCount.Composite(
+                left = ComposingCount.InputCount(1),
+                right = ComposingCount.SurfaceCount(1),
+            ),
+            transducer,
+        )
+        assertEquals("", leftFirst.convertTarget)
+        assertNotEquals(leftFirst.convertTarget, rightFirst.convertTarget)
+    }
+
+    @Test
+    fun deleteForwardUsesBackwardSemantics() {
+        val transducer = AzooKeyRoman2KanaTransducer.fromMap(
+            mapOf(
+                "ka" to ("か" to 2),
+                "n" to ("ん" to 1),
+                "su" to ("す" to 2),
+            ),
+        )
+        var text = ComposingText.fromConvertTarget("")
+        text = text.insertRoman2KanaAtCursor("kansu", transducer)
+        assertEquals("かんす", text.convertTarget)
+        text = text.moveCursor(-2).deleteForwardFromCursor(1, transducer)
+        assertEquals("かす", text.convertTarget)
     }
 }

@@ -361,12 +361,15 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         val dicCandidates = latticeResult.second[
             AzooKeyLatticeDualIndexMap.DualIndex.BothIndex(inputIdx = 0, surfaceIdx = 0),
         ].let { array ->
-            (array.inputIndexedNodes + array.surfaceIndexedNodes).map { node ->
-                val surfaceRange = node.range as AzooKeyLatticeRange.Surface
+            (array.inputIndexedNodes + array.surfaceIndexedNodes).mapNotNull { node ->
+                val length = when (val range = node.range) {
+                    is AzooKeyLatticeRange.Surface -> (range.to - range.from).toUByte()
+                    is AzooKeyLatticeRange.Input -> node.entry.reading.length.toUByte()
+                }
                 Candidate(
                     string = node.entry.surface,
                     type = CandidateType.PART_OF_LETTERS,
-                    length = (surfaceRange.to - surfaceRange.from).toUByte(),
+                    length = length,
                     score = node.entry.value.toInt(),
                     value = node.entry.value,
                     yomi = node.entry.reading,

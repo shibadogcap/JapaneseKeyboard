@@ -1,5 +1,6 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 data class CandidateRequest(
     val input: String,
     val mode: CandidateRequestMode,
@@ -22,6 +23,15 @@ data class CandidateRequest(
     val isCandidateSelectionActive: Boolean = false,
     val isConverting: Boolean = false,
     val isDirectInputMode: Boolean = false,
+    val completedCandidate: Candidate? = null,
+    /** 前回変換時の入力文字列（4 経路分岐用）。null の場合は新規構築（all-path）。 */
+    val previousInput: String? = null,
+    /** 前回変換時の lattice ノード（4 経路分岐の再利用用）。 */
+    val previousLatticeNodes: List<*>? = null,
+    /** 現在の composing（Roman2Kana / dual-index lattice 用）。 */
+    val composingText: ComposingText? = null,
+    /** 前回変換時の composing（afterComplete 用）。 */
+    val previousComposingText: ComposingText? = null,
 ) {
     private val runtimePolicy: AzooKeyRuntimeConversionPolicy
         get() = AzooKeyRuntimeConversionPolicyResolver.resolve(
@@ -79,18 +89,9 @@ data class CandidateRequest(
 
     /**
      * AzooKey's N_best is a lattice search width, not a visible candidate cap.
-     * Long composing text needs a wider lattice to keep clause and word
-     * candidates from disappearing.
      */
     val effectiveSearchNBest: Int
-        get() {
-            val minimum = when {
-                input.length >= 16 -> 64
-                input.length >= 8 -> 48
-                else -> 24
-            }
-            return nBest.coerceAtLeast(minimum).coerceAtMost(80)
-        }
+        get() = nBest.coerceAtLeast(1)
 
     fun toAzooKeyStyleOptions(): AzooKeyStyleConvertRequestOptions {
         return AzooKeyStyleConvertRequestOptions(

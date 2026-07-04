@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLoudsTrieTypoSearcher
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyLoudsTypoSearcher
 
 class AzooKeyLoudsDictionaryRegistry(
@@ -67,6 +68,18 @@ class AzooKeyLoudsDictionaryRegistry(
             maxDepth = maxDepth,
             maxCount = maxCount,
         ) ?: emptyList()
+    }
+
+    fun entriesForIdentifier(identifier: String, nodeIndices: Collection<Int>): List<AzooKeyDictionaryEntry> {
+        return lookupByIdentifier(identifier)?.entriesAtNodeIndices(nodeIndices).orEmpty()
+    }
+
+    fun trieTypoSearcherForIdentifier(identifier: String): AzooKeyLoudsTrieTypoSearcher? {
+        return lookupByIdentifier(identifier)?.trieTypoSearcher()
+    }
+
+    fun charIdMap(): AzooKeyCharIdMap? {
+        return identifiers.firstNotNullOfOrNull { lookupByIdentifier(it)?.trieTypoSearcher()?.charIdMap }
     }
 
     fun exactEntriesForIdentifier(identifier: String, reading: String): List<AzooKeyDictionaryEntry> {

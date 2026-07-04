@@ -81,9 +81,9 @@ object KanaFlickLayout {
         ),
         KeyGroup.YA to mapOf(
             FlickDir.CENTER to 'や',
-            FlickDir.LEFT to '（',
+            FlickDir.LEFT to '「',
             FlickDir.UP to 'ゆ',
-            FlickDir.RIGHT to '）',
+            FlickDir.RIGHT to '」',
             FlickDir.DOWN to 'よ'
             // LEFT/RIGHT を実運用の「ゃ/ゅ/ょ」等に合わせたいならここを差し替え
         ),
