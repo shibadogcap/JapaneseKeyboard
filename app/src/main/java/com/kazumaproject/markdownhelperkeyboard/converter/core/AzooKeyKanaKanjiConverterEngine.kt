@@ -191,14 +191,24 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
 
         val diff = inputData.differenceSuffix(previousInputData)
-        val result = kana2Kanji.kana2latticeChanged(
-            inputData = inputData,
-            nBest = options.nBest,
-            counts = diff,
-            previousResult = previousInputData to sessionState.lattice,
-            needTypoCorrection = needTypoCorrection,
-            useMemory = useMemory,
-        )
+        val result = if (diff.deletedInput == 0 && diff.deletedSurface == 0) {
+            // 追加入力のみ: 増分ラティスに差分があるため、正確性優先で全量再構築する
+            kana2Kanji.kana2latticeAll(
+                inputData = inputData,
+                nBest = options.nBest,
+                needTypoCorrection = needTypoCorrection,
+                useMemory = useMemory,
+            )
+        } else {
+            kana2Kanji.kana2latticeChanged(
+                inputData = inputData,
+                nBest = options.nBest,
+                counts = diff,
+                previousResult = previousInputData to sessionState.lattice,
+                needTypoCorrection = needTypoCorrection,
+                useMemory = useMemory,
+            )
+        }
         sessionState.previousInputData = inputData
         return ConvertToLatticeResult(result, usedAfterComplete = false)
     }

@@ -112,14 +112,28 @@ class AzooKeySwiftKotlinParityTest {
         }
     }
 
+    private data class SwiftEvalOutput(
+        val text: String,
+    )
+
     private data class SwiftEvalItem(
         val query: String,
-        val answer: List<String>,
+        val answers: List<String>? = null,
+        val answer: List<String>? = null,
+        val outputs: List<SwiftEvalOutput>? = null,
+    )
+
+    private data class SwiftEvalRoot(
+        val items: List<SwiftEvalItem>? = null,
     )
 
     private fun parseSwiftOutput(file: File): Map<String, List<String>> {
-        val items = gson.fromJson(file.readText(), Array<SwiftEvalItem>::class.java)
-        return items.associate { it.query to it.answer }
+        val root = gson.fromJson(file.readText(), SwiftEvalRoot::class.java)
+        val items = root.items ?: gson.fromJson(file.readText(), Array<SwiftEvalItem>::class.java).toList()
+        return items.associate { item ->
+            val expected = item.answers ?: item.answer ?: item.outputs?.map { it.text }.orEmpty()
+            item.query to expected
+        }
     }
 
     private fun assertTop1(candidates: List<Candidate>, expected: String) {
