@@ -3,10 +3,14 @@ package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
+import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
+import com.kazumaproject.markdownhelperkeyboard.converter.api.appendRoman2KanaCharAtEnd
+import com.kazumaproject.markdownhelperkeyboard.converter.api.insertDirectAtCursor
 import com.kazumaproject.markdownhelperkeyboard.converter.api.insertRoman2KanaAtCursor
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyConverterEngineResult
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyKanaKanjiConverterEngine
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyConnectionCostStore
+import com.kazumaproject.markdownhelperkeyboard.ime_service.romaji_kana.DefaultRomajiToKanaMap
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import java.io.File
 import kotlinx.coroutines.test.runTest
@@ -108,23 +112,73 @@ internal object AzooKeyParityGoldenFixtures {
         )
     }
 
+    /** Swift [ConverterTests.requestOptions] と同じ候補オプション。 */
+    fun swiftAlignedConvertOptions(request: CandidateRequest): ConvertRequestOptions {
+        return toConvertOptions(request).copy(
+            fullWidthRomanCandidate = false,
+            halfWidthKanaCandidate = false,
+            englishCandidateInRoman2KanaInput = true,
+        )
+    }
+
+    fun defaultRoman2KanaTransducer(): AzooKeyRoman2KanaTransducer =
+        AzooKeyRoman2KanaTransducer.fromMap(DefaultRomajiToKanaMap.data)
+
+    fun buildSequentialDirectComposingText(query: String): ComposingText {
+        var text = ComposingText.fromConvertTarget("")
+        for (ch in query) {
+            text = text.insertDirectAtCursor(ch.toString())
+        }
+        return text
+    }
+
+    fun buildSequentialRoman2KanaComposingText(
+        query: String,
+        transducer: AzooKeyRoman2KanaTransducer = defaultRoman2KanaTransducer(),
+    ): ComposingText {
+        var text = ComposingText.fromConvertTarget("")
+        for (ch in query) {
+            text = text.appendRoman2KanaCharAtEnd(ch, transducer)
+        }
+        return text
+    }
+
     suspend fun convert(
         engine: AzooKeyKanaKanjiConverterEngine,
         request: CandidateRequest,
         session: ConversionSession = ConversionSession(),
+        swiftAlignedOptions: Boolean = false,
+        roman2KanaTransducer: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
     ): AzooKeyStyleConversionResult {
-        return convertWithEngine(engine, request, session).conversionResult
+        return convertWithEngine(
+            engine,
+            request,
+            session,
+            swiftAlignedOptions,
+            roman2KanaTransducer,
+        ).conversionResult
     }
 
     suspend fun convertWithEngine(
         engine: AzooKeyKanaKanjiConverterEngine,
         request: CandidateRequest,
         session: ConversionSession = ConversionSession(),
+        swiftAlignedOptions: Boolean = false,
+        roman2KanaTransducer: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
     ): AzooKeyConverterEngineResult {
         request.completedCandidate?.let { engine.setCompletedData(session.sessionId, it) }
+        val options = if (swiftAlignedOptions) {
+            swiftAlignedConvertOptions(request).copy(
+                roman2KanaTransducer = roman2KanaTransducer,
+            )
+        } else {
+            toConvertOptions(request).copy(
+                roman2KanaTransducer = roman2KanaTransducer,
+            )
+        }
         return engine.requestCandidates(
             inputData = request.composingText ?: ComposingText.fromConvertTarget(request.input),
-            options = toConvertOptions(request),
+            options = options,
             session = session,
             searchMemory = { _, _ -> emptyList() },
             searchUserTemplate = { _, _ -> emptyList() },

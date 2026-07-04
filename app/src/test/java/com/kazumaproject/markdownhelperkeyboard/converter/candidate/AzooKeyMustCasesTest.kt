@@ -1,5 +1,6 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import com.kazumaproject.markdownhelperkeyboard.converter.api.appendRoman2KanaCharAtEnd
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -75,4 +76,50 @@ class AzooKeyMustCasesTest {
     }
 
     // TypoCorrectionGenerator の DicdataStore 統合後に Swift testMustCases typo gradual を有効化する
+
+    private val roman2KanaCases = listOf(
+        Case("tukatteiru", "使っている"),
+        Case("sindadoubutu", "死んだ動物"),
+        Case("keisann", "計算"),
+    )
+
+    @Test
+    fun roman2KanaFullConversion() = AzooKeyParityGoldenFixtures.runWithAssets {
+        val transducer = AzooKeyParityGoldenFixtures.defaultRoman2KanaTransducer()
+        for (case in roman2KanaCases) {
+            val engine = AzooKeyParityGoldenFixtures.engine()
+            val composing = AzooKeyParityGoldenFixtures.buildSequentialRoman2KanaComposingText(
+                case.input,
+                transducer,
+            )
+            val result = AzooKeyParityGoldenFixtures.convert(
+                engine,
+                AzooKeyParityGoldenFixtures.defaultRequest(case.input, composingText = composing),
+                swiftAlignedOptions = true,
+                roman2KanaTransducer = transducer,
+            )
+            assertEquals("input=${case.input}", case.expect, result.mainResults.firstOrNull()?.string)
+        }
+    }
+
+    @Test
+    fun roman2KanaGradualConversion() = AzooKeyParityGoldenFixtures.runWithAssets {
+        val transducer = AzooKeyParityGoldenFixtures.defaultRoman2KanaTransducer()
+        for (case in roman2KanaCases) {
+            val engine = AzooKeyParityGoldenFixtures.engine()
+            var composing = com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText.fromConvertTarget("")
+            for (ch in case.input) {
+                composing = composing.appendRoman2KanaCharAtEnd(ch, transducer)
+                val result = AzooKeyParityGoldenFixtures.convert(
+                    engine,
+                    AzooKeyParityGoldenFixtures.defaultRequest(case.input, composingText = composing),
+                    swiftAlignedOptions = true,
+                    roman2KanaTransducer = transducer,
+                )
+                if (composing.input.size == case.input.length) {
+                    assertEquals("input=${case.input}", case.expect, result.mainResults.firstOrNull()?.string)
+                }
+            }
+        }
+    }
 }
