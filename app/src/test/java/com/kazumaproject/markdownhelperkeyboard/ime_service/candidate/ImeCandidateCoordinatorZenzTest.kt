@@ -150,6 +150,14 @@ class ImeCandidateCoordinatorZenzTest {
             maxTokens: Int,
         ): String = "生成"
 
+        override suspend fun predictNextInputText(
+            profile: String,
+            leftSideContext: String,
+            composingText: String,
+            count: Int,
+            possibleNexts: List<String>,
+        ): String = ""
+
         override suspend fun scoreCandidates(
             profile: String,
             leftContext: String,

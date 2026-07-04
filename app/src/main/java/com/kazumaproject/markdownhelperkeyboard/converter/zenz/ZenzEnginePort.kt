@@ -11,6 +11,15 @@ interface ZenzEnginePort {
         maxTokens: Int,
     ): String
 
+    /** AzooKey `Zenz.predictNextInputText` 相当（v3 input prediction）。 */
+    suspend fun predictNextInputText(
+        profile: String,
+        leftSideContext: String,
+        composingText: String,
+        count: Int,
+        possibleNexts: List<String> = emptyList(),
+    ): String
+
     suspend fun candidateEvaluate(
         profile: String,
         leftContext: String,

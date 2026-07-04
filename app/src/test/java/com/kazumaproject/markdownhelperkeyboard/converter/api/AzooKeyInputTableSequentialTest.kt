@@ -8,7 +8,7 @@ import org.junit.Test
  * AzooKey [InputTablesTests] / [ComposingTextTests] 相当の逐次 roman2kana convertTarget。
  */
 class AzooKeyInputTableSequentialTest {
-    private val transducer = AzooKeyRoman2KanaTransducer.fromMap(DefaultRomajiToKanaMap.data)
+    private val transducer = AzooKeyRoman2KanaTransducer.default()
 
     private fun sequentialConvertTarget(input: String): String {
         var text = ComposingText.fromConvertTarget("")
@@ -16,6 +16,14 @@ class AzooKeyInputTableSequentialTest {
             text = text.appendRoman2KanaCharAtEnd(ch, transducer)
         }
         return text.convertTarget
+    }
+
+    @Test
+    fun geminationKeepsTrailingConsonantMidInput() {
+        assertEquals("い", sequentialConvertTarget("i"))
+        assertEquals("いt", sequentialConvertTarget("it"))
+        assertEquals("いっt", sequentialConvertTarget("itt"))
+        assertEquals("いって", sequentialConvertTarget("itte"))
     }
 
     @Test
@@ -37,5 +45,14 @@ class AzooKeyInputTableSequentialTest {
         assertEquals("かn", sequentialConvertTarget("kan"))
         assertEquals("かんt", sequentialConvertTarget("kant"))
         assertEquals("かんと", sequentialConvertTarget("kanto"))
+    }
+
+    @Test
+    fun nFollowedByNonRomanLeavesNUntilSeparator() {
+        val table = AzooKeyInputTable.Default
+        val buffer = mutableListOf<Char>()
+        table.apply(buffer, 'n')
+        table.apply(buffer, 't')
+        assertEquals("んt", buffer.joinToString(""))
     }
 }

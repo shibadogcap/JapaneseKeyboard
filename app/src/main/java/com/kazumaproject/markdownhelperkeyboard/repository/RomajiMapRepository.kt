@@ -62,7 +62,7 @@ class RomajiMapRepository @Inject constructor(
         val nonDeletableMap = romajiMapDao.getNonDeletableMap()
         Timber.d("updateDefaultMap: ${nonDeletableMap?.mapData?.size}")
         if (nonDeletableMap != null) {
-            if (nonDeletableMap.mapData.size != 312){
+            if (nonDeletableMap.mapData.size != DefaultRomajiToKanaMap.data.size){
                 val updatedMap = nonDeletableMap.copy(
                     mapData = getDefaultMapData()
                 )

@@ -3,78 +3,50 @@ package com.kazumaproject.markdownhelperkeyboard.converter.api
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 
 /**
- * AzooKey [ComposingText](https://github.com/azooKey/AzooKeyKanaKanjiConverter) の Roman2Kana 変換。
- * IME の [RomajiKanaConverter.convert] と同じ最長一致ルール（オフライン・Android 非依存）。
+ * AzooKey Roman2Kana 変換。
+ * デフォルトは [AzooKeyInputTable.Default]（Swift `defaultRoman2Kana` 互換）。
+ * カスタムローマ字表は [fromMap] でユーザー編集テーブルを維持。
  */
-class AzooKeyRoman2KanaTransducer(
-    private val romajiToKana: Map<String, Pair<String, Int>>,
+class AzooKeyRoman2KanaTransducer private constructor(
+    private val inputTable: AzooKeyInputTable,
 ) {
-    private val maxKeyLength: Int = romajiToKana.keys.maxOfOrNull { it.length } ?: 1
-    private val possibleNextsByPrefix: Map<String, List<String>> = buildPossibleNexts(romajiToKana)
-
-    /** AzooKey [InputTable.possibleNexts](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
     fun possibleNexts(romanPrefix: String): List<String> =
-        possibleNextsByPrefix[romanPrefix.lowercase()].orEmpty()
+        inputTable.possibleNexts(romanPrefix)
 
-    fun convert(romaji: String): String {
-        val text = romaji.lowercase()
-        if (text.isEmpty()) return ""
-        val result = StringBuilder()
-        var index = 0
-        while (index < text.length) {
-            val current = text[index]
-            if (current == 'n' && index + 1 < text.length && text[index + 1] !in "aiueoyn") {
-                result.append('ん')
-                index++
-                continue
-            }
-            if (
-                index + 1 < text.length &&
-                current == text[index + 1] &&
-                current in "kstcpbdfghjmqrvwz"
-            ) {
-                result.append('っ')
-                index++
-                continue
-            }
-            var matched = false
-            for (len in maxKeyLength downTo 1) {
-                if (index + len > text.length) continue
-                val segment = text.substring(index, index + len)
-                val mapping = romajiToKana[segment] ?: continue
-                result.append(mapping.first)
-                index += mapping.second
-                matched = true
-                break
-            }
-            if (!matched) {
-                result.append(current)
-                index++
-            }
-        }
-        return result.toString()
-    }
+    /** 逐次 apply（ComposingText 用）。 */
+    fun apply(buffer: MutableList<Char>, added: Char): Int =
+        inputTable.apply(buffer, added)
+
+    /** 完成形ローマ字列の convertTarget。 */
+    fun convert(romaji: String): String = inputTable.convert(romaji)
+
+    val table: AzooKeyInputTable get() = inputTable
 
     companion object {
         val Identity: AzooKeyRoman2KanaTransducer =
-            AzooKeyRoman2KanaTransducer(emptyMap())
+            AzooKeyRoman2KanaTransducer(AzooKeyInputTable.Empty)
 
-        fun fromMap(map: Map<String, Pair<String, Int>>): AzooKeyRoman2KanaTransducer {
-            return AzooKeyRoman2KanaTransducer(map)
-        }
+        /** AzooKey 本家 defaultRoman2Kana（非カスタム時）。 */
+        fun default(): AzooKeyRoman2KanaTransducer =
+            AzooKeyRoman2KanaTransducer(AzooKeyInputTable.Default)
 
-        /** AzooKey [InputTables.defaultRoman2Kana](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
+        /** ユーザー編集ローマ字表。 */
+        fun fromMap(map: Map<String, Pair<String, Int>>): AzooKeyRoman2KanaTransducer =
+            AzooKeyRoman2KanaTransducer(AzooKeyInputTable.fromRomajiMap(map))
+
+        /** @deprecated テスト互換。map から構築。 */
         fun fromDefaultInputTable(map: Map<String, Pair<String, Int>>): AzooKeyRoman2KanaTransducer =
             fromMap(map)
 
-        /** AzooKey InputTable.possibleNexts 構築（roman prefix → katakana 変換候補列） */
+        /** AzooKey InputTable.possibleNexts 構築（テスト・レガシー互換） */
         internal fun buildPossibleNexts(map: Map<String, Pair<String, Int>>): Map<String, List<String>> {
-            if (map.isEmpty()) return emptyMap()
+            val stringMap = map.mapValues { it.value.first }
+            if (stringMap.isEmpty()) return emptyMap()
             val results = mutableMapOf<String, MutableList<String>>()
-            for ((key, value) in map) {
-                val katakana = value.first.hiraganaToKatakana()
+            for ((key, value) in stringMap) {
+                val katakana = value.hiraganaToKatakana()
                 for (prefixCount in 1 until key.length) {
-                    val prefix = key.substring(0, prefixCount)
+                    val prefix = key.substring(0, prefixCount).lowercase()
                     results.getOrPut(prefix) { mutableListOf() }.add(katakana)
                 }
             }
@@ -82,3 +54,4 @@ class AzooKeyRoman2KanaTransducer(
         }
     }
 }
+

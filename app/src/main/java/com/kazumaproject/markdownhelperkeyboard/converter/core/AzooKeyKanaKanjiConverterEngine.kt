@@ -1,15 +1,22 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.core
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.core.domain.extensions.katakanaToHiragana
 import com.kazumaproject.markdownhelperkeyboard.converter.api.CandidateRequestBridge
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
+import com.kazumaproject.markdownhelperkeyboard.converter.api.deleteBackwardFromCursor
+import com.kazumaproject.markdownhelperkeyboard.converter.api.insertDirectAtCursor
+import com.kazumaproject.markdownhelperkeyboard.converter.api.insertRoman2KanaAtCursor
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionarySourceKind
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyMid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConversionResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStylePredictionMode
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTypoCorrectionPolicy
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
@@ -52,7 +59,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
     constructor(
         registry: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLoudsDictionaryRegistry,
         connectionStore: com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyConnectionCostStore,
-    ) : this(azooKeyDicdataFacadeSourceForTests(registry, connectionStore), null, null)
+        zenzEngine: ZenzEnginePort? = null,
+    ) : this(azooKeyDicdataFacadeSourceForTests(registry, connectionStore), zenzEngine, null)
 
     private data class SessionState(
         var previousInputData: ComposingText? = null,
@@ -100,6 +108,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             options = options,
             kana2Kanji = kana2Kanji,
             sessionState = sessionState,
+            session = session,
+            searchMemory = searchMemory,
             searchUserTemplate = searchUserTemplate,
         )
 
@@ -122,6 +132,151 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
 
     fun setCompletedData(sessionId: String, candidate: Candidate) {
         sessions.getOrPut(sessionId) { SessionState() }.completedData = candidate
+    }
+
+    data class PredictNextInputTextResult(
+        val predictedText: String,
+        val suffixCount: Int,
+    )
+
+    /** AzooKey [KanaKanjiConverter.predictNextInputText](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
+    suspend fun predictNextInputText(
+        leftSideContext: String,
+        composingText: ComposingText,
+        count: Int,
+        options: ConvertRequestOptions,
+        session: ConversionSession,
+        inputStyle: InputStyle = composingText.input.lastOrNull()?.inputStyle ?: InputStyle.Direct,
+    ): PredictNextInputTextResult {
+        if (!options.zenzaiMode.isEnabled) {
+            invalidatePredictiveInputCache(session.sessionId)
+            return PredictNextInputTextResult(predictedText = "", suffixCount = 0)
+        }
+        val engine = zenzEngine ?: run {
+            invalidatePredictiveInputCache(session.sessionId)
+            return PredictNextInputTextResult(predictedText = "", suffixCount = 0)
+        }
+        val cacheContext = PredictiveInputCacheContext(
+            leftSideContext = leftSideContext,
+            inputStyle = inputStyle,
+            zenzaiMode = options.zenzaiMode,
+            zenzProfile = options.zenzProfile,
+        )
+        cachedPredictiveInputText(
+            sessionId = session.sessionId,
+            context = cacheContext,
+            composingText = composingText,
+            count = count,
+        )?.let { cached ->
+            return PredictNextInputTextResult(predictedText = cached, suffixCount = 0)
+        }
+        val source = AzooKeyPredictiveInputResolver.resolve(composingText, options.roman2KanaTransducer)
+        val predictedText = engine.predictNextInputText(
+            profile = options.zenzProfile,
+            leftSideContext = leftSideContext,
+            composingText = source.baseConvertTarget,
+            count = count,
+            possibleNexts = source.possibleNexts,
+        )
+        val sessionState = sessions.getOrPut(session.sessionId) { SessionState() }
+        if (predictedText.isEmpty()) {
+            sessionState.predictiveInputCache = null
+        } else {
+            sessionState.predictiveInputCache = PredictiveInputCacheEntry(
+                context = cacheContext,
+                originalConvertTarget = composingText.convertTarget,
+                suffixCount = source.droppedSuffixCount,
+                predictedText = predictedText,
+            )
+        }
+        return PredictNextInputTextResult(
+            predictedText = predictedText,
+            suffixCount = source.droppedSuffixCount,
+        )
+    }
+
+    private fun cachedPredictiveInputText(
+        sessionId: String,
+        context: PredictiveInputCacheContext,
+        composingText: ComposingText,
+        count: Int,
+    ): String? {
+        val cache = sessions[sessionId]?.predictiveInputCache ?: return null
+        if (cache.context != context) {
+            invalidatePredictiveInputCache(sessionId)
+            return null
+        }
+        val remaining = cache.remainingPrediction(composingText.convertTarget, count)
+        if (remaining == null) {
+            invalidatePredictiveInputCache(sessionId)
+            return null
+        }
+        return remaining
+    }
+
+    private fun invalidatePredictiveInputCache(sessionId: String) {
+        sessions[sessionId]?.predictiveInputCache = null
+    }
+
+    private suspend fun experimentalZenzaiPredictionCandidates(
+        composingText: ComposingText,
+        options: ConvertRequestOptions,
+        session: ConversionSession,
+        searchMemory: suspend (reading: String, limit: Int) -> List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry>,
+        searchUserTemplate: suspend (input: String, limit: Int) -> List<Candidate>,
+    ): List<Candidate> {
+        if (!options.zenzaiMode.isEnabled || !options.experimentalZenzaiPredictiveInput) {
+            return emptyList()
+        }
+        val inputStyle = composingText.input.lastOrNull()?.inputStyle ?: InputStyle.Direct
+        val leftSideContext = session.leftSideContext.takeLast(AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX)
+        val prediction = predictNextInputText(
+            leftSideContext = leftSideContext,
+            composingText = composingText,
+            count = 10,
+            options = options,
+            session = session,
+            inputStyle = inputStyle,
+        )
+        if (prediction.predictedText.isEmpty()) return emptyList()
+
+        val insertText = if (inputStyle == InputStyle.Roman2Kana) {
+            prediction.predictedText.katakanaToHiragana()
+        } else {
+            prediction.predictedText
+        }
+        var predictedComposingText = composingText
+        if (prediction.suffixCount > 0) {
+            predictedComposingText = predictedComposingText.deleteBackwardFromCursor(
+                count = prediction.suffixCount,
+                roman2Kana = options.roman2KanaTransducer,
+            )
+        }
+        predictedComposingText = when (inputStyle) {
+            InputStyle.Roman2Kana -> predictedComposingText.insertRoman2KanaAtCursor(
+                insertText,
+                options.roman2KanaTransducer,
+            )
+            else -> predictedComposingText.insertDirectAtCursor(insertText)
+        }
+
+        val fallbackOptions = options.copy(
+            requireJapanesePrediction = AzooKeyStylePredictionMode.Disabled,
+            requireEnglishPrediction = AzooKeyStylePredictionMode.Disabled,
+        )
+        val scratchSessionId = "${session.sessionId}-zenz-predictive-${System.nanoTime()}"
+        val scratchSession = session.copy(sessionId = scratchSessionId)
+        return try {
+            requestCandidates(
+                inputData = predictedComposingText,
+                options = fallbackOptions,
+                session = scratchSession,
+                searchMemory = searchMemory,
+                searchUserTemplate = searchUserTemplate,
+            ).conversionResult.mainResults.firstOrNull()?.let { listOf(it) }.orEmpty()
+        } finally {
+            sessions.remove(scratchSessionId)
+        }
     }
 
     private data class ConvertToLatticeResult(
@@ -210,6 +365,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         options: ConvertRequestOptions,
         kana2Kanji: AzooKeyKana2Kanji,
         sessionState: SessionState,
+        session: ConversionSession,
+        searchMemory: suspend (reading: String, limit: Int) -> List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry>,
         searchUserTemplate: suspend (input: String, limit: Int) -> List<Candidate>,
     ): AzooKeyStyleConversionResult {
         sessionState.lattice = latticeResult.second
@@ -287,6 +444,15 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
                     kana2Kanji = kana2Kanji,
                     useMemory = useMemory,
                     roman2Kana = options.roman2KanaTransducer,
+                    experimentalFallback = {
+                        experimentalZenzaiPredictionCandidates(
+                            composingText = inputData,
+                            options = options,
+                            session = session,
+                            searchMemory = searchMemory,
+                            searchUserTemplate = searchUserTemplate,
+                        )
+                    },
                 ),
             ).sortedByDescending { it.value }.take(3)
             predictionResults = mergeStableCandidates(stablePredictionCandidates, rawPredictions, 3)

@@ -1,5 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.zenz
 
+import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.core.domain.extensions.katakanaToHiragana
 import com.kazumaproject.zenz.ZenzEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,6 +25,39 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
             input = inputKatakana,
             maxTokens = maxTokens,
         ) ?: ""
+    }
+
+    override suspend fun predictNextInputText(
+        profile: String,
+        leftSideContext: String,
+        composingText: String,
+        count: Int,
+        possibleNexts: List<String>,
+    ): String = withContext(Dispatchers.Default) {
+        if (count <= 0 || composingText.isEmpty()) return@withContext ""
+        val generated = ZenzEngine.generateWithContextAndConditions(
+            profile = profile,
+            topic = "",
+            style = "",
+            preference = "",
+            leftContext = leftSideContext,
+            input = composingText.hiraganaToKatakana(),
+            maxTokens = count,
+        )?.trim().orEmpty()
+        if (generated.isEmpty()) return@withContext ""
+        if (possibleNexts.isEmpty()) {
+            return@withContext generated.take(count)
+        }
+        val allowedPrefixes = possibleNexts.filter { it.isNotEmpty() }
+        var candidate = ""
+        for (ch in generated) {
+            val next = candidate + ch
+            val normalized = next.hiraganaToKatakana()
+            if (allowedPrefixes.none { it.startsWith(normalized) }) break
+            candidate = next
+            if (candidate.length >= count) break
+        }
+        candidate
     }
 
     override suspend fun candidateEvaluate(

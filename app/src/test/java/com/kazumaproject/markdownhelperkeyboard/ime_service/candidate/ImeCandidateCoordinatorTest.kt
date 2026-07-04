@@ -91,6 +91,14 @@ class ImeCandidateCoordinatorTest {
                         maxTokens: Int,
                     ): String = ""
 
+                    override suspend fun predictNextInputText(
+                        profile: String,
+                        leftSideContext: String,
+                        composingText: String,
+                        count: Int,
+                        possibleNexts: List<String>,
+                    ): String = ""
+
                     override suspend fun scoreCandidates(
                         profile: String,
                         leftContext: String,
@@ -185,6 +193,14 @@ class ImeCandidateCoordinatorTest {
                         leftContext: String,
                         inputKatakana: String,
                         maxTokens: Int,
+                    ): String = ""
+
+                    override suspend fun predictNextInputText(
+                        profile: String,
+                        leftSideContext: String,
+                        composingText: String,
+                        count: Int,
+                        possibleNexts: List<String>,
                     ): String = ""
 
                     override suspend fun scoreCandidates(

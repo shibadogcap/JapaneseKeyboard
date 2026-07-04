@@ -122,7 +122,7 @@ internal object AzooKeyParityGoldenFixtures {
     }
 
     fun defaultRoman2KanaTransducer(): AzooKeyRoman2KanaTransducer =
-        AzooKeyRoman2KanaTransducer.fromMap(DefaultRomajiToKanaMap.data)
+        AzooKeyRoman2KanaTransducer.default()
 
     fun buildSequentialDirectComposingText(query: String): ComposingText {
         var text = ComposingText.fromConvertTarget("")
@@ -186,17 +186,7 @@ internal object AzooKeyParityGoldenFixtures {
     }
 
     fun romanIttaiComposingText(): ComposingText {
-        val transducer = com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.fromMap(
-            mapOf(
-                "i" to ("い" to 1),
-                "t" to ("t" to 1),
-                "ta" to ("た" to 2),
-                "it" to ("いt" to 2),
-                "itt" to ("いt" to 3),
-                "itta" to ("いた" to 4),
-                "ittai" to ("いったい" to 5),
-            ),
-        )
+        val transducer = com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.default()
         return ComposingText.fromConvertTarget("")
             .insertRoman2KanaAtCursor("ittai", transducer)
     }

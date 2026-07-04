@@ -25,6 +25,14 @@ class ZenzConversionServiceTest {
             maxTokens: Int,
         ): String = generateResult
 
+        override suspend fun predictNextInputText(
+            profile: String,
+            leftSideContext: String,
+            composingText: String,
+            count: Int,
+            possibleNexts: List<String>,
+        ): String = generateResult.take(count)
+
         override suspend fun candidateEvaluate(
             profile: String,
             leftContext: String,

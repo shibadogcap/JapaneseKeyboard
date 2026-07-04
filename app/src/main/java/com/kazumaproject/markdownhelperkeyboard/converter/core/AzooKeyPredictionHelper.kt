@@ -3,8 +3,6 @@ package com.kazumaproject.markdownhelperkeyboard.converter.core
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
-import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
-import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionarySourceKind
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyMid
@@ -24,6 +22,25 @@ object AzooKeyPredictionHelper {
         kana2Kanji: AzooKeyKana2Kanji,
         useMemory: Boolean,
         roman2Kana: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
+        experimentalFallback: suspend () -> List<Candidate> = { emptyList() },
+    ): List<Candidate> {
+        val candidates = collectPredictionCandidates(
+            bestCandidateDataForPrediction = bestCandidateDataForPrediction,
+            composingText = composingText,
+            kana2Kanji = kana2Kanji,
+            useMemory = useMemory,
+            roman2Kana = roman2Kana,
+        )
+        if (candidates.isNotEmpty()) return candidates
+        return experimentalFallback()
+    }
+
+    private suspend fun collectPredictionCandidates(
+        bestCandidateDataForPrediction: CandidateData,
+        composingText: ComposingText,
+        kana2Kanji: AzooKeyKana2Kanji,
+        useMemory: Boolean,
+        roman2Kana: AzooKeyRoman2KanaTransducer,
     ): List<Candidate> {
         val candidates = mutableListOf<Candidate>()
         var prepart = bestCandidateDataForPrediction

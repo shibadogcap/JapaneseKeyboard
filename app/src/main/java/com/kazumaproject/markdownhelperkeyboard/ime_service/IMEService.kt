@@ -632,7 +632,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private var romajiConverter: RomajiKanaConverter? = null
     private var azooKeyRoman2KanaTransducer: com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer =
-        com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.Identity
+        com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.default()
 
     private lateinit var clipboardManager: ClipboardManager
 
@@ -11212,9 +11212,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
                 isDefaultRomajiHenkanMap = !isDeletable
                 romajiConverter = RomajiKanaConverter(converterMap)
-                azooKeyRoman2KanaTransducer =
+                azooKeyRoman2KanaTransducer = if (isDeletable) {
                     com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
                         .fromMap(converterMap)
+                } else {
+                    com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.default()
+                }
             }
         }
 

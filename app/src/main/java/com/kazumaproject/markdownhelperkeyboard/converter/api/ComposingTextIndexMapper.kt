@@ -2,7 +2,6 @@ package com.kazumaproject.markdownhelperkeyboard.converter.api
 
 /**
  * AzooKey [ComposingText.inputIndexToSurfaceIndexMap](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。
- * input index と convertTarget (surface) index の対応を独立セグメント境界から構築する。
  */
 object ComposingTextIndexMapper {
     internal data class IndexPair(
@@ -63,17 +62,12 @@ object ComposingTextIndexMapper {
     }
 
     private class ConvertTargetElement(
-        val builder: StringBuilder,
-        val romajiBuffer: StringBuilder?,
+        val buffer: MutableList<Char>,
         val inputStyle: InputStyle,
-        private val roman2Kana: AzooKeyRoman2KanaTransducer,
+        val directBuilder: StringBuilder?,
     ) {
         val string: String
-            get() = when {
-                inputStyle == InputStyle.Roman2Kana && romajiBuffer != null ->
-                    roman2Kana.convert(romajiBuffer.toString())
-                else -> builder.toString()
-            }
+            get() = directBuilder?.toString() ?: buffer.joinToString("")
     }
 
     private fun updateConvertTargetElements(
@@ -92,15 +86,14 @@ object ComposingTextIndexMapper {
         }
         val lastIndex = currentElements.lastIndex
         if (currentElements[lastIndex].inputStyle == newElement.inputStyle) {
-            return appendToConvertTarget(currentElements[lastIndex], newElement.piece)
+            return appendToConvertTarget(currentElements[lastIndex], newElement.piece, roman2Kana)
         }
         when (newElement.piece) {
             is InputPiece.CompositionSeparator -> {
                 currentElements += ConvertTargetElement(
-                    builder = StringBuilder(),
-                    romajiBuffer = null,
+                    buffer = mutableListOf(),
                     inputStyle = newElement.inputStyle,
-                    roman2Kana = roman2Kana,
+                    directBuilder = StringBuilder(),
                 )
             }
             is InputPiece.Character -> {
@@ -116,18 +109,18 @@ object ComposingTextIndexMapper {
     ): ConvertTargetElement {
         val piece = element.piece as InputPiece.Character
         return if (element.inputStyle == InputStyle.Roman2Kana) {
+            val buffer = mutableListOf<Char>()
+            roman2Kana.apply(buffer, piece.value.lowercaseChar())
             ConvertTargetElement(
-                builder = StringBuilder(),
-                romajiBuffer = StringBuilder(piece.value.lowercase()),
+                buffer = buffer,
                 inputStyle = InputStyle.Roman2Kana,
-                roman2Kana = roman2Kana,
+                directBuilder = null,
             )
         } else {
             ConvertTargetElement(
-                builder = StringBuilder(piece.value.toString()),
-                romajiBuffer = null,
+                buffer = mutableListOf(),
                 inputStyle = element.inputStyle,
-                roman2Kana = roman2Kana,
+                directBuilder = StringBuilder(piece.value.toString()),
             )
         }
     }
@@ -135,16 +128,17 @@ object ComposingTextIndexMapper {
     private fun appendToConvertTarget(
         element: ConvertTargetElement,
         piece: InputPiece,
+        roman2Kana: AzooKeyRoman2KanaTransducer,
     ): Int {
         return when (piece) {
             is InputPiece.CompositionSeparator -> 0
             is InputPiece.Character -> {
-                if (element.inputStyle == InputStyle.Roman2Kana && element.romajiBuffer != null) {
-                    element.romajiBuffer.append(piece.value.lowercase())
+                if (element.inputStyle == InputStyle.Roman2Kana && element.directBuilder == null) {
+                    roman2Kana.apply(element.buffer, piece.value.lowercaseChar())
                 } else {
-                    element.builder.append(piece.value)
+                    element.directBuilder?.append(piece.value)
+                    0
                 }
-                0
             }
         }
     }

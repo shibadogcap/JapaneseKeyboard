@@ -103,6 +103,7 @@ data class PredictiveInputCacheContext(
     val leftSideContext: String,
     val inputStyle: InputStyle,
     val zenzaiMode: AzooKeyStyleZenzaiMode,
+    val zenzProfile: String = "",
 )
 
 data class PredictiveInputCacheEntry(
