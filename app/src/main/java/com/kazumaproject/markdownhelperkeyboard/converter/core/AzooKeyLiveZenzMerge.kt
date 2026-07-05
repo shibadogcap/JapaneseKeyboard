@@ -5,6 +5,13 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateTyp
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzCandidate
 
 object AzooKeyLiveZenzMerge {
+    private val readingVariantTypes = setOf(
+        CandidateType.KATAKANA.toInt(),
+        CandidateType.HIRAGANA.toInt(),
+        CandidateType.NBEST.toInt(),
+        CandidateType.HALF_WIDTH_KATAKANA_SPECIAL.toInt(),
+    )
+
     fun mergeIfApplicable(
         insertReading: String,
         dictionaryCandidates: List<Candidate>,
@@ -39,7 +46,14 @@ object AzooKeyLiveZenzMerge {
         val merged = (zenzAsCandidates + dictionaryCandidates.filter {
             it.type.toInt() != CandidateType.LEARNED_HISTORY.toInt() && it.string.length <= inputLength
         }).sortedByDescending { it.value }
-        return AzooKeyZenzaiValueReorder.reorderTopValues(merged.take(5))
-            .let { AzooKeyJapaneseConversionText.filterDisplayedCandidates(it) }
+        val mergedTop = AzooKeyZenzaiValueReorder.reorderTopValues(merged.take(5))
+        val readingVariants = dictionaryCandidates.filter { candidate ->
+            candidate.type.toInt() in readingVariantTypes ||
+                AzooKeyJapaneseConversionText.isPureHalfWidthKatakana(candidate.string)
+        }
+        val combined = mergedTop + readingVariants.filter { variant ->
+            mergedTop.none { it.string == variant.string }
+        }
+        return AzooKeyJapaneseConversionText.filterDisplayedCandidates(combined)
     }
 }

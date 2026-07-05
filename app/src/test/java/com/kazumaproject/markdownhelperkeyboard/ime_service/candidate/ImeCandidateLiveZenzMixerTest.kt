@@ -6,6 +6,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzCandidat
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyLiveZenzMerge
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImeCandidateLiveZenzMixerTest {
@@ -114,5 +115,30 @@ class ImeCandidateLiveZenzMixerTest {
         val zenzResult = merged.firstOrNull { it.string == "視界" }
         requireNotNull(zenzResult)
         assertEquals("しかい", zenzResult.yomi)
+    }
+
+    @Test
+    fun mergePreservesHalfWidthKatakanaVariants() {
+        val dictionary = listOf(
+            Candidate(string = "東京", type = 1, length = 2u, score = 3000, value = 3000f),
+            Candidate(string = "トウキョウ", type = CandidateType.KATAKANA, length = 5u, score = -14, value = -14f),
+            Candidate(string = "ﾄｳｷｮｳ", type = CandidateType.NBEST, length = 4u, score = -15, value = -15f),
+        )
+        val zenz = listOf(
+            ZenzCandidate(
+                string = "東京",
+                type = CandidateType.ZENZ,
+                length = 2u,
+                score = 3500,
+                originalString = "とうきょう",
+            ),
+        )
+        val merged = AzooKeyLiveZenzMerge.mergeIfApplicable(
+            insertReading = "とうきょう",
+            dictionaryCandidates = dictionary,
+            zenzCandidates = zenz,
+        )
+        requireNotNull(merged)
+        assertTrue(merged.any { it.string == "ﾄｳｷｮｳ" })
     }
 }

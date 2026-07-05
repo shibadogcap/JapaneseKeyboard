@@ -442,8 +442,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
                 .map { it.applyAppropriateActions().parseTemplate() }
                 .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
             return AzooKeyStyleConversionResult(
-                mainResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(mainResults),
-                firstClauseResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(mainResults),
+                mainResults = mainResults,
+                firstClauseResults = mainResults,
             )
         }
 
@@ -476,9 +476,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
                 merged.sortedByDescending { it.value }
             }
             return AzooKeyStyleConversionResult(
-                mainResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(
-                    mainResults.map { it.applyAppropriateActions().parseTemplate() },
-                ),
+                mainResults = mainResults
+                    .map { it.applyAppropriateActions().parseTemplate() }
+                    .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) },
             )
         }
 
@@ -658,11 +658,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
         result = result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         result = result + firstClauseCandidates + wordList
-        result = AzooKeyJapaneseConversionText.filterDisplayedCandidates(
-            result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) },
-        )
-
-        result = result.map { it.applyAppropriateActions().parseTemplate() }
+        result = result
+            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
+            .map { it.applyAppropriateActions().parseTemplate() }
         firstClauseResults = firstClauseResults.map { it.applyAppropriateActions().parseTemplate() }
         predictionResults = predictionResults.map { it.applyAppropriateActions().parseTemplate() }
         englishPredictionResults = englishPredictionResults.map { it.applyAppropriateActions().parseTemplate() }

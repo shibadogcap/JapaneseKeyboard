@@ -146,6 +146,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private var emojiSearchView: androidx.appcompat.widget.SearchView? = null
     private var emojiSearchListener: ((String) -> Unit)? = null
     private var emojiSearchResults: List<String>? = null
+    private var symbolPanelSearchFocusListener: ((Boolean) -> Unit)? = null
+
+    private enum class ActiveSearchTarget {
+        CLIPBOARD,
+        EMOJI,
+    }
+
+    private var activeSearchTarget: ActiveSearchTarget? = null
 
     init {
         inflate(context, R.layout.symbol_keyboard_main_layout, this)
@@ -214,10 +222,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 return true
             }
         })
+        setupSymbolSearchView(clipboardSearchView, ActiveSearchTarget.CLIPBOARD)
 
         emojiSearchView?.setOnQueryTextListener(object : androidx.appcompat.widget.SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean = false
-
             override fun onQueryTextChange(newText: String?): Boolean {
                 val query = newText.orEmpty()
                 emojiSearchListener?.invoke(query)
@@ -230,7 +237,10 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 }
                 return true
             }
+
+            override fun onQueryTextSubmit(query: String?): Boolean = false
         })
+        setupSymbolSearchView(emojiSearchView, ActiveSearchTarget.EMOJI)
 
         emojiKitchenPreviewImage?.setOnClickListener {
             val bitmap = generatedStickerBitmap
@@ -793,6 +803,65 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         emojiSearchListener = listener
     }
 
+    fun setOnSymbolPanelSearchFocusListener(listener: (Boolean) -> Unit) {
+        symbolPanelSearchFocusListener = listener
+    }
+
+    fun isSymbolPanelSearchActive(): Boolean = activeSearchTarget != null
+
+    fun appendActiveSearchText(text: String) {
+        if (text.isEmpty()) return
+        val searchView = activeSearchView() ?: return
+        val updated = searchView.query?.toString().orEmpty() + text
+        searchView.setQuery(updated, true)
+    }
+
+    fun deleteActiveSearchChar(): Boolean {
+        val searchView = activeSearchView() ?: return false
+        val current = searchView.query?.toString().orEmpty()
+        if (current.isEmpty()) return false
+        searchView.setQuery(current.dropLast(1), true)
+        return true
+    }
+
+    fun clearSymbolPanelSearchFocus() {
+        activeSearchTarget = null
+        clipboardSearchView?.clearFocus()
+        emojiSearchView?.clearFocus()
+        symbolPanelSearchFocusListener?.invoke(false)
+    }
+
+    private fun activeSearchView(): androidx.appcompat.widget.SearchView? {
+        return when (activeSearchTarget) {
+            ActiveSearchTarget.CLIPBOARD -> clipboardSearchView
+            ActiveSearchTarget.EMOJI -> emojiSearchView
+            null -> null
+        }
+    }
+
+    private fun setupSymbolSearchView(
+        searchView: androidx.appcompat.widget.SearchView?,
+        target: ActiveSearchTarget,
+    ) {
+        val editText = searchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text,
+        ) ?: return
+        editText.showSoftInputOnFocus = false
+        val activate = {
+            activeSearchTarget = target
+            symbolPanelSearchFocusListener?.invoke(true)
+        }
+        editText.setOnClickListener { activate() }
+        editText.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                activate()
+            } else if (activeSearchTarget == target) {
+                activeSearchTarget = null
+                symbolPanelSearchFocusListener?.invoke(false)
+            }
+        }
+    }
+
     fun displayEmojiSearchResults(results: List<String>) {
         emojiSearchResults = results
         if (currentMode != SymbolMode.EMOJI) return
@@ -1119,6 +1188,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             SymbolMode.CLIPBOARD -> {
                 clipboardControlLayout?.visibility = View.VISIBLE
                 emojiControlLayout?.visibility = View.GONE
+                emojiSearchView?.setQuery("", false)
                 categoryTab.visibility = View.GONE
             }
             SymbolMode.EMOJI -> {
@@ -1129,6 +1199,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 categoryTab.visibility = if (hasQuery) View.GONE else View.VISIBLE
             }
             else -> {
+                clearSymbolPanelSearchFocus()
                 clipboardControlLayout?.visibility = View.GONE
                 emojiControlLayout?.visibility = View.GONE
                 clipboardSearchView?.setQuery("", false)

@@ -1159,7 +1159,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         private const val ZENZ_RERANK_ALPHA = 0.7f
         private const val ZENZ_RERANK_BETA = 0.3f
         private const val ZENZ_LEFT_CONTEXT_MAX = 20
-        private const val CANDIDATE_REFRESH_DEBOUNCE_MS = 24L
+        private const val CANDIDATE_REFRESH_DEBOUNCE_MS = 12L
         private val DEFAULT_DELETE_KEY_FLICK_TARGETS =
             DeleteKeyFlickDeleteTargetRepository.DEFAULT_TARGET_SYMBOLS.toSet()
         private val ALWAYS_DELETE_KEY_FLICK_BOUNDARIES = setOf(' ', '　', '\n')
@@ -1258,8 +1258,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var zenzRerankRequestToken: Long = 0L
     private var zenzContextCacheInput: String? = null
     private var zenzContextCacheHardwareKeyboard: Boolean? = null
+    private var zenzContextCacheLeftContext: String? = null
     private var zenzContextCache: com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateZenzContext? = null
     private var cachedCandidateLeftContext: String = ""
+    private var symbolPanelSearchFocused = false
 
     private var previousTenKeyQWERTYMode: TenKeyQWERTYMode? = null
 
@@ -11092,27 +11094,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         updateUpperAreaVisibility(mainView)
                     }
                     if (isSymbolKeyboardShow.isShown) {
-                        when {
-                            customLayoutDefault.isVisible -> {
-                                customLayoutDefault.visibility = View.INVISIBLE
-                            }
-
-                            tabletView.isVisible && isTabletGojuonSurface() -> {
-                                tabletView.visibility = View.INVISIBLE
-                            }
-
-                            tabletView.isVisible && isTabletTenkeySurface() -> {
-                                keyboardView.visibility = View.INVISIBLE
-                            }
-
-                            keyboardView.isVisible -> {
-                                keyboardView.visibility = View.INVISIBLE
-                            }
-
-                            qwertyView.isVisible -> {
-                                qwertyView.visibility = View.INVISIBLE
-                            }
-                        }
+                        applySymbolPanelKeyboardVisibility(
+                            mainView = mainView,
+                            keepMainKeyboardVisible = symbolPanelSearchFocused,
+                        )
                         animateViewVisibility(keyboardSymbolView, true)
                         suggestionRecyclerView.isVisible = false
                         if (isSymbolKeyboardShow.mode == SymbolMode.CLIPBOARD) {
@@ -11121,6 +11106,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             setSymbols(mainView)
                         }
                     } else {
+                        symbolPanelSearchFocused = false
+                        mainLayoutBinding?.keyboardSymbolView?.clearSymbolPanelSearchFocus()
+                        floatingKeyboardBinding?.floatingSymbolKeyboard?.clearSymbolPanelSearchFocus()
                         if (isTabletGojuonSurface()) {
                             when {
                                 tabletView.isInvisible -> {
@@ -11487,7 +11475,68 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun clearZenzContextCache() {
         zenzContextCacheInput = null
         zenzContextCacheHardwareKeyboard = null
+        zenzContextCacheLeftContext = null
         zenzContextCache = null
+    }
+
+    private fun isSymbolPanelSearchRoutingActive(): Boolean =
+        symbolPanelSearchFocused && keyboardSymbolViewState.value.isShown
+
+    private fun routeSymbolPanelSearchText(text: String): Boolean {
+        if (!isSymbolPanelSearchRoutingActive() || text.isEmpty()) return false
+        mainLayoutBinding?.keyboardSymbolView?.appendActiveSearchText(text)
+        floatingKeyboardBinding?.floatingSymbolKeyboard?.appendActiveSearchText(text)
+        return true
+    }
+
+    private fun routeSymbolPanelSearchDelete(): Boolean {
+        if (!isSymbolPanelSearchRoutingActive()) return false
+        val deletedFromMain = mainLayoutBinding?.keyboardSymbolView?.deleteActiveSearchChar() == true
+        val deletedFromFloating =
+            floatingKeyboardBinding?.floatingSymbolKeyboard?.deleteActiveSearchChar() == true
+        return deletedFromMain || deletedFromFloating
+    }
+
+    private fun setSymbolPanelSearchFocused(active: Boolean) {
+        if (symbolPanelSearchFocused == active) return
+        symbolPanelSearchFocused = active
+        mainLayoutBinding?.let { mainView ->
+            if (keyboardSymbolViewState.value.isShown) {
+                applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = active)
+                updateKeyboardLayout(mainView, isSymbolOverride = true)
+            }
+        }
+    }
+
+    private fun applySymbolPanelKeyboardVisibility(
+        mainView: MainLayoutBinding,
+        keepMainKeyboardVisible: Boolean,
+    ) {
+        if (keepMainKeyboardVisible) {
+            when {
+                mainView.customLayoutDefault.isInvisible -> mainView.customLayoutDefault.isVisible = true
+                mainView.tabletView.isVisible && isTabletGojuonSurface() -> {
+                    mainView.tabletView.isVisible = true
+                }
+                mainView.tabletView.isVisible && isTabletTenkeySurface() -> {
+                    mainView.keyboardView.isVisible = true
+                }
+                mainView.keyboardView.isInvisible -> mainView.keyboardView.isVisible = true
+                mainView.qwertyView.isInvisible -> mainView.qwertyView.isVisible = true
+            }
+        } else {
+            when {
+                mainView.customLayoutDefault.isVisible -> mainView.customLayoutDefault.visibility = View.INVISIBLE
+                mainView.tabletView.isVisible && isTabletGojuonSurface() -> {
+                    mainView.tabletView.visibility = View.INVISIBLE
+                }
+                mainView.tabletView.isVisible && isTabletTenkeySurface() -> {
+                    mainView.keyboardView.visibility = View.INVISIBLE
+                }
+                mainView.keyboardView.isVisible -> mainView.keyboardView.visibility = View.INVISIBLE
+                mainView.qwertyView.isVisible -> mainView.qwertyView.visibility = View.INVISIBLE
+            }
+        }
     }
 
     private fun currentZenzConversionConfig(
@@ -11955,6 +12004,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val density = resources.displayMetrics.density
         val screenWidth = resources.displayMetrics.widthPixels
         val isSymbol = isSymbolOverride ?: keyboardSymbolViewState.value.isShown
+        val symbolWithInputKeyboard = isSymbol && symbolPanelSearchFocused
 
         // 2. ピクセル値の計算
         val heightPx = when {
@@ -11998,7 +12048,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             heightPx + applicationContext.dpToPx(40)
         }
 
-        val finalKeyboardHeight = baseKeyboardHeight + systemBottomInset
+        val finalKeyboardHeight = when {
+            symbolWithInputKeyboard -> (heightPx * 2) + applicationContext.dpToPx(80) + systemBottomInset
+            else -> baseKeyboardHeight + systemBottomInset
+        }
 
         val finalKeyboardWidth =
             if (isSymbol) {
@@ -14870,6 +14923,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 override fun onClick() {
                     if (!deleteKeyLongKeyPressed.get()) {
                         vibrate()
+                        if (routeSymbolPanelSearchDelete()) return
                         sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
                     }
                     stopDeleteLongPress()
@@ -14933,6 +14987,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
             setOnEmojiSearchListener { query ->
                 emojiSearchQuery.value = query
+            }
+            setOnSymbolPanelSearchFocusListener { active ->
+                setSymbolPanelSearchFocused(active)
             }
             setClipboardHistoryEnabled(isClipboardHistoryFeatureEnabled)
             setOnClipboardHistoryToggleListener(this@IMEService)
@@ -14960,6 +15017,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 override fun onClick() {
                     if (!deleteKeyLongKeyPressed.get()) {
                         vibrate()
+                        if (routeSymbolPanelSearchDelete()) return
                         sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL)
                     }
                     stopDeleteLongPress()
@@ -15023,6 +15081,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
             setOnEmojiSearchListener { query ->
                 emojiSearchQuery.value = query
+            }
+            setOnSymbolPanelSearchFocusListener { active ->
+                setSymbolPanelSearchFocused(active)
             }
             setClipboardHistoryEnabled(isClipboardHistoryFeatureEnabled)
             setOnClipboardHistoryToggleListener(this@IMEService)
@@ -17512,8 +17573,14 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         insertString: String,
     ): com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateZenzContext {
         val hardwareKeyboard = hasHardwareKeyboardConnected == true
+        val leftContext = cachedCandidateLeftContext.ifEmpty {
+            truncateZenzLeftContext(getLeftContext(inputLength = 0))
+        }
         zenzContextCacheInput?.let { cachedInput ->
-            if (cachedInput == insertString && zenzContextCacheHardwareKeyboard == hardwareKeyboard) {
+            if (cachedInput == insertString &&
+                zenzContextCacheHardwareKeyboard == hardwareKeyboard &&
+                zenzContextCacheLeftContext == leftContext
+            ) {
                 zenzContextCache?.let { return it }
             }
         }
@@ -17522,7 +17589,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             snapshot = snapshot,
             policy = currentRuntimeConversionPolicy(insertString),
             config = currentZenzConversionConfig(snapshot),
-            leftContext = resolveZenzLeftContext(insertString),
+            leftContext = leftContext,
             hasHardwareKeyboard = hardwareKeyboard,
             fallbackZenzEnabled = zenzEnableStatePreference == true,
             fallbackZenzRerankEnabled = zenzRerankPreference == true,
@@ -17530,6 +17597,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         )
         zenzContextCacheInput = insertString
         zenzContextCacheHardwareKeyboard = hardwareKeyboard
+        zenzContextCacheLeftContext = leftContext
         zenzContextCache = built
         return built
     }
@@ -17946,6 +18014,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun handleDeleteKeyTap(insertString: String, suggestions: List<Candidate>) {
+        if (routeSymbolPanelSearchDelete()) return
         when {
             insertString.isNotEmpty() -> {
                 if (isHenkan.get()) {
@@ -19170,6 +19239,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun sendCharTap(
         charToSend: Char, insertString: String, sb: StringBuilder
     ) {
+        if (routeSymbolPanelSearchText(charToSend.toString())) return
         when (currentInputType) {
             InputTypeForIME.None,
             InputTypeForIME.Number,
