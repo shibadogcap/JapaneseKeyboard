@@ -42,7 +42,7 @@ internal object AzooKeyJapaneseConversionText {
         var offset = 0
         while (offset < text.length) {
             val codePoint = text.codePointAt(offset)
-            if (codePoint in 0xFF66..0xFF9F) return true
+            if (codePoint in 0xFF61..0xFF9F) return true
             offset += Character.charCount(codePoint)
         }
         return false
@@ -53,7 +53,7 @@ internal object AzooKeyJapaneseConversionText {
         var offset = 0
         while (offset < text.length) {
             val codePoint = text.codePointAt(offset)
-            if (codePoint !in 0xFF66..0xFF9F && codePoint != 0xFF9E && codePoint != 0xFF9F) {
+            if (codePoint !in 0xFF61..0xFF9F) {
                 return false
             }
             offset += Character.charCount(codePoint)
@@ -74,7 +74,7 @@ internal object AzooKeyJapaneseConversionText {
         if (isHangulCodePoint(codePoint)) return false
         if (codePoint in 0x3041..0x3096) return true // ひらがな
         if (codePoint in 0x30A1..0x30F6) return true // カタカナ
-        if (codePoint in 0xFF66..0xFF9F) return true // 半角カナ
+        if (codePoint in 0xFF61..0xFF9F) return true // 半角カナ（濁点・半濁点含む）
         if (codePoint in 'a'.code..'z'.code || codePoint in 'A'.code..'Z'.code) return true
         if (codePoint in '0'.code..'9'.code) return true
         if (codePoint.toChar() in allowedAsciiSymbols) return true
@@ -91,7 +91,7 @@ internal object AzooKeyJapaneseConversionText {
         if (isDecoratedAlphanumericCodePoint(codePoint)) return true
         if (codePoint in 0x3041..0x3096) return true // ひらがな
         if (codePoint in 0x30A1..0x30F6) return true // カタカナ
-        if (codePoint in 0xFF66..0xFF9F) return true // 半角カナ
+        if (codePoint in 0xFF61..0xFF9F) return true // 半角カナ（濁点・半濁点含む）
         if (codePoint in 'a'.code..'z'.code || codePoint in 'A'.code..'Z'.code) return true
         if (codePoint in 0xFF41..0xFF5A || codePoint in 0xFF21..0xFF3A) return true // 全角英字
         if (codePoint in '0'.code..'9'.code || codePoint in 0xFF10..0xFF19) return true // 数字

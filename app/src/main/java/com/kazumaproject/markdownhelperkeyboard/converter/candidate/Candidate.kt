@@ -223,7 +223,7 @@ private val HALF_TO_FULL_WIDTH_ALPHANUM_MAP: Map<Char, Char> = run {
 /**
  * 文字列を半角カナに変換（azooKey `halfWidthKanaCandidate` 相当）
  */
-fun String.toHalfWidthKana(): String = this.map { KATAKANA_TO_HALF_WIDTH_MAP[it] ?: it }.joinToString("")
+fun String.toHalfWidthKana(): String = HalfWidthKatakanaConverter.convertFullWidthKatakana(this)
 
 /**
  * 文字列を全角英数字に変換（azooKey `fullWidthRomanCandidate` 相当）

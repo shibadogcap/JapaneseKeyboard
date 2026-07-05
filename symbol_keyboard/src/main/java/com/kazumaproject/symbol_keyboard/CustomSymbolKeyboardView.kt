@@ -847,10 +847,13 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             androidx.appcompat.R.id.search_src_text,
         ) ?: return
         editText.showSoftInputOnFocus = false
+        editText.isFocusableInTouchMode = true
         val activate = {
             activeSearchTarget = target
+            editText.requestFocus()
             symbolPanelSearchFocusListener?.invoke(true)
         }
+        searchView.setOnClickListener { activate() }
         editText.setOnClickListener { activate() }
         editText.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {

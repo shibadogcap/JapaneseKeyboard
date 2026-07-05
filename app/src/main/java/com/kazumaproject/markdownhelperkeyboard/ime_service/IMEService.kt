@@ -11502,8 +11502,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         symbolPanelSearchFocused = active
         mainLayoutBinding?.let { mainView ->
             if (keyboardSymbolViewState.value.isShown) {
-                applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = active)
-                updateKeyboardLayout(mainView, isSymbolOverride = true)
+                if (active) {
+                    updateKeyboardLayout(mainView, isSymbolOverride = true)
+                } else {
+                    applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = false)
+                    updateKeyboardLayout(mainView, isSymbolOverride = true)
+                }
             }
         }
     }
@@ -11512,30 +11516,56 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding,
         keepMainKeyboardVisible: Boolean,
     ) {
+        val surface = getNormalKeyboardSurface() ?: return
         if (keepMainKeyboardVisible) {
-            when {
-                mainView.customLayoutDefault.isInvisible -> mainView.customLayoutDefault.isVisible = true
-                mainView.tabletView.isVisible && isTabletGojuonSurface() -> {
-                    mainView.tabletView.isVisible = true
-                }
-                mainView.tabletView.isVisible && isTabletTenkeySurface() -> {
-                    mainView.keyboardView.isVisible = true
-                }
-                mainView.keyboardView.isInvisible -> mainView.keyboardView.isVisible = true
-                mainView.qwertyView.isInvisible -> mainView.qwertyView.isVisible = true
-            }
+            renderKeyboardMode(surface, qwertyMode.value, isFloating = false)
         } else {
-            when {
-                mainView.customLayoutDefault.isVisible -> mainView.customLayoutDefault.visibility = View.INVISIBLE
-                mainView.tabletView.isVisible && isTabletGojuonSurface() -> {
-                    mainView.tabletView.visibility = View.INVISIBLE
-                }
-                mainView.tabletView.isVisible && isTabletTenkeySurface() -> {
-                    mainView.keyboardView.visibility = View.INVISIBLE
-                }
-                mainView.keyboardView.isVisible -> mainView.keyboardView.visibility = View.INVISIBLE
-                mainView.qwertyView.isVisible -> mainView.qwertyView.visibility = View.INVISIBLE
+            hideKeyboardViews(surface)
+        }
+    }
+
+    private fun applySymbolPanelWithKeyboardSplitLayout(
+        mainView: MainLayoutBinding,
+        keyboardHeightPx: Int,
+        width: Int,
+        gravity: Int,
+    ) {
+        val toolbarHeight = dpToPx(40)
+        val horizontal = gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+        val symbolHeight = (keyboardHeightPx * 0.58f).toInt().coerceAtLeast(dpToPx(200))
+
+        (mainView.keyboardSymbolView.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.height = symbolHeight
+            params.width = width
+            params.topMargin = toolbarHeight
+            params.bottomMargin = 0
+            params.gravity = Gravity.TOP or horizontal
+            mainView.keyboardSymbolView.layoutParams = params
+        }
+
+        applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = true)
+        val surface = getNormalKeyboardSurface() ?: return
+        val keyboardView = when (qwertyMode.value) {
+            TenKeyQWERTYMode.Default -> {
+                if (isTabletGojuonSurface()) surface.tabletView else surface.keyboardView
             }
+            TenKeyQWERTYMode.TenKeyQWERTY,
+            TenKeyQWERTYMode.TenKeyQWERTYRomaji,
+            -> surface.qwertyView
+            TenKeyQWERTYMode.Custom,
+            TenKeyQWERTYMode.Sumire,
+            TenKeyQWERTYMode.Number,
+            -> surface.customLayout
+        }
+        keyboardView?.let { view ->
+            (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                params.height = keyboardHeightPx
+                params.topMargin = 0
+                params.bottomMargin = 0
+                params.gravity = Gravity.BOTTOM or horizontal
+                view.layoutParams = params
+            }
+            view.isVisible = true
         }
     }
 
@@ -12048,8 +12078,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             heightPx + applicationContext.dpToPx(40)
         }
 
+        val toolbarHeight = dpToPx(40)
         val finalKeyboardHeight = when {
-            symbolWithInputKeyboard -> (heightPx * 2) + applicationContext.dpToPx(80) + systemBottomInset
+            symbolWithInputKeyboard -> toolbarHeight + (heightPx * 1.58f).toInt().coerceAtLeast(dpToPx(200)) + systemBottomInset
             else -> baseKeyboardHeight + systemBottomInset
         }
 
@@ -12115,6 +12146,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             param.bottomMargin = 0
             param.gravity = Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
             mainView.keyboardSymbolView.layoutParams = param
+        }
+
+        if (symbolWithInputKeyboard) {
+            applySymbolPanelWithKeyboardSplitLayout(
+                mainView = mainView,
+                keyboardHeightPx = heightPx,
+                width = finalKeyboardWidth,
+                gravity = gravity,
+            )
         }
 
         if (isTabletGojuonSurface()) {
