@@ -8920,7 +8920,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
                     is KeyAction.InputText -> {
                         if (action.text == "^_^") {
-                            val insertString = inputString.value
+                            val insertString = keyboardCompositionTextForEditing()
                             Timber.d("InputText: emoji: $insertString")
                             if (insertString.isNotEmpty()) {
                                 val sb = StringBuilder()
@@ -8930,7 +8930,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                         dakutenChar, sb, insertString
                                     )
                                 }
-                            } else {
+                            } else if (!isSymbolPanelSearchRoutingActive()) {
                                 _keyboardSymbolViewState.value = SymbolKeyboardState(
                                     isShown = !_keyboardSymbolViewState.value.isShown
                                 )
@@ -9290,7 +9290,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     is KeyAction.InputText -> {
                         when (action.text) {
                             "ひらがな小文字" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -9302,7 +9302,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
 
                             "濁点" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -9314,7 +9314,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
 
                             "半濁点" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -9722,7 +9722,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     is KeyAction.InputText -> {
                         when (action.text) {
                             "^_^" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 Timber.d("InputText: emoji: $insertString")
                                 if (insertString.isNotEmpty()) {
                                     val sb = StringBuilder()
@@ -9732,7 +9732,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                             dakutenChar, sb, insertString
                                         )
                                     }
-                                } else {
+                                } else if (!isSymbolPanelSearchRoutingActive()) {
                                     _keyboardSymbolViewState.value = SymbolKeyboardState(
                                         isShown = !_keyboardSymbolViewState.value.isShown
                                     )
@@ -9752,7 +9752,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
 
                             "ひらがな小文字" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -9764,7 +9764,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
 
                             "濁点" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -9776,7 +9776,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             }
 
                             "半濁点" -> {
-                                val insertString = inputString.value
+                                val insertString = keyboardCompositionTextForEditing()
                                 if (insertString.isEmpty()) return
                                 val sb = StringBuilder()
                                 val c = insertString.last()
@@ -10627,7 +10627,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun getSensitiveClipboardPreviewText(text: CharSequence? = null): String = "********"
 
     private fun dakutenSmallActionForSumire() {
-        val insertString = inputString.value
+        val insertString = keyboardCompositionTextForEditing()
         val sb = StringBuilder()
         if (insertString.isNotEmpty()) {
             if (insertString.last().isLatinAlphabet()) {
@@ -11509,6 +11509,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return inputString.value
         }
         return lastQwertyRomajiRawInput ?: getActiveSymbolPanelSearchQuery()
+    }
+
+    private fun keyboardCompositionTextForEditing(): String {
+        if (!isSymbolPanelSearchRoutingActive()) {
+            return inputString.value
+        }
+        return getActiveSymbolPanelSearchQuery()
     }
 
     private fun isSymbolPanelSearchRoutingActive(): Boolean {
@@ -19422,21 +19429,26 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun setStringBuilderForConvertStringInHiragana(
         inputChar: Char, sb: StringBuilder, insertString: String
     ) {
+        if (insertString.isEmpty()) return
+        val updated = if (insertString.length == 1) {
+            inputChar.toString()
+        } else {
+            insertString.dropLast(1) + inputChar
+        }
+        if (routeSymbolPanelSearchFullText(updated)) {
+            lastQwertyRomajiRawInput = null
+            return
+        }
         if (insertString.length == 1) {
             sb.append(inputChar)
-            _inputString.update {
-                sb.toString()
-            }
         } else {
             sb.append(insertString).deleteAt(insertString.length - 1).append(inputChar)
-            _inputString.update {
-                sb.toString()
-            }
         }
+        _inputString.update { updated }
     }
 
     private fun toggleDakutenOnlyForCustomKeyboard() {
-        val insertString = inputString.value
+        val insertString = keyboardCompositionTextForEditing()
         if (insertString.isEmpty()) return
 
         insertString.last().toggleDakutenWithSeion()?.let { toggled ->
@@ -19449,7 +19461,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun toggleHandakutenOnlyForCustomKeyboard() {
-        val insertString = inputString.value
+        val insertString = keyboardCompositionTextForEditing()
         if (insertString.isEmpty()) return
 
         insertString.last().toggleHandakutenWithSeion()?.let { toggled ->
@@ -19466,15 +19478,16 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     ) {
         _dakutenPressed.value = true
         englishSpaceKeyPressed.set(false)
-        if (insertString.isNotEmpty()) {
-            val insertPosition = insertString.last()
+        val compositionText = keyboardCompositionTextForEditing().ifEmpty { insertString }
+        if (compositionText.isNotEmpty()) {
+            val insertPosition = compositionText.last()
             insertPosition.let { c ->
                 if (c.isHiragana()) {
                     when (gestureType) {
                         GestureType.Tap, GestureType.FlickBottom -> {
                             c.getDakutenSmallChar()?.let { dakutenChar ->
                                 setStringBuilderForConvertStringInHiragana(
-                                    dakutenChar, sb, insertString
+                                    dakutenChar, sb, compositionText
                                 )
                             }
                         }
@@ -19482,7 +19495,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         GestureType.FlickLeft -> {
                             c.getDakutenFlickLeft()?.let { dakutenChar ->
                                 setStringBuilderForConvertStringInHiragana(
-                                    dakutenChar, sb, insertString
+                                    dakutenChar, sb, compositionText
                                 )
                             }
                         }
@@ -19490,7 +19503,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         GestureType.FlickRight -> {
                             c.getDakutenFlickRight()?.let { dakutenChar ->
                                 setStringBuilderForConvertStringInHiragana(
-                                    dakutenChar, sb, insertString
+                                    dakutenChar, sb, compositionText
                                 )
                             }
                         }
@@ -19498,7 +19511,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         GestureType.FlickTop -> {
                             c.getDakutenFlickTop()?.let { dakutenChar ->
                                 setStringBuilderForConvertStringInHiragana(
-                                    dakutenChar, sb, insertString
+                                    dakutenChar, sb, compositionText
                                 )
                             }
                         }
@@ -19521,9 +19534,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     ) {
         _dakutenPressed.value = true
         englishSpaceKeyPressed.set(false)
+        val compositionText = keyboardCompositionTextForEditing().ifEmpty { insertString }
 
-        if (insertString.isNotEmpty()) {
-            val insertPosition = insertString.last()
+        if (compositionText.isNotEmpty()) {
+            val insertPosition = compositionText.last()
             insertPosition.let { c ->
                 if (c.isHiragana()) {
                     when (gestureType) {
@@ -19532,7 +19546,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 setStringBuilderForConvertStringInHiragana(
                                     dakutenChar,
                                     sb,
-                                    insertString
+                                    compositionText
                                 )
                             }
                         }
@@ -19542,7 +19556,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 setStringBuilderForConvertStringInHiragana(
                                     dakutenChar,
                                     sb,
-                                    insertString
+                                    compositionText
                                 )
                             }
                         }
@@ -19552,7 +19566,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 setStringBuilderForConvertStringInHiragana(
                                     dakutenChar,
                                     sb,
-                                    insertString
+                                    compositionText
                                 )
                             }
                         }
@@ -19562,7 +19576,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 setStringBuilderForConvertStringInHiragana(
                                     dakutenChar,
                                     sb,
-                                    insertString
+                                    compositionText
                                 )
                             }
                         }
