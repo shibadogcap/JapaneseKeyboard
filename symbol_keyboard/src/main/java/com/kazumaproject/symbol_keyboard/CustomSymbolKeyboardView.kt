@@ -809,6 +809,10 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
     fun isSymbolPanelSearchActive(): Boolean = activeSearchTarget != null
 
+    fun getActiveSearchQuery(): String {
+        return activeSearchView()?.query?.toString().orEmpty()
+    }
+
     fun appendActiveSearchText(text: String) {
         if (text.isEmpty()) return
         val searchView = activeSearchView() ?: return

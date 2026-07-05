@@ -9598,22 +9598,28 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 }
                                 if (text.length == 1) {
                                     if (isCustomLayoutRomajiMode) {
-                                        val insertString = inputString.value
+                                        val insertString = composingPrefixForKeyboardAppend()
                                         val sb = StringBuilder()
                                         sb.append(insertString).append(text)
                                         romajiConverter?.let { converter ->
                                             if (isDefaultRomajiHenkanMap) {
                                                 if (!isCustomLayoutShiftPressed && !isCustomLayoutCapLock) {
-                                                    _inputString.update {
-                                                        converter.convertCustomLayout(
-                                                            sb.toString()
-                                                        )
+                                                    val converted = converter.convertCustomLayout(
+                                                        sb.toString()
+                                                    )
+                                                    if (!routeSymbolPanelSearchFullText(converted)) {
+                                                        _inputString.update { converted }
+                                                    } else {
+                                                        lastQwertyRomajiRawInput = sb.toString()
                                                     }
                                                 } else {
-                                                    _inputString.update {
-                                                        applyCustomLayoutShiftAndCapLock(
-                                                            sb.toString()
-                                                        )
+                                                    val converted = applyCustomLayoutShiftAndCapLock(
+                                                        sb.toString()
+                                                    )
+                                                    if (!routeSymbolPanelSearchFullText(converted)) {
+                                                        _inputString.update { converted }
+                                                    } else {
+                                                        lastQwertyRomajiRawInput = sb.toString()
                                                     }
                                                 }
 
@@ -9627,12 +9633,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                                         ),
                                                     )
                                                 } else {
-                                                    _inputString.update {
-                                                        applyCustomLayoutShiftAndCapLock(
-                                                            converter.convert(
-                                                                sb.toString()
-                                                            )
+                                                    val converted = applyCustomLayoutShiftAndCapLock(
+                                                        converter.convert(
+                                                            sb.toString()
                                                         )
+                                                    )
+                                                    if (!routeSymbolPanelSearchFullText(converted)) {
+                                                        _inputString.update { converted }
+                                                    } else {
+                                                        lastQwertyRomajiRawInput = sb.toString()
                                                     }
                                                 }
                                             }
@@ -9656,13 +9665,16 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                         commitText(text, 1)
                                     } else {
                                         if (isCustomLayoutRomajiMode) {
-                                            val insertString = inputString.value
+                                            val insertString = composingPrefixForKeyboardAppend()
                                             val sb = StringBuilder()
                                             sb.append(insertString).append(text)
                                             romajiConverter?.let { converter ->
                                                 if (isDefaultRomajiHenkanMap) {
-                                                    _inputString.update {
-                                                        converter.convertCustomLayout(sb.toString())
+                                                    val converted = converter.convertCustomLayout(sb.toString())
+                                                    if (!routeSymbolPanelSearchFullText(converted)) {
+                                                        _inputString.update { converted }
+                                                    } else {
+                                                        lastQwertyRomajiRawInput = sb.toString()
                                                     }
                                                 } else {
                                                     if (customRomajiZenkakuConversionEnablePreference == true) {
@@ -9672,17 +9684,23 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                                             converter.convertQWERTYZenkaku(raw),
                                                         )
                                                     } else {
-                                                        _inputString.update {
-                                                            converter.convert(sb.toString())
+                                                        val converted = converter.convert(sb.toString())
+                                                        if (!routeSymbolPanelSearchFullText(converted)) {
+                                                            _inputString.update { converted }
+                                                        } else {
+                                                            lastQwertyRomajiRawInput = sb.toString()
                                                         }
                                                     }
                                                 }
                                             }
                                         } else {
-                                            val insertString = inputString.value
+                                            val insertString = composingPrefixForKeyboardAppend()
                                             val sb = StringBuilder()
                                             sb.append(insertString).append(text)
-                                            _inputString.update { sb.toString() }
+                                            val combined = sb.toString()
+                                            if (!routeSymbolPanelSearchFullText(combined)) {
+                                                _inputString.update { combined }
+                                            }
                                         }
                                     }
                                 }
@@ -10150,9 +10168,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
                 }
             } else {
-                sb.append(insertString).append(text)
-                _inputString.update {
-                    sb.toString()
+                sb.append(composingPrefixForKeyboardAppend()).append(text)
+                val combined = sb.toString()
+                if (!routeSymbolPanelSearchFullText(combined)) {
+                    _inputString.update { combined }
                 }
             }
         }
@@ -11479,6 +11498,19 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         zenzContextCache = null
     }
 
+    private fun getActiveSymbolPanelSearchQuery(): String {
+        return mainLayoutBinding?.keyboardSymbolView?.getActiveSearchQuery()
+            ?: floatingKeyboardBinding?.floatingSymbolKeyboard?.getActiveSearchQuery()
+            ?: ""
+    }
+
+    private fun composingPrefixForKeyboardAppend(): String {
+        if (!isSymbolPanelSearchRoutingActive()) {
+            return inputString.value
+        }
+        return lastQwertyRomajiRawInput ?: getActiveSymbolPanelSearchQuery()
+    }
+
     private fun isSymbolPanelSearchRoutingActive(): Boolean {
         if (!keyboardSymbolViewState.value.isShown) return false
         if (symbolPanelSearchFocused) return true
@@ -11505,12 +11537,18 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val deletedFromMain = mainLayoutBinding?.keyboardSymbolView?.deleteActiveSearchChar() == true
         val deletedFromFloating =
             floatingKeyboardBinding?.floatingSymbolKeyboard?.deleteActiveSearchChar() == true
+        if (deletedFromMain || deletedFromFloating) {
+            lastQwertyRomajiRawInput = getActiveSymbolPanelSearchQuery().ifEmpty { null }
+        }
         return deletedFromMain || deletedFromFloating
     }
 
     private fun setSymbolPanelSearchFocused(active: Boolean) {
         if (symbolPanelSearchFocused == active) return
         symbolPanelSearchFocused = active
+        if (active) {
+            lastQwertyRomajiRawInput = null
+        }
         mainLayoutBinding?.let { mainView ->
             if (keyboardSymbolViewState.value.isShown) {
                 if (active) {
@@ -13103,9 +13141,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     ) {
         if (isSymbolPanelSearchRoutingActive()) {
             if (string.isNotEmpty()) {
-                routeSymbolPanelSearchFullText(string)
                 _inputString.update { "" }
-                lastQwertyRomajiRawInput = null
             }
             return
         }
@@ -15496,6 +15532,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             val inputForAppend = if (isHenkan.get()) {
                                 commitCurrentHenkanForNewInput()
                                 ""
+                            } else if (isSymbolPanelSearchRoutingActive()) {
+                                lastQwertyRomajiRawInput.orEmpty()
                             } else {
                                 effectiveInsertString
                             }
@@ -19348,6 +19386,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun sendCharFlick(
         charToSend: Char, insertString: String, sb: StringBuilder
     ) {
+        if (routeSymbolPanelSearchText(charToSend.toString())) return
         when (currentInputType) {
             InputTypeForIME.None,
             InputTypeForIME.Number,
