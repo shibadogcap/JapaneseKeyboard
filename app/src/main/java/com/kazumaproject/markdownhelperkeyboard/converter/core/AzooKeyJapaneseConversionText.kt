@@ -27,12 +27,10 @@ internal object AzooKeyJapaneseConversionText {
         return surface.codePoints().allMatch { isAllowedClauseCodePoint(it) }
     }
 
-    /** 候補バー表示から除外すべき surface */
+    /** 候補バー表示から除外すべき surface（Zenz 由来のハングル等の謎候補） */
     fun shouldRejectDisplayedCandidate(surface: String): Boolean {
         if (surface.isEmpty()) return true
         if (containsHangul(surface)) return true
-        if (isPureHalfWidthKatakana(surface)) return true
-        if (containsHangul(surface) && containsHalfWidthKatakana(surface)) return true
         return false
     }
 

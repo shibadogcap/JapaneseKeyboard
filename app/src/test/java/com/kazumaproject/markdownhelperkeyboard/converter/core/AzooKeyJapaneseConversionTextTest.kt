@@ -21,9 +21,9 @@ class AzooKeyJapaneseConversionTextTest {
     }
 
     @Test
-    fun rejectsPureHalfWidthKatakanaForDisplay() {
-        assertTrue(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ﾄｳｷｮｳ"))
-        assertTrue(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ｱｲｳ"))
+    fun acceptsPureHalfWidthKatakanaForDisplay() {
+        assertFalse(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ﾄｳｷｮｳ"))
+        assertFalse(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ｱｲｳ"))
     }
 
     @Test
@@ -80,9 +80,16 @@ class AzooKeyJapaneseConversionTextTest {
                 length = 2u,
                 score = 0,
             ),
+            com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate(
+                string = "ﾄｳｷｮｳ",
+                type = 3,
+                length = 4u,
+                score = -15,
+            ),
         )
         val filtered = AzooKeyJapaneseConversionText.filterDisplayedCandidates(candidates)
-        assertEquals(1, filtered.size)
-        assertEquals("東京", filtered.first().string)
+        assertEquals(2, filtered.size)
+        assertEquals("東京", filtered[0].string)
+        assertEquals("ﾄｳｷｮｳ", filtered[1].string)
     }
 }

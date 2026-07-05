@@ -503,8 +503,7 @@ object DefaultSpecialCandidateProviders {
         TimeExpressionSpecialCandidateProvider,
         CommaSeparatedNumberSpecialCandidateProvider,
         TypographySpecialCandidateProvider,
-        // HalfWidthKatakanaSpecialCandidateProvider は候補バーでは非表示のため除外
-        // HalfWidthKatakanaSpecialCandidateProvider,
+        HalfWidthKatakanaSpecialCandidateProvider,
     )
 
     fun provide(request: CandidateRequest): List<Candidate> {

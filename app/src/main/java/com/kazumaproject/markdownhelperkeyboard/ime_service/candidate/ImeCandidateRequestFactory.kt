@@ -68,7 +68,7 @@ object ImeCandidateRequestFactory {
             experimentalZenzaiPredictiveInput = preferences.experimentalZenzaiPredictiveInput,
             typoCorrectionMode = preferences.typoCorrectionMode,
             fullWidthRomanCandidate = true,
-            halfWidthKanaCandidate = false,
+            halfWidthKanaCandidate = true,
             englishCandidateInRoman2KanaInput = preferences.englishCandidateInRoman2KanaInput,
             metadata = preferences.versionString?.let {
                 ConvertRequestOptions.Metadata(versionString = it)
