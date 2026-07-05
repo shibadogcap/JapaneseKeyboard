@@ -912,9 +912,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var qwertyPositionPreferenceValue: Boolean? = true
     private var qwertyBottomMarginPreferenceValue: Int? = 0
 
-    private var tenkeyHeightLandScapePreferenceValue: Int? = 280
+    private var tenkeyHeightLandScapePreferenceValue: Int? = 220
     private var tenkeyWidthLandScapePreferenceValue: Int? = 100
-    private var qwertyHeightLandScapePreferenceValue: Int? = 280
+    private var qwertyHeightLandScapePreferenceValue: Int? = 220
     private var qwertyWidthLandScapePreferenceValue: Int? = 100
     private var candidateViewLandScapeHeightPreferenceValue: Int? = 110
     private var candidateViewLandScapeHeightEmptyPreferenceValue: Int? = 110
@@ -12054,12 +12054,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
         } else {
             KeyboardSizePreferences(
-                heightPref = tenkeyHeightLandScapePreferenceValue ?: 280,
+                heightPref = tenkeyHeightLandScapePreferenceValue ?: 220,
                 widthPref = tenkeyWidthLandScapePreferenceValue ?: 100,
                 bottomMargin = tenkeyLandScapeBottomMarginPreferenceValue ?: 0,
                 positionIsEnd = tenkeyLandScapePositionPreferenceValue ?: true,
                 candidateEmptyHeight = candidateViewLandScapeHeightEmptyPreferenceValue ?: 110,
-                qwertyHeightPref = qwertyHeightLandScapePreferenceValue ?: 280,
+                qwertyHeightPref = qwertyHeightLandScapePreferenceValue ?: 220,
                 qwertyWidthPref = qwertyWidthLandScapePreferenceValue ?: 100,
                 qwertyBottomMargin = qwertyLandScapeBottomMarginPreferenceValue ?: 0,
                 qwertyPositionIsEnd = qwertyLandScapePositionPreferenceValue ?: true,
@@ -12128,13 +12128,18 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         // 3. 最終的な高さ、幅、Gravity、マージンの決定
-        val baseKeyboardHeight = if (isPortrait) {
-            heightPx + applicationContext.dpToPx(40)
-        } else {
-            heightPx + applicationContext.dpToPx(40)
-        }
-
         val toolbarHeight = dpToPx(40)
+        val candidateTabHeight = if (
+            !isPortrait &&
+            candidateTabVisibility == true &&
+            mainView.candidateTabLayout.isVisible
+        ) {
+            mainView.candidateTabLayout.height.takeIf { it > 0 } ?: dpToPx(36)
+        } else {
+            0
+        }
+        val baseKeyboardHeight = heightPx + toolbarHeight + candidateTabHeight
+
         val finalKeyboardHeight = when {
             symbolWithInputKeyboard -> toolbarHeight + (heightPx * 1.58f).toInt().coerceAtLeast(dpToPx(200)) + systemBottomInset
             else -> baseKeyboardHeight + systemBottomInset
@@ -12192,15 +12197,20 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             gravity = gravity,
             finalBottomMargin = finalBottomMargin,
             finalStartMargin = finalStartMargin,
-            finalEndMargin = finalEndMargin
+            finalEndMargin = finalEndMargin,
+            isPortrait = isPortrait,
         )
 
         (mainView.keyboardSymbolView.layoutParams as? FrameLayout.LayoutParams)?.let { param ->
             param.height = heightPx
             param.width = finalKeyboardWidth
-            param.topMargin = dpToPx(40)
-            param.bottomMargin = 0
-            param.gravity = Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
+            param.topMargin = if (isPortrait) toolbarHeight else 0
+            param.bottomMargin = if (isPortrait) 0 else finalBottomMargin
+            param.gravity = if (isPortrait) {
+                Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
+            } else {
+                gravity
+            }
             mainView.keyboardSymbolView.layoutParams = param
         }
 
@@ -12216,7 +12226,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (isTabletGojuonSurface()) {
             (mainView.tabletView.layoutParams as? FrameLayout.LayoutParams)?.let { param ->
                 param.height = heightPx
-                mainView.keyboardSymbolView.layoutParams = param
+                mainView.tabletView.layoutParams = param
             }
         }
 
@@ -12322,7 +12332,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         gravity: Int,
         finalBottomMargin: Int,
         finalStartMargin: Int,
-        finalEndMargin: Int
+        finalEndMargin: Int,
+        isPortrait: Boolean = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT,
     ) {
         if (hasHardwareKeyboardConnected == true) {
             val wrapContent = ViewGroup.LayoutParams.WRAP_CONTENT
@@ -12350,29 +12361,46 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val horizontalGravity = gravity and Gravity.HORIZONTAL_GRAVITY_MASK
         val toolbarHorizontalGravity = horizontalGravity.takeIf { it != 0 } ?: Gravity.START
         val toolbarGravity = Gravity.TOP or toolbarHorizontalGravity
-        listOf(
-            mainView.suggestionViewParent,
+        val keyboardViews = listOf(
             mainView.keyboardView,
             mainView.tabletView,
             mainView.customLayoutDefault,
             mainView.qwertyView,
             mainView.candidatesRowView,
-            mainView.keyboardSymbolView
-        ).forEach { view ->
+            mainView.keyboardSymbolView,
+        )
+        (mainView.suggestionViewParent.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            params.height = toolbarHeight
+            params.topMargin = 0
+            params.bottomMargin = 0
+            params.gravity = toolbarGravity
+            mainView.suggestionViewParent.layoutParams = params
+        }
+        keyboardViews.forEach { view ->
             (view.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-                if (view != mainView.suggestionViewParent) {
-                    params.height = heightPx
+                params.height = heightPx
+                if (isPortrait) {
                     params.topMargin = toolbarHeight
                     params.bottomMargin = 0
-                    params.gravity = Gravity.TOP or (gravity and Gravity.HORIZONTAL_GRAVITY_MASK)
+                    params.gravity = Gravity.TOP or horizontalGravity
                 } else {
-                    params.height = toolbarHeight
                     params.topMargin = 0
-                    params.bottomMargin = 0
-                    params.gravity = toolbarGravity
+                    params.bottomMargin = finalBottomMargin
+                    params.gravity = gravity
                 }
                 view.layoutParams = params
             }
+        }
+        (mainView.candidateTabLayout.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            if (!isPortrait && candidateTabVisibility == true && mainView.candidateTabLayout.isVisible) {
+                params.height = dpToPx(36)
+                params.topMargin = 0
+                params.bottomMargin = heightPx + finalBottomMargin
+                params.gravity = gravity
+            } else {
+                params.bottomMargin = 0
+            }
+            mainView.candidateTabLayout.layoutParams = params
         }
 
         (mainView.root.layoutParams as? FrameLayout.LayoutParams)?.let { params ->

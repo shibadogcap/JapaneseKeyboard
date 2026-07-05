@@ -120,7 +120,7 @@
     <com.kazumaproject.tabletkey.TabletKeyboardView
         android:id="@+id/tablet_view"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/keyboard_height"
+        android:layout_height="@dimen/keyboard_height_land"
         android:layout_gravity="bottom"
         android:clickable="true"
         android:focusable="true"
@@ -130,7 +130,7 @@
     <com.kazumaproject.qwerty_keyboard.ui.QWERTYKeyboardView
         android:id="@+id/qwerty_view"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/keyboard_height"
+        android:layout_height="@dimen/keyboard_height_land"
         android:layout_gravity="bottom"
         android:clickable="true"
         android:focusable="true"
@@ -140,7 +140,7 @@
     <com.kazumaproject.custom_keyboard.view.FlickKeyboardView
         android:id="@+id/custom_layout_default"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/keyboard_height"
+        android:layout_height="@dimen/keyboard_height_land"
         android:layout_gravity="bottom"
         android:clickable="true"
         android:focusable="true"
