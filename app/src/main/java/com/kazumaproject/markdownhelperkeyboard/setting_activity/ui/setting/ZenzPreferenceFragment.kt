@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.SwitchPreferenceCompat
 import com.kazumaproject.markdownhelperkeyboard.R
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
 import dagger.hilt.android.AndroidEntryPoint
@@ -35,6 +36,28 @@ class ZenzPreferenceFragment : PreferenceFragmentCompat() {
         }
 
         updateModelPrefSummary()
+        bindZenzaiRerankExclusion()
+    }
+
+    private fun bindZenzaiRerankExclusion() {
+        val zenzaiPref = findPreference<SwitchPreferenceCompat>("enable_ai_conversion_zenzai_preference")
+        val rerankPref = findPreference<SwitchPreferenceCompat>("enable_zenz_rerank_preference")
+        if (zenzaiPref == null || rerankPref == null) return
+
+        fun syncRerankAvailability() {
+            val zenzaiOn = zenzaiPref.isChecked
+            rerankPref.isEnabled = !zenzaiOn
+            if (zenzaiOn && rerankPref.isChecked) {
+                rerankPref.isChecked = false
+                appPreference.enable_zenz_rerank_preference = false
+            }
+        }
+
+        zenzaiPref.setOnPreferenceChangeListener { _, _ ->
+            syncRerankAvailability()
+            true
+        }
+        syncRerankAvailability()
     }
 
     private fun showModelSelectDialog() {

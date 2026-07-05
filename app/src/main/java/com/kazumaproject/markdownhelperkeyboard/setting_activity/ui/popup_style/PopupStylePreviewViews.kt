@@ -196,8 +196,9 @@ class FlickPopupStylePreviewView @JvmOverloads constructor(
         val scale = style.sizeScalePercent / 100f
         val size = dpToPx(92f) * scale
         val rect = RectF(width / 2f - size / 2f, height / 2f - size / 2f, width / 2f + size / 2f, height / 2f + size / 2f)
-        canvas.drawOval(rect, popupPaint)
-        canvas.drawOval(rect, strokePaint)
+        val radius = dpToPx(18f) * scale
+        canvas.drawRoundRect(rect, radius, radius, popupPaint)
+        canvas.drawRoundRect(rect, radius, radius, strokePaint)
         drawCenteredText(canvas, "あ", rect)
     }
 

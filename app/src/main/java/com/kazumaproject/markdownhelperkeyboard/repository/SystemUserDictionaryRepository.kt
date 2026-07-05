@@ -14,6 +14,9 @@ class SystemUserDictionaryRepository @Inject constructor(
 
     suspend fun getAllForBuild(): List<SystemUserDictionaryEntry> = dao.getAllForBuild()
 
+    suspend fun searchByReadingPrefix(prefix: String, limit: Int): List<SystemUserDictionaryEntry> =
+        dao.searchByReadingPrefix(prefix, limit)
+
     suspend fun insert(entry: SystemUserDictionaryEntry) = dao.insert(entry)
 
     suspend fun insertAll(entries: List<SystemUserDictionaryEntry>) = dao.insertAll(entries)

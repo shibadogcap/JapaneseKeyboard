@@ -632,4 +632,11 @@ class RomajiKanaConverter(private val romajiToKana: Map<String, Pair<String, Int
         buffer.clear()
         surface.clear()
     }
+
+    /** 変換 API 用: 確定済みかなと未確定ローマ字バッファ */
+    fun composingSnapshot(): RomajiComposingSnapshot =
+        RomajiComposingSnapshot(
+            committedSurface = surface.toString(),
+            pendingRomaji = buffer.toString(),
+        )
 }

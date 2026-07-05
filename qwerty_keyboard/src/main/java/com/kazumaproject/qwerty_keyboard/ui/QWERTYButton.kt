@@ -4,14 +4,15 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.widget.Toast
 import androidx.appcompat.widget.AppCompatButton
 import androidx.core.content.ContextCompat
+import kotlin.math.min
 
 class QWERTYButton @JvmOverloads constructor(
     context: Context,
@@ -40,24 +41,29 @@ class QWERTYButton @JvmOverloads constructor(
     /**
      * ✅ STEP 2: 文字描画用のPaintオブジェクトを準備
      */
-    private val topRightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color =
             ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
         textAlign = Paint.Align.RIGHT
-        setPadding(0, 1, 6, 0)
         textSize = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_SP,
-            9f,
+            8.5f,
             context.resources.displayMetrics
         )
     }
+    private val textBounds = Rect()
 
     init {
         isAllCaps = false
     }
 
     fun setOverlayTypeface(typeface: Typeface?) {
-        topRightPaint.typeface = typeface
+        overlayPaint.typeface = typeface
+        invalidate()
+    }
+
+    fun setOverlayTextColor(color: Int) {
+        overlayPaint.color = color
         invalidate()
     }
 
@@ -75,38 +81,36 @@ class QWERTYButton @JvmOverloads constructor(
         // 最初にボタン本来の描画処理を呼び出す
         super.onDraw(canvas)
 
-        // topRightCharがnullでなければ文字を描画する
-        topRightChar?.toString()?.let { charText ->
-            // 描画位置を計算 (ボタンの右上、少し内側)
-            val x = (width - paddingRight).toFloat()
-            val y = paddingTop.toFloat() + topRightPaint.textSize
-
-            // Canvasに文字を描画
-            canvas.drawText(charText, x, y, topRightPaint)
-        }
-
-        bottomRightChar?.toString()?.let { charText ->
-            val x = (width - paddingRight).toFloat()
-            val y = height - paddingBottom.toFloat() - topRightPaint.fontMetrics.descent
-            canvas.drawText(charText, x, y, topRightPaint)
-        }
+        drawOverlayChar(canvas, topRightChar, top = true)
+        drawOverlayChar(canvas, bottomRightChar, top = false)
     }
 
+    private fun drawOverlayChar(canvas: Canvas, char: Char?, top: Boolean) {
+        val text = char?.toString() ?: return
+        val horizontalInset = (width * 0.14f).coerceAtLeast(4f)
+        val verticalInset = (height * 0.10f).coerceAtLeast(3f)
+        val maxTextSize = min(width, height) * 0.28f
+        overlayPaint.textSize = overlayPaint.textSize.coerceAtMost(maxTextSize)
+        overlayPaint.getTextBounds(text, 0, text.length, textBounds)
+        val x = width - horizontalInset
+        val y = if (top) {
+            verticalInset - textBounds.top
+        } else {
+            height - verticalInset - textBounds.bottom
+        }
+        canvas.drawText(text, x, y, overlayPaint)
+    }
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-            Toast.makeText(context, "Single Tap", Toast.LENGTH_SHORT).show()
-            // super.onSingleTapConfirmed(e) を呼ぶか、独自の処理を行う
             return true
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
-            Toast.makeText(context, "Double Tap", Toast.LENGTH_SHORT).show()
             return true
         }
 
         override fun onLongPress(e: MotionEvent) {
-            Toast.makeText(context, "Long Press", Toast.LENGTH_SHORT).show()
         }
     }
 }

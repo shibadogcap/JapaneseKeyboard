@@ -66,7 +66,7 @@ class CustomAngleFlickPopupView @JvmOverloads constructor(
     private val targetPositions = mutableMapOf<CircularFlickDirection, PointF>()
     private val segmentPaths = mutableMapOf<CircularFlickDirection, Path>()
     private var isFullUIModeActive = false
-    private var shapeType: ShapeType = ShapeType.CIRCLE
+    private var shapeType: ShapeType = ShapeType.ROUNDED_SQUARE
     private var mapSwitchDirection: CircularFlickDirection? = null
     private var showMapSwitchLabel = false
     private var mapSwitchLabel: String? = null
@@ -92,6 +92,11 @@ class CustomAngleFlickPopupView @JvmOverloads constructor(
         this.centerCircleRadius = centerRadius // ここで見た目のサイズを固定
         this.textPaint.textSize = newTextSize
         updateSizesAndRequestLayout()
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        textPaint.typeface = typeface ?: Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        invalidate()
     }
 
     // ... (setCustomRanges, setShapeType, setColors などは変更なし) ...

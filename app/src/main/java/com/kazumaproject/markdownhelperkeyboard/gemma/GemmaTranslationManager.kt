@@ -685,10 +685,10 @@ class GemmaTranslationManager @Inject constructor(
     )
 
     companion object {
-        const val TRANSLATED_CANDIDATE_TYPE = 41
-        const val PROMPT_RESULT_CANDIDATE_TYPE = 42
-        const val SELECTION_TRANSLATE_ACTION_CANDIDATE_TYPE = 43
-        const val SELECTION_PROMPT_ACTION_CANDIDATE_TYPE = 44
+        const val TRANSLATED_CANDIDATE_TYPE = 81
+        const val PROMPT_RESULT_CANDIDATE_TYPE = 82
+        const val SELECTION_TRANSLATE_ACTION_CANDIDATE_TYPE = 83
+        const val SELECTION_PROMPT_ACTION_CANDIDATE_TYPE = 84
         private const val MODEL_DIR_NAME = "models"
         private const val MODEL_EXTENSION = ".litertlm"
         private const val SUPPORTED_MODEL_NAME_FRAGMENT = "gemma-4-e2b-it"

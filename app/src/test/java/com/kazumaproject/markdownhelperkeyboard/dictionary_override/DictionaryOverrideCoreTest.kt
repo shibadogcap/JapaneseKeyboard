@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import com.google.gson.Gson
-import com.kazumaproject.markdownhelperkeyboard.converter.ConnectionMatrix
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.external_dictionary.CORE_REPLACEMENT_CATEGORIES
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.external_dictionary.COMMON_REPLACEMENT_KEYS
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.external_dictionary.ExternalDictionaryDisplayState
@@ -542,33 +541,6 @@ class DictionaryOverrideCoreTest {
         )
 
         assertTrue(result.isCompatible)
-    }
-
-    @Test
-    fun compatibility_connectionIdSize2670SquareInfersMatrixSize2670() {
-        assertEquals(2670, ConnectionMatrix.inferMatrixSize(2670 * 2670))
-    }
-
-    @Test
-    fun compatibility_connectionIdSize2672SquareInfersMatrixSize2672() {
-        assertEquals(2672, ConnectionMatrix.inferMatrixSize(2672 * 2672))
-    }
-
-    @Test
-    fun compatibility_connectionIdSizeZeroIsInvalidForMatrixSizeInference() {
-        assertNull(ConnectionMatrix.inferMatrixSize(0))
-    }
-
-    @Test
-    fun compatibility_connectionIdNonSquareSizeIsInvalidForMatrixSizeInference() {
-        assertNull(ConnectionMatrix.inferMatrixSize(2670 * 2670 + 1))
-    }
-
-    @Test
-    fun compatibility_bundledSizedConnectionIdListInfers2670MatrixSizeFromShortArraySize() {
-        val connectionIdList = ShortArray(2670 * 2670)
-
-        assertEquals(2670, ConnectionMatrix.inferMatrixSize(connectionIdList))
     }
 
     @Test

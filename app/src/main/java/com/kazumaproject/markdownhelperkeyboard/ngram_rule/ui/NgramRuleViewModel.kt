@@ -5,10 +5,9 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
-import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isAllHiragana
-import com.kazumaproject.markdownhelperkeyboard.ngram_rule.NgramRuleScorerManager
 import com.kazumaproject.markdownhelperkeyboard.ngram_rule.database.ThreeNodeRuleEntity
 import com.kazumaproject.markdownhelperkeyboard.ngram_rule.database.TwoNodeRuleEntity
 import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
@@ -27,12 +26,11 @@ import javax.inject.Inject
 @HiltViewModel
 class NgramRuleViewModel @Inject constructor(
     private val repository: NgramRuleRepository,
-    private val scorerManager: NgramRuleScorerManager,
-    private val kanaKanjiEngine: KanaKanjiEngine,
     private val userDictionaryRepository: UserDictionaryRepository,
     private val learnRepository: LearnRepository,
     private val appPreference: AppPreference,
     private val idDefEntryRepository: IdDefEntryRepository,
+    private val dictionaryAssetProvider: AzooKeyDictionaryAssetProvider,
 ) : ViewModel() {
 
     val twoNodeRules: LiveData<List<TwoNodeRuleItem>> =
@@ -54,35 +52,17 @@ class NgramRuleViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val suggestions = runCatching {
-                withContext(Dispatchers.Default) {
-                    kanaKanjiEngine.getCandidatesOriginal(
-                        input = yomi,
-                        n = 120,
-                        mozcUtPersonName = appPreference.mozc_ut_person_names_preference,
-                        mozcUTPlaces = appPreference.mozc_ut_places_preference,
-                        mozcUTWiki = appPreference.mozc_ut_wiki_preference,
-                        mozcUTNeologd = appPreference.mozc_ut_neologd_preference,
-                        mozcUTWeb = appPreference.mozc_ut_web_preference,
-                        userDictionaryRepository = userDictionaryRepository,
-                        learnRepository = if (appPreference.learn_dictionary_preference == true) learnRepository else null,
-                        isOmissionSearchEnable = appPreference.omission_search_preference == true,
-                        enableTypoCorrectionJapaneseFlick = appPreference.enable_typo_correction_japanese_flick_keyboard_preference,
-                        enableTypoCorrectionQwertyEnglish = appPreference.enable_typo_correction_qwerty_english_keyboard_preference,
-                        typoCorrectionOffsetScore = appPreference.enable_typo_correction_japanese_flick_keyboard_offset_score_preference,
-                        omissionSearchOffsetScore = appPreference.omission_search_offset_score_preference,
-                    )
-                        .asSequence()
-                        .filter { candidate -> candidate.type.toInt() == 1 }
-                        .filter { candidate -> candidate.length.toInt() == yomi.length }
-                        .map { candidate -> candidate.toSuggestion() }
-                        .distinctBy { it.word }
-                        .sortedBy { it.score }
-                        .take(100)
-                        .toList()
-                }
-            }.getOrDefault(emptyList())
-
+            val suggestions = withContext(Dispatchers.Default) {
+                val registry = dictionaryAssetProvider.loudsDictionaryRegistry
+                    ?: return@withContext emptyList()
+                registry.prefixEntries(reading = yomi, maxDepth = 20, maxCount = 32)
+                    .map { entry ->
+                        WordSuggestion(
+                            word = entry.surface,
+                            score = entry.value.toInt(),
+                        )
+                    }
+            }
             _wordSuggestions.value = suggestions
         }
     }
@@ -102,7 +82,6 @@ class NgramRuleViewModel @Inject constructor(
                 ),
                 editingId = form.id,
             )
-            scorerManager.refreshNow()
         }
     }
 
@@ -124,28 +103,24 @@ class NgramRuleViewModel @Inject constructor(
                 ),
                 editingId = form.id,
             )
-            scorerManager.refreshNow()
         }
     }
 
     fun deleteTwoNodeRule(id: Int) {
         viewModelScope.launch {
             repository.deleteTwoNodeRule(id)
-            scorerManager.refreshNow()
         }
     }
 
     fun deleteThreeNodeRule(id: Int) {
         viewModelScope.launch {
             repository.deleteThreeNodeRule(id)
-            scorerManager.refreshNow()
         }
     }
 
     fun deleteAllRules() {
         viewModelScope.launch {
             repository.deleteAll()
-            scorerManager.refreshNow()
         }
     }
 
@@ -178,7 +153,6 @@ class NgramRuleViewModel @Inject constructor(
                     )
                 },
             )
-            scorerManager.refreshNow()
         }
     }
 

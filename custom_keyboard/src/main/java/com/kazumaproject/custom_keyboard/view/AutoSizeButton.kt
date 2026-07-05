@@ -97,37 +97,44 @@ class AutoSizeButton @JvmOverloads constructor(
         invalidate()
     }
 
+    private var isAdjustingTextSize = false
+
     private fun adjustTextSize(buttonWidth: Int, buttonHeight: Int) {
+        if (isAdjustingTextSize) return
         if (text.isNullOrEmpty() || buttonWidth <= 0 || buttonHeight <= 0) return
+        isAdjustingTextSize = true
+        try {
+            var currentTextSizePx = TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_SP,
+                defaultTextSize,
+                context.resources.displayMetrics
+            )
+            paint.textSize = currentTextSizePx
 
-        var currentTextSizePx = TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_SP,
-            defaultTextSize,
-            context.resources.displayMetrics
-        )
-        paint.textSize = currentTextSizePx
+            // ★修正点1: 利用可能な「高さ」も計算する
+            val availableWidth = buttonWidth - paddingLeft - paddingRight
+            val availableHeight = buttonHeight - paddingTop - paddingBottom
 
-        // ★修正点1: 利用可能な「高さ」も計算する
-        val availableWidth = buttonWidth - paddingLeft - paddingRight
-        val availableHeight = buttonHeight - paddingTop - paddingBottom
+            paint.getTextBounds(text.toString(), 0, text.length, textBounds)
 
-        paint.getTextBounds(text.toString(), 0, text.length, textBounds)
-
-        // ★修正点2: 条件を更新 -> 幅「または」高さがはみ出す場合に縮小を開始
-        if (textBounds.width() > availableWidth || textBounds.height() > availableHeight) {
-            // ★修正点3: ループ条件も更新 -> 幅「または」高さが収まるまでループ
-            while (textBounds.width() > availableWidth || textBounds.height() > availableHeight) {
-                currentTextSizePx -= 1f // 1ピクセルずつ小さくする
-                if (currentTextSizePx <= 2f) { // 小さくなりすぎないように下限を設定
-                    break
+            // ★修正点2: 条件を更新 -> 幅「または」高さがはみ出す場合に縮小を開始
+            if (textBounds.width() > availableWidth || textBounds.height() > availableHeight) {
+                // ★修正点3: ループ条件も更新 -> 幅「または」高さが収まるまでループ
+                while (textBounds.width() > availableWidth || textBounds.height() > availableHeight) {
+                    currentTextSizePx -= 1f // 1ピクセルずつ小さくする
+                    if (currentTextSizePx <= 2f) { // 小さくなりすぎないように下限を設定
+                        break
+                    }
+                    paint.textSize = currentTextSizePx
+                    paint.getTextBounds(text.toString(), 0, text.length, textBounds)
                 }
-                paint.textSize = currentTextSizePx
-                paint.getTextBounds(text.toString(), 0, text.length, textBounds)
             }
-        }
 
-        // 最終的なテキストサイズをピクセル単位で設定
-        setTextSize(TypedValue.COMPLEX_UNIT_PX, currentTextSizePx)
+            // 最終的なテキストサイズをピクセル単位で設定
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, currentTextSizePx)
+        } finally {
+            isAdjustingTextSize = false
+        }
     }
 
     private fun drawFlickGuides(canvas: Canvas) {

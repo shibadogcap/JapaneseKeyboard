@@ -156,15 +156,6 @@
 
     <PreferenceCategory android:title="@string/conversion_preference_title">
 
-        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
-            android:defaultValue="4"
-            android:key="n_best_preference"
-            android:max="16"
-            android:summary="@string/n_best_preference_summary"
-            android:title="N-Best"
-            app:min="2"
-            app:showSeekBarValue="true" />
-
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:key="conversion_bunsetsu_separation_preference"
@@ -248,27 +239,10 @@
 
         <PreferenceCategory android:title="@string/typo_correction_title">
 
-            <SwitchPreferenceCompat
-                android:key="enable_typo_correction_japanese_flick_keyboard_preference"
-                android:title="@string/enable_typo_correction_japanese_flick_keyboard_preference_title"
-                app:defaultValue="false"
-                app:summary="@string/enable_typo_correction_japanese_flick_keyboard_preference_sumary" />
-
-            <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
-                android:key="enable_typo_correction_japanese_flick_keyboard_offset_score_preference"
-                android:max="5000"
-                android:title="@string/enable_typo_correction_japanese_flick_keyboard_offset_score_preference_tittle"
-                app:defaultValue="3000"
-                app:min="0"
-                app:seekBarIncrement="10"
-                app:showSeekBarValue="true"
-                app:summary="@string/enable_typo_correction_japanese_flick_keyboard_offset_score_preference_summary" />
-
-            <SwitchPreferenceCompat
-                android:key="enable_typo_correction_qwerty_english_keyboard_preference"
-                android:title="@string/enable_typo_correction_qwerty_english_keyboard_preference_title"
-                app:defaultValue="false"
-                app:summary="@string/enable_typo_correction_qwerty_english_keyboard_preference_summary" />
+            <Preference
+                android:selectable="false"
+                android:summary="@string/typo_correction_azookey_summary"
+                android:title="@string/typo_correction_azookey_title" />
 
         </PreferenceCategory>
 
@@ -344,7 +318,7 @@
             android:title="@string/custom_direct_mode_space_hankaku_title" />
 
         <SwitchPreferenceCompat
-            android:defaultValue="false"
+            android:defaultValue="true"
             android:key="live_conversion_preference"
             android:summaryOff="@string/live_conversion_summary_off"
             android:summaryOn="@string/live_conversion_summary_on"
@@ -360,6 +334,16 @@
             app:min="1"
             app:showSeekBarValue="true" />
 
+        <ListPreference
+            android:defaultValue="weak"
+            android:dependency="live_conversion_preference"
+            android:dialogTitle="@string/live_conversion_automatic_completion_strength_title"
+            android:entries="@array/live_conversion_automatic_completion_strength_entries"
+            android:entryValues="@array/live_conversion_automatic_completion_strength_values"
+            android:key="live_conversion_automatic_completion_strength_preference"
+            android:summary="@string/live_conversion_automatic_completion_strength_summary"
+            android:title="@string/live_conversion_automatic_completion_strength_title" />
+
         <SwitchPreferenceCompat
             android:defaultValue="false"
             android:dependency="live_conversion_preference"
@@ -367,23 +351,6 @@
             android:summaryOff="@string/live_conversion_candidate_yomi_summary_off"
             android:summaryOn="@string/live_conversion_candidate_yomi_summary_on"
             android:title="@string/live_conversion_candidate_yomi_title" />
-
-        <SwitchPreferenceCompat
-            android:defaultValue="false"
-            android:key="omission_search_preference"
-            android:summaryOff="@string/omission_search_summary_off"
-            android:summaryOn="@string/omission_search_summary_on"
-            android:title="@string/omission_search_title" />
-
-        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
-            android:key="omission_search_preference_offset_score_preference"
-            android:max="5000"
-            android:title="@string/omission_search_preference_offset_score_preference_title"
-            app:defaultValue="1900"
-            app:min="0"
-            app:seekBarIncrement="10"
-            app:showSeekBarValue="true"
-            app:summary="@string/omission_search_preference_offset_score_preference_summary" />
 
         <SwitchPreferenceCompat
             android:defaultValue="false"
@@ -462,18 +429,6 @@
             app:min="1"
             app:showSeekBarValue="true"
             app:summary="@string/pref_clipboard_unpinned_retention_hours_summary" />
-    </PreferenceCategory>
-
-    <PreferenceCategory android:title="@string/category_operation_title">
-        <com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference
-            android:defaultValue="1000"
-            android:dependency=""
-            android:key="time_same_pronounce_typing_preference"
-            android:max="1000"
-            android:title="@string/time_same_pronounce_typing_title"
-            app:min="1"
-            app:showSeekBarValue="true"
-            app:summary="@string/time_same_pronounce_typing_summary" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/category_vibration_title">

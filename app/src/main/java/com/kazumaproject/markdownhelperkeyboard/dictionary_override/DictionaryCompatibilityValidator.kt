@@ -4,7 +4,6 @@ import androidx.annotation.StringRes
 import com.kazumaproject.connection_id.ConnectionIdBuilder
 import com.kazumaproject.dictionary.TokenArray
 import com.kazumaproject.markdownhelperkeyboard.R
-import com.kazumaproject.markdownhelperkeyboard.converter.ConnectionMatrix
 import timber.log.Timber
 import java.io.InputStream
 import javax.inject.Inject
@@ -241,7 +240,7 @@ class DictionaryCompatibilityValidator @Inject constructor(
                         val size = ConnectionIdBuilder().readShortArrayFromBytes(raw).size
                         ConnectionIdStats(
                             shortArraySize = size,
-                            matrixSize = ConnectionMatrix.inferMatrixSize(size),
+                            matrixSize = kotlin.math.sqrt(size.toDouble()).toInt().takeIf { it * it == size && it > 0 },
                         )
                     }
                 }

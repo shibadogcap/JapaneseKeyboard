@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PointF
+import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -117,6 +118,7 @@ class CrossFlickInputController(
     private var popupColorTheme: FlickPopupColorTheme? = null
     private var directionalPopupStyle = PopupViewStyle(100, 28f)
     private var crossPopupStyle = PopupViewStyle(100, 18f)
+    private var customTypeface: Typeface? = null
     private val displayActionsByClass by lazy {
         KeyActionMapper.getDisplayActions(context).associateBy { it.action::class }
     }
@@ -140,6 +142,16 @@ class CrossFlickInputController(
         )
         actionPopupViews.values.forEach { it.applyPopupViewStyle(crossPopupStyle) }
         (gridPopup.contentView as? CrossFlickPopupView)?.applyPopupViewStyle(crossPopupStyle)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        customTypeface = typeface
+        actionPopupViews.values.forEach { it.setCustomTypeface(typeface) }
+        (gridPopup.contentView as? CrossFlickPopupView)?.setCustomTypeface(typeface)
+        directionalPopupMap.values.forEach { popup ->
+            (popup.contentView as? DirectionalKeyPopupView)?.typeface = typeface
+        }
+        (currentVisibleDirectionalPopup?.contentView as? DirectionalKeyPopupView)?.typeface = typeface
     }
 
     // 長押し判定までの待機時間を変更する。FlickKeyboardView から端末設定に合わせて呼ばれる。
@@ -448,6 +460,7 @@ class CrossFlickInputController(
 
         val popupView = CrossFlickPopupView(context).apply {
             applyPopupViewStyle(crossPopupStyle)
+            setCustomTypeface(customTypeface)
             val scale = crossPopupStyle.sizeScalePercent.coerceIn(50, 200) / 100f
             setCells(
                 mapOf(direction to flickAction),
@@ -558,6 +571,7 @@ class CrossFlickInputController(
 
             val popupView = DirectionalKeyPopupView(context).apply {
                 this.text = text
+                typeface = customTypeface
                 applyPopupViewStyle(directionalPopupStyle)
                 popupColorTheme?.let { setColors(it) }
                 setFlickDirection(direction)
@@ -681,6 +695,7 @@ class CrossFlickInputController(
 
         val popupView = gridPopup.contentView as CrossFlickPopupView
         popupView.applyPopupViewStyle(crossPopupStyle)
+        popupView.setCustomTypeface(customTypeface)
         popupColorTheme?.let { popupView.setColors(it) }
         val scale = crossPopupStyle.sizeScalePercent.coerceIn(50, 200) / 100f
 

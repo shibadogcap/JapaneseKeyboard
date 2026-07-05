@@ -3862,7 +3862,7 @@ object KeyboardDefaultLayouts {
             ),
             KeyData(
                 label = "",
-                row = 0,
+                row = 2,
                 column = 3,
                 isFlickable = false,
                 action = KeyAction.SwitchToNextIme,
@@ -3888,7 +3888,7 @@ object KeyboardDefaultLayouts {
             KeyData("9", 2, 2, false, keyType = KeyType.STANDARD_FLICK),
             KeyData(
                 "",
-                2,
+                0,
                 3,
                 false,
                 KeyAction.Delete,
@@ -3912,7 +3912,7 @@ object KeyboardDefaultLayouts {
                 action = enterKeyStates[0].action,
                 rowSpan = 1,
                 isSpecialKey = true,
-                drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
+                drawableResId = enterKeyStates[0].drawableResId,
                 keyId = "enter_key",
                 dynamicStates = enterKeyStates,
             )
@@ -4559,7 +4559,7 @@ object KeyboardDefaultLayouts {
             ),
             KeyData(
                 label = "",
-                row = 0,
+                row = 2,
                 column = 3,
                 isFlickable = false,
                 action = KeyAction.SwitchToNextIme,
@@ -4585,7 +4585,7 @@ object KeyboardDefaultLayouts {
             KeyData("9", 2, 2, false, keyType = KeyType.STANDARD_FLICK),
             KeyData(
                 "",
-                2,
+                0,
                 3,
                 false,
                 KeyAction.Delete,

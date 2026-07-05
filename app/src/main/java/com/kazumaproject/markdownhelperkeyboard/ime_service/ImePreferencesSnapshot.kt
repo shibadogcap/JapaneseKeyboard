@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service
 
 import com.kazumaproject.core.data.clicked_symbol.SymbolMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults
 import com.kazumaproject.markdownhelperkeyboard.ime_service.state.CandidateTab
 import com.kazumaproject.markdownhelperkeyboard.ime_service.state.KeyboardType
 import com.kazumaproject.markdownhelperkeyboard.dictionary_override.DictionaryCategory
@@ -21,6 +22,7 @@ data class ImePreferencesSnapshot(
     val isOmissionSearchEnable: Boolean,
     val delayTime: Int,
     val isLearnDictionaryMode: Boolean,
+    val learningTypePreference: String,
     val isUserDictionaryEnable: Boolean,
     val isUserTemplateEnable: Boolean,
     val hankakuPreference: Boolean,
@@ -28,6 +30,7 @@ data class ImePreferencesSnapshot(
     val isLiveConversionEnable: Boolean,
     val liveConversionStartLength: Int,
     val showLiveConversionCandidateYomi: Boolean,
+    val liveConversionAutomaticCompletionStrength: String,
     val nBest: Int,
     val flickSensitivityPreferenceValue: Int,
     val longPressTimeoutPreferenceValue: Int,
@@ -132,6 +135,7 @@ data class ImePreferencesSnapshot(
     val qwertyLandscapeBottomMarginPreferenceValue: Int,
     val zenzEnableStatePreference: Boolean,
     val zenzaiEnableStatePreference: Boolean,
+    val experimentalZenzaiPredictiveInputPreference: Boolean,
     val zenzProfilePreference: String,
     val zenzEnableLongPressConversionPreference: Boolean,
     val zenzRerankPreference: Boolean,
@@ -155,6 +159,8 @@ data class ImePreferencesSnapshot(
     val customThemeShortcutIconColor: Int,
     val customThemeEnterKeyColor: Int,
     val customThemeEnterKeyTextColor: Int,
+    val customThemePopupBgColor: Int,
+    val customThemePopupTextColor: Int,
     val liquidGlassThemePreference: Boolean,
     val liquidGlassBlurRadiousPreference: Int,
     val liquidGlassKeyBlurRadiousPreference: Int,
@@ -185,6 +191,9 @@ data class ImePreferencesSnapshot(
     val customIconSpacePath: String,
     val customIconArrowLeftPath: String,
     val customIconArrowRightPath: String,
+    val customIconShiftOffPath: String,
+    val customIconShiftOnPath: String,
+    val customIconShiftLockPath: String,
     val customFontKeyPath: String,
     val customFontCandidatePath: String,
     val customIconModeSwitchPath: String,
@@ -199,6 +208,25 @@ data class ImePreferencesSnapshot(
     val customTextSpace: String,
     val customTextSymbol: String,
     val customText123: String,
+    val customIconEnterAccessPath: String,
+    val customIconEnterDonePath: String,
+    val customIconEnterGoPath: String,
+    val customIconEnterNextPath: String,
+    val customIconEnterPreviousPath: String,
+    val customIconEnterSearchPath: String,
+    val customIconEnterSendPath: String,
+    val customIconConvertPath: String,
+    val customTextEnterAccess: String,
+    val customTextEnterDone: String,
+    val customTextEnterGo: String,
+    val customTextEnterNext: String,
+    val customTextEnterPrevious: String,
+    val customTextEnterSearch: String,
+    val customTextEnterSend: String,
+    val customTextConvert: String,
+    val keyBorderEnable: Boolean,
+    val keyCornerRadiusDp: Int,
+    val keyPopupStyle: String,
 ) {
     companion object {
         fun from(
@@ -258,16 +286,20 @@ data class ImePreferencesSnapshot(
                 isOmissionSearchEnable = appPreference.omission_search_preference ?: false,
                 delayTime = appPreference.time_same_pronounce_typing_preference ?: 1000,
                 isLearnDictionaryMode = appPreference.learn_dictionary_preference ?: true,
+                learningTypePreference = appPreference.learning_type_preference ?: "input_and_output",
                 isUserDictionaryEnable = appPreference.user_dictionary_preference ?: true,
                 isUserTemplateEnable = appPreference.user_template_preference ?: true,
                 hankakuPreference = appPreference.space_hankaku_preference ?: false,
                 customDirectModeSpaceHankakuPreference =
                     appPreference.custom_direct_mode_space_hankaku_preference ?: true,
-                isLiveConversionEnable = appPreference.live_conversion_preference ?: false,
+                isLiveConversionEnable = appPreference.live_conversion_preference
+                    ?: AzooKeyConversionDefaults.LIVE_CONVERSION_ENABLED,
                 liveConversionStartLength =
                     appPreference.live_conversion_start_length_preference ?: 1,
                 showLiveConversionCandidateYomi =
                     appPreference.live_conversion_candidate_yomi_preference ?: false,
+                liveConversionAutomaticCompletionStrength =
+                    appPreference.live_conversion_automatic_completion_strength_preference ?: "weak",
                 nBest = appPreference.n_best_preference ?: 4,
                 flickSensitivityPreferenceValue = appPreference.flick_sensitivity_preference ?: 100,
                 longPressTimeoutPreferenceValue =
@@ -297,9 +329,9 @@ data class ImePreferencesSnapshot(
                 qwertyEnableZenkakuSpacePreference =
                     appPreference.qwerty_enable_zenkaku_space_preference ?: false,
                 qwertyRomajiHankakuNumberPreference =
-                    appPreference.qwerty_romaji_hankaku_number_preference ?: false,
+                    appPreference.qwerty_romaji_hankaku_number_preference ?: true,
                 qwertyRomajiHankakuSymbolPreference =
-                    appPreference.qwerty_romaji_hankaku_symbol_preference ?: false,
+                    appPreference.qwerty_romaji_hankaku_symbol_preference ?: true,
                 qwertyShowKutoutenButtonsPreference =
                     appPreference.qwerty_show_kutouten_buttons ?: false,
                 showCandidateInPasswordPreference = appPreference.show_candidates_password ?: true,
@@ -426,6 +458,10 @@ data class ImePreferencesSnapshot(
                     AppVariantConfig.hasZenz && appPreference.enable_zenz_preference,
                 zenzaiEnableStatePreference =
                     AppVariantConfig.hasZenz && appPreference.enable_zenzai_preference,
+                experimentalZenzaiPredictiveInputPreference =
+                    AppVariantConfig.hasZenz &&
+                        appPreference.enable_zenzai_preference &&
+                        appPreference.experimental_zenzai_predictive_input_preference,
                 zenzProfilePreference = appPreference.zenz_profile_preference,
                 zenzEnableLongPressConversionPreference =
                     AppVariantConfig.hasZenz && appPreference.enable_zenz_long_press_preference,
@@ -460,6 +496,8 @@ data class ImePreferencesSnapshot(
                 ),
                 customThemeEnterKeyColor = appPreference.custom_theme_enter_key_color,
                 customThemeEnterKeyTextColor = appPreference.custom_theme_enter_key_text_color,
+                customThemePopupBgColor = appPreference.custom_theme_popup_bg_color,
+                customThemePopupTextColor = appPreference.custom_theme_popup_text_color,
                 liquidGlassThemePreference = appPreference.liquid_glass_preference,
                 liquidGlassBlurRadiousPreference = appPreference.liquid_glass_blur_radius,
                 liquidGlassKeyBlurRadiousPreference = appPreference.liquid_glass_key_alpha,
@@ -502,6 +540,9 @@ data class ImePreferencesSnapshot(
                 customIconSpacePath = appPreference.custom_icon_space_path,
                 customIconArrowLeftPath = appPreference.custom_icon_arrow_left_path,
                 customIconArrowRightPath = appPreference.custom_icon_arrow_right_path,
+                customIconShiftOffPath = appPreference.custom_icon_shift_off_path,
+                customIconShiftOnPath = appPreference.custom_icon_shift_on_path,
+                customIconShiftLockPath = appPreference.custom_icon_shift_lock_path,
                 customFontKeyPath = appPreference.custom_font_key_path,
                 customFontCandidatePath = appPreference.custom_font_candidate_path,
                 customIconModeSwitchPath = appPreference.custom_icon_mode_switch_path,
@@ -516,6 +557,25 @@ data class ImePreferencesSnapshot(
                 customTextSpace = appPreference.custom_text_space,
                 customTextSymbol = appPreference.custom_text_symbol,
                 customText123 = appPreference.custom_text_123,
+                customIconEnterAccessPath = appPreference.custom_icon_enter_access_path,
+                customIconEnterDonePath = appPreference.custom_icon_enter_done_path,
+                customIconEnterGoPath = appPreference.custom_icon_enter_go_path,
+                customIconEnterNextPath = appPreference.custom_icon_enter_next_path,
+                customIconEnterPreviousPath = appPreference.custom_icon_enter_previous_path,
+                customIconEnterSearchPath = appPreference.custom_icon_enter_search_path,
+                customIconEnterSendPath = appPreference.custom_icon_enter_send_path,
+                customIconConvertPath = appPreference.custom_icon_convert_path,
+                customTextEnterAccess = appPreference.custom_text_enter_access,
+                customTextEnterDone = appPreference.custom_text_enter_done,
+                customTextEnterGo = appPreference.custom_text_enter_go,
+                customTextEnterNext = appPreference.custom_text_enter_next,
+                customTextEnterPrevious = appPreference.custom_text_enter_previous,
+                customTextEnterSearch = appPreference.custom_text_enter_search,
+                customTextEnterSend = appPreference.custom_text_enter_send,
+                customTextConvert = appPreference.custom_text_convert,
+                keyBorderEnable = appPreference.key_border_enable ?: false,
+                keyCornerRadiusDp = appPreference.key_corner_radius_dp ?: 8,
+                keyPopupStyle = appPreference.key_popup_style ?: "default",
             )
         }
     }

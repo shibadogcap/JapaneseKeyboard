@@ -280,9 +280,9 @@ fun AppCompatButton.setTenKeyTextJapaneseWithFlickGuide(
 
         R.id.key_8 -> FlickChars(
             center = "や",
-            left = "(",   // や行は一般的に左/右は無しにすることが多い
+            left = "「",
             top = "ゆ",
-            right = ")",
+            right = "」",
             bottom = "よ"
         )
 

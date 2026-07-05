@@ -3,9 +3,9 @@
     android:height="24dp"
     android:viewportWidth="960"
     android:viewportHeight="960"
-    android:tint="?attr/colorControlNormal"
+    android:tint="@color/keyboard_icon_color"
     android:autoMirrored="true">
   <path
-      android:fillColor="@android:color/white"
+      android:fillColor="@color/keyboard_icon_color"
       android:pathData="M800,720L800,240L880,240L880,720L800,720ZM480,720L423,664L567,520L80,520L80,440L567,440L424,296L480,240L720,480L480,720Z"/>
 </vector>

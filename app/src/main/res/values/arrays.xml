@@ -105,4 +105,32 @@
         <item>nl</item>
         <item>uk</item>
     </string-array>
+
+    <string-array name="live_conversion_automatic_completion_strength_entries">
+        <item>@string/automatic_completion_strength_disabled</item>
+        <item>@string/automatic_completion_strength_weak</item>
+        <item>@string/automatic_completion_strength_normal</item>
+        <item>@string/automatic_completion_strength_strong</item>
+        <item>@string/automatic_completion_strength_ultrastrong</item>
+    </string-array>
+
+    <string-array name="live_conversion_automatic_completion_strength_values">
+        <item>disabled</item>
+        <item>weak</item>
+        <item>normal</item>
+        <item>strong</item>
+        <item>ultrastrong</item>
+    </string-array>
+
+    <string-array name="learning_type_preference_entries">
+        <item>@string/learning_type_input_and_output</item>
+        <item>@string/learning_type_only_output</item>
+        <item>@string/learning_type_nothing</item>
+    </string-array>
+
+    <string-array name="learning_type_preference_values">
+        <item>input_and_output</item>
+        <item>only_output</item>
+        <item>nothing</item>
+    </string-array>
 </resources>

@@ -17,6 +17,10 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -31,7 +35,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
-import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.imageview.ShapeableImageView
@@ -74,7 +77,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private val gridLM = GridLayoutManager(context, 3, RecyclerView.HORIZONTAL, false)
 
     // View References for functional keys
-    private val returnButton: ShapeableImageView
+    private val returnButton: TextView
     private val deleteButton: ShapeableImageView
 
     // Theme Colors (Default values)
@@ -146,6 +149,28 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         modeTab = findViewById(R.id.mode_tab_layout)
         recycler = findViewById(R.id.symbol_candidate_recycler_view)
         returnButton = findViewById(R.id.return_jp_keyboard_button)
+        val returnText = SpannableString("あa")
+        returnText.setSpan(
+            StyleSpan(android.graphics.Typeface.BOLD),
+            0,
+            1,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnText.setSpan(
+            StyleSpan(android.graphics.Typeface.NORMAL),
+            1,
+            2,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnText.setSpan(
+            RelativeSizeSpan(1.4f),
+            1,
+            2,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnButton.text = returnText
+        returnButton.gravity = android.view.Gravity.CENTER
+
         deleteButton = findViewById(R.id.symbol_keyboard_delete_key)
 
         emojiKitchenRecyclerView = findViewById(R.id.emoji_kitchen_recycler_view)
@@ -308,20 +333,29 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 currentMode = SymbolMode.entries[tab?.position ?: 0]
                 buildCategoryTabs()
                 categoryTab.getTabAt(0)?.select()
-                updateSymbolsForCategory(0)
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
             }
 
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+            }
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+            }
         })
 
         categoryTab.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 updateSymbolsForCategory(tab?.position ?: 0)
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
             }
 
-            override fun onTabUnselected(tab: TabLayout.Tab?) {}
-            override fun onTabReselected(tab: TabLayout.Tab?) {}
+            override fun onTabUnselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+            }
+            override fun onTabReselected(tab: TabLayout.Tab?) {
+                customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+            }
         })
     }
 
@@ -349,7 +383,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             this.setBackgroundColor(backgroundColor)
         }
 
-        // 2. ColorStateList の作成
+        // 2. ColorStateList の作成（選択中を濃く、非選択を薄く）
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
             intArrayOf(-android.R.attr.state_selected)
@@ -360,6 +394,8 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         )
         val tabColorStateList = ColorStateList(states, colors)
         val bgTintList = ColorStateList.valueOf(backgroundColor)
+        val tabButtonRadius = dpToPx(8).toFloat()
+        val auxiliaryButtonRadius = dpToPx(8).toFloat()
 
         // 3. Category Tab の全体設定
         categoryTab.backgroundTintList = bgTintList
@@ -374,7 +410,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★重要: タブの生成完了を待ってから背景を適用 (postを使用)
         categoryTab.post {
-            applyThemeToTabs(categoryTab, backgroundColor)
+            applyThemeToTabs(categoryTab, keyBackgroundColor, tabButtonRadius)
         }
 
         // 4. Mode Tab (Bottom Bar) の全体設定
@@ -386,7 +422,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // ★重要: クリッピング無効化と遅延適用
         disableClipping(modeTab)
         modeTab.post {
-            applyThemeToTabs(modeTab, backgroundColor)
+            applyThemeToTabs(modeTab, keyBackgroundColor, tabButtonRadius)
         }
 
         // 5. 機能キー (Return/Delete) のニューモーフィズム設定
@@ -398,8 +434,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         returnButton.setPadding(p, p, p, p)
         deleteButton.setPadding(p, p, p, p)
 
-        returnButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        returnButton.setTextColor(iconColor)
         deleteButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        applyThemeToAuxiliaryControls(
+            keyBackgroundColor = keyBackgroundColor,
+            iconColor = iconColor,
+            cornerRadius = auxiliaryButtonRadius,
+        )
 
         if (currentMode == SymbolMode.CLIPBOARD) {
             buildCategoryTabs()
@@ -409,6 +451,36 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             textColor = iconColor,
             highlightColor = selectedIconColor
         )
+    }
+
+    private fun applyThemeToAuxiliaryControls(
+        @ColorInt keyBackgroundColor: Int,
+        @ColorInt iconColor: Int,
+        cornerRadius: Float,
+    ) {
+        val buttonBackground = getTabNeumorphDrawable(keyBackgroundColor, cornerRadius)
+        val hintColor = ColorUtils.setAlphaComponent(iconColor, 160)
+
+        clipboardClearAllButton?.background = buttonBackground
+        clipboardClearAllButton?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        clipboardSearchView?.background = buttonBackground
+        clipboardSearchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text
+        )?.apply {
+            setTextColor(iconColor)
+            setHintTextColor(hintColor)
+        }
+        clipboardSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_mag_icon
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        clipboardSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_close_btn
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        emojiKitchenResetButton?.background = buttonBackground
+        emojiKitchenResetButton?.setTextColor(iconColor)
+        emojiKitchenPreviewLabel?.setTextColor(iconColor)
     }
 
     /**
@@ -426,7 +498,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     /**
      * TabLayout内のすべてのタブViewに対して、ニューモーフィズム背景とマージンを適用する
      */
-    private fun applyThemeToTabs(tabLayout: TabLayout, @ColorInt baseColor: Int) {
+    private fun applyThemeToTabs(
+        tabLayout: TabLayout,
+        @ColorInt buttonColor: Int,
+        cornerRadius: Float,
+    ) {
         val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return
 
         for (i in 0 until slidingTabStrip.childCount) {
@@ -440,9 +516,8 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 tabView.layoutParams = params
             }
 
-            // 背景を設定
-            val radius = dpToPx(8).toFloat()
-            tabView.background = getTabNeumorphDrawable(baseColor, radius)
+            // キー背景色でボタン面を描画（パネル背景色だと影が見えなくなる）
+            tabView.background = getTabNeumorphDrawable(buttonColor, cornerRadius)
 
             // パディング調整 (Drawable内のpaddingとは別に、Viewのコンテンツ位置調整)
             // TenKeyのロジックではDrawable自体がpaddingを持つため、View自体のpaddingは少なめでOK
@@ -460,12 +535,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
      */
     private fun getTabNeumorphDrawable(@ColorInt baseColor: Int, radius: Float): Drawable {
         // 1. 色の計算 (TenKeyと同じ係数を使用)
-        // ハイライト色: 明るくする (1.2f)
-        val highlightColor = manipulateColor(baseColor, 1.2f)
-        // シャドウ色: 暗くする (0.8f)
-        val shadowColor = manipulateColor(baseColor, 0.8f)
-        // 押下時の色: ベースより少し暗く (0.95f)
-        val pressedColor = manipulateColor(baseColor, 0.95f)
+        // ハイライト色: 明るくする
+        val highlightColor = manipulateColor(baseColor, 1.25f)
+        // シャドウ色: 暗くする
+        val shadowColor = manipulateColor(baseColor, 0.75f)
+        // 押下時の色: ベースより少し暗く
+        val pressedColor = manipulateColor(baseColor, 0.92f)
 
         // 2. オフセット量とパディング (TenKeyの設定に合わせる)
         val density = resources.displayMetrics.density
@@ -784,7 +859,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         if (isCustomThemeApplied) {
             // postを使って描画後に適用
             modeTab.post {
-                applyThemeToTabs(modeTab, themeBackgroundColor)
+                applyThemeToTabs(modeTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -882,7 +957,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 categoryTab.addTab(tab)
                 tab.customView?.let { customView ->
                     customView.findViewById<TextView>(R.id.clipboard_tab_text)
-                        .setTextColor(normalColor)
+                        .setTextColor(selectedColor)
                 }
             }
 
@@ -896,7 +971,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         if (isCustomThemeApplied) {
             // postを使って描画後に適用
             categoryTab.post {
-                applyThemeToTabs(categoryTab, themeBackgroundColor)
+                applyThemeToTabs(categoryTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
@@ -939,10 +1014,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         pagingJob?.cancel()
         lifecycleOwner?.let { owner ->
             pagingJob = owner.lifecycleScope.launch {
-                symbolAdapter.submitData(PagingData.empty())
-                clipboardAdapter.submitData(PagingData.empty())
-                recycler.scrollToPosition(0)
-
                 when (currentMode) {
                     SymbolMode.CLIPBOARD -> {
                         recycler.adapter = clipboardAdapter
@@ -955,6 +1026,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                             }
                         }
                         val clipboardListItems = buildClipboardListItems(clipBoardItems)
+                        recycler.scrollToPosition(0)
                         Pager(
                             config = PagingConfig(pageSize = 20, enablePlaceholders = false),
                             pagingSourceFactory = { ClipboardPagingSource(clipboardListItems) }
@@ -1019,9 +1091,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         }
 
                         when (currentMode) {
-                            SymbolMode.EMOTICON -> symbolAdapter.setItemMargins(10, 8, context)
-                            SymbolMode.SYMBOL -> symbolAdapter.setItemMargins(14, 8, context)
-                            else -> symbolAdapter.setItemMargins(4, 3, context)
+                            SymbolMode.EMOJI,
+                            SymbolMode.EMOJI_KITCHEN -> symbolAdapter.setItemMargins(2, 1, context)
+                            SymbolMode.EMOTICON -> symbolAdapter.setItemMargins(6, 5, context)
+                            SymbolMode.SYMBOL -> symbolAdapter.setItemMargins(8, 5, context)
+                            else -> symbolAdapter.setItemMargins(3, 2, context)
                         }
 
                         symbolAdapter.showSkinToneIndicators =
@@ -1029,11 +1103,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
                         symbolAdapter.symbolTextSize = when (currentMode) {
                             SymbolMode.EMOJI -> {
-                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
+                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 31f else 27f
                             }
 
                             SymbolMode.EMOJI_KITCHEN -> {
-                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 36f else 30f
+                                if (resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT) 31f else 27f
                             }
 
                             SymbolMode.EMOTICON -> 14f
@@ -1042,12 +1116,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         }
 
                         gridLM.spanCount = when (currentMode) {
-                            SymbolMode.EMOJI -> 7
-                            SymbolMode.EMOTICON -> 3
-                            SymbolMode.SYMBOL -> 5
-                            else -> 5
+                            SymbolMode.EMOJI,
+                            SymbolMode.EMOJI_KITCHEN -> adaptiveGridSpan(targetCellDp = 43, min = 8, max = 14)
+                            SymbolMode.EMOTICON -> adaptiveGridSpan(targetCellDp = 100, min = 3, max = 6)
+                            SymbolMode.SYMBOL -> adaptiveGridSpan(targetCellDp = 58, min = 6, max = 10)
+                            else -> adaptiveGridSpan(targetCellDp = 64, min = 5, max = 9)
                         }
                         gridLM.orientation = RecyclerView.VERTICAL
+                        recycler.scrollToPosition(0)
 
                         Pager(
                             config = PagingConfig(pageSize = 100, enablePlaceholders = false),
@@ -1196,6 +1272,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         ).toInt()
     }
 
+    private fun adaptiveGridSpan(targetCellDp: Int, min: Int, max: Int): Int {
+        val availableWidthPx = recycler.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val availableWidthDp = availableWidthPx / resources.displayMetrics.density
+        return (availableWidthDp / targetCellDp).toInt().coerceIn(min, max)
+    }
+
     private val categoryIconRes = mapOf(
         EmojiCategory.EMOTICONS to com.kazumaproject.core.R.drawable.mood_24px,
         EmojiCategory.GESTURES to com.kazumaproject.core.R.drawable.thumb_up_24dp,
@@ -1253,9 +1335,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // CLIPBOARDのカテゴリは基本1つなので 0 を選択
         categoryTab.getTabAt(selectCategoryIndex.coerceIn(0, categoryTab.tabCount - 1))?.select()
-
-        // Recycler表示更新
-        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     fun switchToSymbolMode(mode: SymbolMode, selectCategoryIndex: Int = 0) {
@@ -1264,7 +1343,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         buildCategoryTabs()
         modeTab.getTabAt(mode.ordinal)?.select()
         categoryTab.getTabAt(selectCategoryIndex.coerceIn(0, categoryTab.tabCount - 1))?.select()
-        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     inner class EmojiKitchenStickerAdapter : RecyclerView.Adapter<EmojiKitchenStickerAdapter.StickerViewHolder>() {
@@ -1318,6 +1396,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     fun setCustomTypeface(typeface: android.graphics.Typeface?) {
         this.customTypeface = typeface
         
+        returnButton.typeface = typeface
         symbolAdapter.setCustomTypeface(typeface)
         clipboardAdapter.setCustomTypeface(typeface)
         applyTypefaceToSearchView(typeface)
@@ -1345,18 +1424,29 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     }
 
     private fun applyTypefaceToTabLayout(tabLayout: TabLayout, typeface: android.graphics.Typeface?) {
-        tabLayout.post {
-            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@post
-            for (i in 0 until slidingTabStrip.childCount) {
-                val tabView = slidingTabStrip.getChildAt(i) as? ViewGroup ?: continue
-                for (j in 0 until tabView.childCount) {
-                    val child = tabView.getChildAt(j)
-                    if (child is TextView) {
-                        child.typeface = typeface
-                    }
+        fun applyToChildren(view: View) {
+            if (view is TextView) {
+                view.typeface = typeface
+                view.includeFontPadding = false
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    applyToChildren(view.getChildAt(i))
                 }
             }
         }
+        tabLayout.post {
+            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@post
+            for (i in 0 until slidingTabStrip.childCount) {
+                applyToChildren(slidingTabStrip.getChildAt(i))
+            }
+        }
+        tabLayout.postDelayed({
+            val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return@postDelayed
+            for (i in 0 until slidingTabStrip.childCount) {
+                applyToChildren(slidingTabStrip.getChildAt(i))
+            }
+        }, 32L)
     }
 
 }

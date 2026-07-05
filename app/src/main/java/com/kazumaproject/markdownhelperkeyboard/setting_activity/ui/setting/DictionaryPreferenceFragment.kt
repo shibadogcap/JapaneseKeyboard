@@ -51,13 +51,6 @@ class DictionaryPreferenceFragment : PreferenceFragmentCompat() {
             true
         }
 
-        findPreference<Preference>("n_gram_rule_preference")?.setOnPreferenceClickListener {
-            navigateSafely(
-                R.id.action_navigation_setting_to_ngramRuleFragment
-            )
-            true
-        }
-
         findPreference<Preference>("candidate_order_override_preference")?.setOnPreferenceClickListener {
             navigateSafely(R.id.action_navigation_setting_to_candidateOrderOverrideFragment)
             true

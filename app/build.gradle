@@ -23,7 +23,8 @@ android {
             def keyAliasValue = localProperties['KEY_ALIAS'] ?: System.getenv('HIMAWARI_KEY_ALIAS')
             def keyPasswordValue = localProperties['KEY_PASSWORD'] ?: System.getenv('HIMAWARI_KEY_PASSWORD')
             if (keystoreFile) {
-                storeFile file(keystoreFile)
+                def keystorePath = new File(keystoreFile)
+                storeFile keystorePath.isAbsolute() ? keystorePath : rootProject.file(keystoreFile)
                 storePassword keystorePassword
                 keyAlias keyAliasValue
                 keyPassword keyPasswordValue
@@ -129,6 +130,13 @@ android {
 
     testOptions {
         unitTests.includeAndroidResources = true
+        // QwertyGlideDecoderPerformanceTest is excluded here (CI/default suite).
+        // Run it via: ./gradlew :app:testFullStandardDebugUnitTestPerformance
+        unitTests.all {
+            filter {
+                excludeTestsMatching "*QwertyGlideDecoderPerformanceTest*"
+            }
+        }
     }
 
     applicationVariants.configureEach { variant ->
@@ -158,6 +166,238 @@ android {
 
 }
 
+def azooKeyLoudsDirectory = {
+    def configuredPath = project.findProperty("azooKeyLoudsDir") ?: project.findProperty("azooKeyLoudsDestDir")
+    return configuredPath ? file(configuredPath) : file("$projectDir/src/main/assets/louds")
+}
+
+tasks.register("generateAzooKeyLoudsManifest") {
+    group = "azookey"
+    description = "Generate app/src/main/assets/louds/identifiers.txt from complete .louds/.loudschars2 pairs."
+
+    doLast {
+        def loudsDir = azooKeyLoudsDirectory()
+        if (!loudsDir.exists()) {
+            throw new GradleException("AzooKey LOUDS directory does not exist: ${loudsDir}")
+        }
+
+        def rawIdentifiers = ["user", "memory", "user_shortcuts"] as Set
+        def decodeIdentifier = { String stem ->
+            if (rawIdentifiers.contains(stem)) {
+                return stem
+            }
+            if (!stem.startsWith("[") || !stem.endsWith("]")) {
+                return stem
+            }
+            def body = stem.substring(1, stem.length() - 1)
+            if (body.isEmpty()) {
+                return ""
+            }
+            def builder = new StringBuilder()
+            for (String chunk : body.split("_")) {
+                builder.append((char) Integer.parseInt(chunk, 16))
+            }
+            return builder.toString()
+        }
+
+        def loudsIdentifiers = [] as Set
+        def loudsChars2Identifiers = [] as Set
+        loudsDir.listFiles()?.each { File file ->
+            def name = file.name
+            if (name.endsWith(".louds")) {
+                loudsIdentifiers.add(decodeIdentifier(name.substring(0, name.length() - ".louds".length())))
+            } else if (name.endsWith(".loudschars2")) {
+                loudsChars2Identifiers.add(decodeIdentifier(name.substring(0, name.length() - ".loudschars2".length())))
+            }
+        }
+
+        def identifiers = loudsIdentifiers.intersect(loudsChars2Identifiers).findAll { it }.sort()
+        def manifestFile = new File(loudsDir, "identifiers.txt")
+        manifestFile.text = identifiers ? identifiers.join("\n") + "\n" : ""
+        logger.lifecycle("Generated ${manifestFile} with ${identifiers.size()} AzooKey LOUDS identifiers.")
+    }
+}
+
+tasks.register("verifyAzooKeyLoudsAssets") {
+    group = "azookey"
+    description = "Verify AzooKey LOUDS assets have charID.chid, .louds, .loudschars2, and at least one .loudstxt3 shard."
+
+    doLast {
+        def loudsDir = azooKeyLoudsDirectory()
+        if (!loudsDir.exists()) {
+            throw new GradleException("AzooKey LOUDS directory does not exist: ${loudsDir}")
+        }
+
+        def rawIdentifiers = ["user", "memory", "user_shortcuts"] as Set
+        def decodeIdentifier = { String stem ->
+            if (rawIdentifiers.contains(stem)) {
+                return stem
+            }
+            if (!stem.startsWith("[") || !stem.endsWith("]")) {
+                return stem
+            }
+            def body = stem.substring(1, stem.length() - 1)
+            if (body.isEmpty()) {
+                return ""
+            }
+            def builder = new StringBuilder()
+            for (String chunk : body.split("_")) {
+                builder.append((char) Integer.parseInt(chunk, 16))
+            }
+            return builder.toString()
+        }
+        def shardIdentifier = { String name ->
+            def stem = name.substring(0, name.length() - ".loudstxt3".length())
+            def identifierStem = stem.replaceFirst("\\d+\$", "")
+            if (identifierStem == stem) {
+                return null
+            }
+            return decodeIdentifier(identifierStem)
+        }
+
+        def fileNames = loudsDir.listFiles()?.collect { it.name } ?: []
+        def loudsIdentifiers = [] as Set
+        def loudsChars2Identifiers = [] as Set
+        def shardIdentifiers = [] as Set
+        fileNames.each { String name ->
+            if (name.endsWith(".louds")) {
+                loudsIdentifiers.add(decodeIdentifier(name.substring(0, name.length() - ".louds".length())))
+            } else if (name.endsWith(".loudschars2")) {
+                loudsChars2Identifiers.add(decodeIdentifier(name.substring(0, name.length() - ".loudschars2".length())))
+            } else if (name.endsWith(".loudstxt3")) {
+                def identifier = shardIdentifier(name)
+                if (identifier != null) {
+                    shardIdentifiers.add(identifier)
+                }
+            }
+        }
+
+        def knownIdentifiers = (loudsIdentifiers + loudsChars2Identifiers + shardIdentifiers) as Set
+        def missing = []
+        if (!fileNames.contains("charID.chid")) {
+            missing.add("charID.chid")
+        }
+        def missingLouds = (knownIdentifiers - loudsIdentifiers).sort()
+        def missingLoudsChars2 = (knownIdentifiers - loudsChars2Identifiers).sort()
+        def missingShard = (knownIdentifiers - shardIdentifiers).sort()
+        if (missingLouds) {
+            missing.add("missing .louds for: ${missingLouds.join(', ')}")
+        }
+        if (missingLoudsChars2) {
+            missing.add("missing .loudschars2 for: ${missingLoudsChars2.join(', ')}")
+        }
+        if (missingShard) {
+            missing.add("missing .loudstxt3 shard for: ${missingShard.join(', ')}")
+        }
+        if (missing) {
+            throw new GradleException("Invalid AzooKey LOUDS assets in ${loudsDir}: ${missing.join('; ')}")
+        }
+
+        def completeIdentifiers = loudsIdentifiers.intersect(loudsChars2Identifiers).intersect(shardIdentifiers).sort()
+        logger.lifecycle("Verified ${completeIdentifiers.size()} AzooKey LOUDS identifiers in ${loudsDir}.")
+    }
+}
+
+tasks.register("copyAzooKeyLoudsAssets", Copy) {
+    group = "azookey"
+    description = "Copy AzooKey LOUDS assets from -PazooKeyLoudsSourceDir to app/src/main/assets/louds or -PazooKeyLoudsDestDir."
+
+    def sourceDirProvider = providers.gradleProperty("azooKeyLoudsSourceDir")
+    def destDirProvider = providers.gradleProperty("azooKeyLoudsDestDir")
+            .orElse("$projectDir/src/main/assets/louds")
+
+    onlyIf {
+        if (!sourceDirProvider.present) {
+            throw new GradleException("Missing -PazooKeyLoudsSourceDir=/path/to/louds")
+        }
+        true
+    }
+
+    from(sourceDirProvider.map { file(it) }) {
+        include "charID.chid"
+        include "*.louds"
+        include "*.loudschars2"
+        include "*.loudstxt3"
+    }
+    into(destDirProvider.map { file(it) })
+}
+
+tasks.register("prepareAzooKeyLoudsAssets") {
+    group = "azookey"
+    description = "Copy, verify, and generate identifiers.txt for AzooKey LOUDS assets."
+    dependsOn("copyAzooKeyLoudsAssets", "verifyAzooKeyLoudsAssets", "generateAzooKeyLoudsManifest")
+}
+
+tasks.named("verifyAzooKeyLoudsAssets") {
+    mustRunAfter("copyAzooKeyLoudsAssets")
+}
+
+tasks.named("generateAzooKeyLoudsManifest") {
+    mustRunAfter("verifyAzooKeyLoudsAssets")
+}
+
+tasks.register("copyAzooKeyConnectionAssets", Copy) {
+    group = "azookey"
+    description = "Copy AzooKey cb/*.binary and mm.binary from -PazooKeyDictionarySourceDir to app/src/main/assets/azookey."
+
+    def sourceDirProvider = providers.gradleProperty("azooKeyDictionarySourceDir")
+    def destDirProvider = providers.gradleProperty("azooKeyDictionaryDestDir")
+            .orElse("$projectDir/src/main/assets/azookey")
+
+    onlyIf {
+        if (!sourceDirProvider.present) {
+            throw new GradleException(
+                    "Missing -PazooKeyDictionarySourceDir=/path/to/AzooKey Dictionary root (contains cb/, mm.binary)"
+            )
+        }
+        true
+    }
+
+    from(sourceDirProvider.map { file(it) }) {
+        include "mm.binary"
+        include "cb/**"
+    }
+    into(destDirProvider.map { file(it) })
+}
+
+tasks.register("prepareAzooKeyDictionaryAssets") {
+    group = "azookey"
+    description = "Copy LOUDS + connection-cost assets and generate louds manifest."
+    dependsOn(
+            "copyAzooKeyLoudsAssets",
+            "copyAzooKeyConnectionAssets",
+            "verifyAzooKeyLoudsAssets",
+            "generateAzooKeyLoudsManifest",
+    )
+}
+
+tasks.register("copyAzooKeyEmojiDictionaryAssets", Copy) {
+    group = "azookey"
+    description = "Copy AzooKey emoji_all and optional emoji_dict dictionary text to app/src/main/assets/azookey/emoji."
+
+    def sourceFileProvider = providers.gradleProperty("azooKeyEmojiDictionarySourceFile")
+    def dicdataSourceFileProvider = providers.gradleProperty("azooKeyEmojiDicdataDictionarySourceFile")
+    def destDirProvider = providers.gradleProperty("azooKeyEmojiDictionaryDestDir")
+            .orElse("$projectDir/src/main/assets/azookey/emoji")
+
+    onlyIf {
+        if (!sourceFileProvider.present) {
+            throw new GradleException("Missing -PazooKeyEmojiDictionarySourceFile=/path/to/emoji_all_E17.0.txt")
+        }
+        true
+    }
+
+    from(sourceFileProvider.map { file(it) }) {
+        rename { "emoji_all_E17.0.txt" }
+    }
+    if (dicdataSourceFileProvider.present) {
+        from(dicdataSourceFileProvider.map { file(it) }) {
+            rename { "emoji_dict_E17.0.txt" }
+        }
+    }
+    into(destDirProvider.map { file(it) })
+}
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation 'com.google.android.material:material:1.13.0'
@@ -181,6 +421,7 @@ dependencies {
     implementation 'androidx.window:window:1.4.0'
     implementation 'androidx.media3:media3-exoplayer:1.5.1'
     implementation 'androidx.media3:media3-ui:1.5.1'
+    implementation 'androidx.autofill:autofill:1.1.0'
 
     //Dagger - Hilt
     def hilt_version = "2.50"
@@ -236,4 +477,18 @@ dependencies {
     implementation "com.afollestad.material-dialogs:color:3.3.0"
 
 //    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
+}
+
+// Performance-only unit tests (not part of testFullStandardDebugUnitTest).
+afterEvaluate {
+    def standardUnitTest = tasks.named("testFullStandardDebugUnitTest")
+    tasks.register("testFullStandardDebugUnitTestPerformance", Test) {
+        group = "verification"
+        description = "Runs QwertyGlideDecoderPerformanceTest only (excluded from testFullStandardDebugUnitTest)."
+        testClassesDirs = standardUnitTest.get().testClassesDirs
+        classpath = standardUnitTest.get().classpath
+        filter {
+            includeTestsMatching "*QwertyGlideDecoderPerformanceTest*"
+        }
+    }
 }

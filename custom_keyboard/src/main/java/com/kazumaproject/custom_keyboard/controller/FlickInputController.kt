@@ -2,6 +2,7 @@ package com.kazumaproject.custom_keyboard.controller
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Typeface
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -77,6 +78,10 @@ class FlickInputController(context: Context) {
 
     fun setPopupColors(theme: FlickPopupColorTheme) {
         popupView.setColors(theme)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        popupView.setCustomTypeface(typeface)
     }
 
     fun setPopupViewSize(center: Float, target: Float, orbit: Float, textSize: Float) {

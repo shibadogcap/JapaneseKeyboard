@@ -3,6 +3,7 @@ package com.kazumaproject.custom_keyboard.view
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.Gravity
@@ -122,6 +123,10 @@ class CrossFlickPopupView(context: Context) : FrameLayout(context) {
         fun applyTextSize(textSizeSp: Float) {
             textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp.coerceIn(8f, 48f))
         }
+
+        fun applyTypeface(typeface: Typeface?) {
+            textView.typeface = typeface
+        }
     }
 
     private val gridLayout = GridLayout(context).apply {
@@ -134,6 +139,7 @@ class CrossFlickPopupView(context: Context) : FrameLayout(context) {
     private var colorTheme: FlickPopupColorTheme? = null
     private var highlightedDirection: FlickDirection? = null
     private var popupTextSizeSp: Float = 18f
+    private var customTypeface: Typeface? = null
 
     init {
         addView(gridLayout, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
@@ -149,6 +155,12 @@ class CrossFlickPopupView(context: Context) : FrameLayout(context) {
     fun applyPopupViewStyle(style: PopupViewStyle) {
         popupTextSizeSp = style.textSizeSp.coerceIn(8f, 48f)
         updateCellTextSizes()
+        invalidate()
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        customTypeface = typeface
+        cells.values.forEach { it.applyTypeface(typeface) }
         invalidate()
     }
 
@@ -172,6 +184,7 @@ class CrossFlickPopupView(context: Context) : FrameLayout(context) {
             val cell = CellView(context).apply {
                 setContent(action)
                 applyTextSize(popupTextSizeSp)
+                applyTypeface(customTypeface)
                 val theme = colorTheme
                 if (theme != null) {
                     applyColors(theme, direction == highlightedDirection)
@@ -213,6 +226,7 @@ class CrossFlickPopupView(context: Context) : FrameLayout(context) {
                 val cell = CellView(context).apply {
                     setContent(action)
                     applyTextSize(popupTextSizeSp)
+                    applyTypeface(customTypeface)
                     val theme = colorTheme
                     if (theme != null) {
                         applyColors(theme, direction == highlightedDirection)

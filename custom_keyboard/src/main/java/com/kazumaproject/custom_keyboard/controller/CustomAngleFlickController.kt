@@ -2,6 +2,7 @@ package com.kazumaproject.custom_keyboard.controller
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Typeface
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -100,6 +101,10 @@ class CustomAngleFlickController(
 
     fun setPopupColors(theme: FlickPopupColorTheme) {
         popupView.setColors(theme)
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        popupView.setCustomTypeface(typeface)
     }
 
     // 見た目用に centerRadius (px) を受け取れるようにする

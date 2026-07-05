@@ -22,6 +22,7 @@ import androidx.appcompat.widget.AppCompatButton
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.ImageViewCompat
 import com.google.android.material.color.DynamicColors
@@ -310,12 +311,16 @@ class TabletKeyboardView @JvmOverloads constructor(
     private var customSpecialKeyColor: Int = Color.GRAY
     private var customKeyTextColor: Int = Color.BLACK
     private var customSpecialKeyTextColor: Int = Color.BLACK
+    private var customEnterKeyTextColor: Int = Color.WHITE
     private var liquidGlassEnable: Boolean = false
 
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
     private var customBorderColor: Int = Color.BLACK
     private var borderWidth: Int = 1
+    private var keyBorderEnable: Boolean = false
+    private var keyCornerRadiusDp: Int = 8
+    private var keyPopupStyle: String = "default"
 
     init {
         (allButtonKeys + allImageButtonKeys).forEach { it.setOnTouchListener(this) }
@@ -408,7 +413,10 @@ class TabletKeyboardView @JvmOverloads constructor(
         customBorderEnable: Boolean,
         customBorderColor: Int,
         liquidGlassKeyAlphaEnable: Int,
-        borderWidth: Int
+        borderWidth: Int,
+        keyBorderEnable: Boolean = false,
+        keyCornerRadiusDp: Int = 8,
+        keyPopupStyle: String = "default"
     ) {
         // メンバ変数に代入
         this.themeMode = themeMode
@@ -422,12 +430,16 @@ class TabletKeyboardView @JvmOverloads constructor(
         this.customSpecialKeyColor = customSpecialKeyColor
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
+        this.customEnterKeyTextColor = customEnterKeyTextColor
         this.liquidGlassEnable = liquidGlassEnable
 
         this.customBorderEnable = customBorderEnable
         this.customBorderColor = customBorderColor
         this.liquidGlassKeyAlphaEnable = liquidGlassKeyAlphaEnable
         this.borderWidth = borderWidth
+        this.keyBorderEnable = keyBorderEnable
+        this.keyCornerRadiusDp = keyCornerRadiusDp
+        this.keyPopupStyle = keyPopupStyle
 
         LayoutInflater.from(context)
 
@@ -459,6 +471,7 @@ class TabletKeyboardView @JvmOverloads constructor(
                 resetLayout()
             }
         }
+        applyEnterKeyDrawableTint()
     }
 
     /**
@@ -3409,8 +3422,22 @@ class TabletKeyboardView @JvmOverloads constructor(
         }
     }
 
+    private var lastEnterKeyDrawable: Drawable? = null
+
     fun setSideKeyEnterDrawable(drawable: Drawable?) {
-        binding.keyEnter.setImageDrawable(drawable)
+        lastEnterKeyDrawable = drawable
+        applyEnterKeyDrawableTint()
+    }
+
+    private fun applyEnterKeyDrawableTint() {
+        val drawable = lastEnterKeyDrawable
+        if (drawable != null) {
+            val wrapped = DrawableCompat.wrap(drawable.mutate())
+            DrawableCompat.setTint(wrapped, customEnterKeyTextColor)
+            binding.keyEnter.setImageDrawable(wrapped)
+        } else {
+            binding.keyEnter.setImageDrawable(null)
+        }
     }
 
     fun setSideKeySpaceDrawable(drawable: Drawable?) {

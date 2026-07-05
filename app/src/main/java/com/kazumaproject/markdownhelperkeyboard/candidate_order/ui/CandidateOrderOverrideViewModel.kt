@@ -7,8 +7,19 @@ import com.kazumaproject.markdownhelperkeyboard.R
 import com.kazumaproject.markdownhelperkeyboard.candidate_order.database.CandidateOrderOverrideEntity
 import com.kazumaproject.markdownhelperkeyboard.candidate_order.model.CandidateOrderItem
 import com.kazumaproject.markdownhelperkeyboard.candidate_order.model.SavedCandidateOrderGroup
+import com.kazumaproject.markdownhelperkeyboard.converter.api.KanaKanjiConverter
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStylePredictionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleZenzaiMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleTypoCorrectionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestPrivacy
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLiveConversionMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ImeCandidateEnvironment
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AuxiliaryCandidateSourceConfig
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
-import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
 import com.kazumaproject.markdownhelperkeyboard.repository.CandidateOrderOverrideRepository
 import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
 import com.kazumaproject.markdownhelperkeyboard.repository.UserDictionaryRepository
@@ -83,7 +94,7 @@ internal fun SavedCandidateOrderGroup.toCandidateOrderEditingState(): CandidateO
 @HiltViewModel
 class CandidateOrderOverrideViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val kanaKanjiEngine: KanaKanjiEngine,
+    private val kanaKanjiConverter: KanaKanjiConverter,
     private val appPreference: AppPreference,
     private val userDictionaryRepository: UserDictionaryRepository,
     private val learnRepository: LearnRepository,
@@ -131,25 +142,48 @@ class CandidateOrderOverrideViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, message = null) }
             val candidates = withContext(Dispatchers.Default) {
-                kanaKanjiEngine.getCandidates(
-                    input = reading,
-                    n = appPreference.n_best_preference ?: 8,
-                    mozcUtPersonName = appPreference.mozc_ut_person_names_preference,
-                    mozcUTPlaces = appPreference.mozc_ut_places_preference,
-                    mozcUTWiki = appPreference.mozc_ut_wiki_preference,
-                    mozcUTNeologd = appPreference.mozc_ut_neologd_preference,
-                    mozcUTWeb = appPreference.mozc_ut_web_preference,
-                    userDictionaryRepository = userDictionaryRepository,
-                    learnRepository = learnRepository,
-                    isOmissionSearchEnable = false,
-                    enableTypoCorrectionJapaneseFlick = false,
-                    enableTypoCorrectionQwertyEnglish = false,
-                    typoCorrectionOffsetScore = appPreference
-                        .enable_typo_correction_japanese_flick_keyboard_offset_score_preference,
-                    omissionSearchOffsetScore = appPreference.omission_search_offset_score_preference
+                val composingText = ComposingText(reading)
+                 val options = ConvertRequestOptions(
+                    nBest = appPreference.n_best_preference ?: 8,
+                    requireJapanesePrediction = AzooKeyStylePredictionMode.AutoMix,
+                    requireEnglishPrediction = AzooKeyStylePredictionMode.Disabled,
+                    learningType = AzooKeyStyleLearningType.InputAndOutput,
+                    zenzaiMode = AzooKeyStyleZenzaiMode.Off,
+                    experimentalZenzaiPredictiveInput = false,
+                    typoCorrectionMode = AzooKeyStyleTypoCorrectionMode.Automatic,
+                    metadata = null,
+                    useUserDictionary = true,
+                    useUserTemplate = false,
+                    useRomajiCandidates = false,
+                    useBunsetsu = false,
+                    useOmissionSearch = false,
                 )
-            }
-                .let { filterCandidateOrderEditableCandidates(reading, it) }
+                val runtime = ConvertRuntimeContext(
+                    privacy = CandidateRequestPrivacy(),
+                    isCandidateSelectionActive = false,
+                    isConverting = false,
+                    isDirectInputMode = false,
+                    liveConversionMode = AzooKeyLiveConversionMode.Disabled,
+                )
+                val environment = ImeCandidateEnvironment(
+                    auxiliaryConfig = AuxiliaryCandidateSourceConfig(
+                        learnedPrefixMatchThreshold = 0,
+                        userDictionaryPrefixMatchThreshold = 0,
+                    ),
+                    isLearnDictionaryMode = false,
+                    romanize = { null },
+                    toHankakuAlphabet = { it },
+                    onNormalBunsetsuResult = { _, _ -> },
+                    latticeIncrementalState = null,
+                )
+                val response = kanaKanjiConverter.requestCandidates(
+                    input = composingText,
+                    options = options,
+                    runtime = runtime,
+                    environment = environment,
+                )
+                response.result.mainResults
+            }.let { filterCandidateOrderEditableCandidates(reading, it) }
 
             val orderedCandidates = withContext(Dispatchers.IO) {
                 candidateOrderOverrideRepository.applyOrder(reading, candidates)

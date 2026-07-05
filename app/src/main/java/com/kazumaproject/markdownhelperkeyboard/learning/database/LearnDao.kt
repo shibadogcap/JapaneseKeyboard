@@ -41,7 +41,7 @@ interface LearnDao {
      * @param limit The maximum number of results to return.
      * @return A list of matching LearnEntity objects.
      */
-    @Query("SELECT * FROM learn_table WHERE input LIKE :prefix || '%' ORDER BY score DESC LIMIT :limit")
+    @Query("SELECT * FROM learn_table WHERE input LIKE :prefix || '%' ORDER BY score ASC LIMIT :limit")
     suspend fun predictiveSearchByInput(prefix: String, limit: Int): List<LearnEntity>
 
     /**

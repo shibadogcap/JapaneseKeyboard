@@ -1,0 +1,53 @@
+[
+  {
+    "id": "nihon",
+    "input": "にほん",
+    "top5": ["日本", "2本", "二本", "ニホン", "に本"],
+    "exactReadingInTop3": true
+  },
+  {
+    "id": "shikai",
+    "input": "しかい",
+    "top5": ["視界", "司会", "歯科医", "市会", "士会"],
+    "exactReadingInTop3": true
+  },
+  {
+    "id": "2000en",
+    "input": "2000えん",
+    "top1": "2000円",
+    "exactReadingInTop3": true
+  },
+  {
+    "id": "2000en_kata",
+    "input": "2000エン",
+    "top1": "2000円",
+    "exactReadingInTop3": true
+  },
+  {
+    "id": "keisan",
+    "input": "けいさん",
+    "top1": "計算",
+    "exactReadingInTop3": true,
+    "requireJapanesePrediction": false
+  },
+  {
+    "id": "tsukatteiru",
+    "input": "つかっている",
+    "top1": "使っている",
+    "exactReadingInTop3": true,
+    "requireJapanesePrediction": false
+  },
+  {
+    "id": "shindadoubutu",
+    "input": "しんだどうぶつ",
+    "top1": "死んだ動物",
+    "exactReadingInTop3": true,
+    "requireJapanesePrediction": false
+  },
+  {
+    "id": "gradual_keisan",
+    "gradualInput": "けいさん",
+    "top1": "計算",
+    "requireJapanesePrediction": false
+  }
+]

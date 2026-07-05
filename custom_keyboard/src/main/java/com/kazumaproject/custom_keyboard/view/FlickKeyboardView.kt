@@ -6,6 +6,7 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Rect
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
@@ -99,6 +100,7 @@ class FlickKeyboardView @JvmOverloads constructor(
     private val hierarchicalTfbiControllers = mutableListOf<TfbiHierarchicalFlickController>()
 
     private var popupWindowAnchorProvider: (() -> View?)? = null
+    private var customTypeface: Typeface? = null
 
     private val hitRect = Rect()
     private var flickSensitivity: Int = 100
@@ -146,10 +148,15 @@ class FlickKeyboardView @JvmOverloads constructor(
     private var customSpecialKeyTextColor: Int = Color.BLACK
     private var customEnterKeyColor: Int = Color.BLUE
     private var customEnterKeyTextColor: Int = Color.WHITE
+    private var customPopupBgColor: Int = Color.WHITE
+    private var customPopupTextColor: Int = Color.BLACK
 
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
     private var customBorderColor: Int = Color.BLACK
+    private var keyBorderEnable: Boolean = false
+    private var keyCornerRadiusDp: Int = 8
+    private var keyPopupStyle: String = "default"
     private var customAngleAndRange: Map<CircularFlickDirection, Pair<Float, Float>> = emptyMap()
     private var circularViewScale: Float = 1.0f
     private var circularFlickDirectionCount: Int = 4
@@ -198,6 +205,33 @@ class FlickKeyboardView @JvmOverloads constructor(
         tfbiControllers.forEach { it.setPopupWindowAnchorProvider(provider) }
         stickyTfbiControllers.forEach { it.setPopupWindowAnchorProvider(provider) }
         hierarchicalTfbiControllers.forEach { it.setPopupWindowAnchorProvider(provider) }
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        customTypeface = typeface
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (child is Button) {
+                child.typeface = typeface
+            }
+            val bg = child.background
+            if (bg is LayerDrawable) {
+                for (j in 0 until bg.numberOfLayers) {
+                    val layer = bg.getDrawable(j)
+                    if (layer is SegmentedBackgroundDrawable) {
+                        layer.setCustomTypeface(typeface)
+                    }
+                }
+            } else if (bg is SegmentedBackgroundDrawable) {
+                bg.setCustomTypeface(typeface)
+            }
+        }
+        flickControllers.forEach { it.setCustomTypeface(typeface) }
+        crossFlickControllers.forEach { it.setCustomTypeface(typeface) }
+        standardFlickControllers.forEach { it.setCustomTypeface(typeface) }
+        tfbiControllers.forEach { it.setCustomTypeface(typeface) }
+        stickyTfbiControllers.forEach { it.setCustomTypeface(typeface) }
+        hierarchicalTfbiControllers.forEach { it.setCustomTypeface(typeface) }
     }
 
     fun applyPopupViewStyleSet(styleSet: FlickPopupViewStyleSet) {
@@ -301,11 +335,16 @@ class FlickKeyboardView @JvmOverloads constructor(
         customKeyTextColor: Int,
         customSpecialKeyTextColor: Int,
         customEnterKeyTextColor: Int,
+        customPopupBgColor: Int,
+        customPopupTextColor: Int,
         liquidGlassEnable: Boolean,
         customBorderEnable: Boolean,
         customBorderColor: Int,
         liquidGlassKeyAlphaEnable: Int,
-        borderWidth: Int
+        borderWidth: Int,
+        keyBorderEnable: Boolean = false,
+        keyCornerRadiusDp: Int = 8,
+        keyPopupStyle: String = "default"
     ) {
         this.themeMode = themeMode
         this.isNightMode = (currentNightMode == Configuration.UI_MODE_NIGHT_YES)
@@ -317,14 +356,34 @@ class FlickKeyboardView @JvmOverloads constructor(
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
         this.customEnterKeyTextColor = customEnterKeyTextColor
+        this.customPopupBgColor = customPopupBgColor
+        this.customPopupTextColor = customPopupTextColor
         this.liquidGlassEnable = liquidGlassEnable
         this.customBorderEnable = customBorderEnable
         this.customBorderColor = customBorderColor
         this.liquidGlassKeyAlphaEnable = liquidGlassKeyAlphaEnable
         this.borderWidth = borderWidth
+        this.keyBorderEnable = keyBorderEnable
+        this.keyCornerRadiusDp = keyCornerRadiusDp
+        this.keyPopupStyle = keyPopupStyle
 
         if (liquidGlassEnable) {
             this.setBackgroundColor(ColorUtils.setAlphaComponent(customBgColor, 0))
+        }
+        // Re-apply icon tints for all dynamic keys after theme change
+        refreshDynamicKeyTint()
+    }
+
+    /**
+     * Re-applies image button tint for all dynamic keys (e.g. enter key)
+     * after theme colors have been updated.
+     */
+    private fun refreshDynamicKeyTint() {
+        dynamicKeyMap.values.forEach { info ->
+            val view = info.view
+            if (view is AppCompatImageButton) {
+                applyImageButtonTint(view, info.keyData)
+            }
         }
     }
 
@@ -590,15 +649,23 @@ class FlickKeyboardView @JvmOverloads constructor(
     }
 
     private fun applyImageButtonTint(button: AppCompatImageButton, keyData: KeyData) {
-        if (
-            themeMode == "custom" &&
-            keyData.isSpecialKey &&
-            KeyIconResolver.shouldTintIcon(keyData)
-        ) {
-            button.setColorFilter(customSpecialKeyTextColor)
-        } else {
+        if (!keyData.isSpecialKey || !KeyIconResolver.shouldTintIcon(keyData)) {
             button.clearColorFilter()
+            return
         }
+        val tintColor = when (themeMode) {
+            "custom" -> {
+                val isEnterKey = keyData.action is KeyAction.Enter ||
+                        keyData.action is KeyAction.Confirm ||
+                        keyData.action is KeyAction.NewLine ||
+                        keyData.action is KeyAction.ForceNewLine
+                if (isEnterKey) customEnterKeyTextColor else customSpecialKeyTextColor
+            }
+            "dark" -> Color.WHITE
+            "light" -> Color.BLACK
+            else -> ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+        }
+        button.setColorFilter(tintColor)
     }
 
     private fun updateImageButtonMatrix(button: AppCompatImageButton, keyData: KeyData) {
@@ -901,6 +968,11 @@ class FlickKeyboardView @JvmOverloads constructor(
 
         val isDarkTheme = context.isDarkThemeOn()
         val commonCornerRadius = dpToPx(8).toFloat()
+        val isEnterKey = keyData.action is KeyAction.Enter ||
+                keyData.action is KeyAction.Confirm ||
+                keyData.action is KeyAction.NewLine ||
+                keyData.action is KeyAction.ForceNewLine
+        val keyCornerRadius = if (isEnterKey) dpToPx(24).toFloat() else commonCornerRadius
 
         val keyView: View = if (KeyIconResolver.hasIcon(keyData)) {
             AppCompatImageButton(context).apply {
@@ -940,21 +1012,31 @@ class FlickKeyboardView @JvmOverloads constructor(
 
                 when (themeMode) {
                     "custom" -> {
+                        val baseColor = if (isEnterKey) customEnterKeyColor else customSpecialKeyColor
                         if (customBorderEnable) {
-                            setDrawableSolidColor(customSpecialKeyColor)
+                            setDrawableSolidColor(baseColor)
                             setBorder(customBorderColor, borderWidth)
                         } else {
                             val neumorphDrawable = getDynamicNeumorphDrawable(
-                                baseColor = customSpecialKeyColor,
-                                radius = commonCornerRadius
+                                baseColor = baseColor,
+                                radius = keyCornerRadius
                             )
 
                             val segmentedDrawable = SegmentedBackgroundDrawable(
                                 label = "",
                                 baseColor = Color.TRANSPARENT,
-                                highlightColor = customSpecialKeyColor,
-                                textColor = customSpecialKeyTextColor,
-                                cornerRadius = commonCornerRadius
+                                highlightColor = if (isEnterKey) {
+                                    manipulateColor(customEnterKeyColor, 1.2f)
+                                } else {
+                                    customSpecialKeyColor
+                                },
+                                textColor = if (isEnterKey) {
+                                    customEnterKeyTextColor
+                                } else {
+                                    customSpecialKeyTextColor
+                                },
+                                cornerRadius = keyCornerRadius,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -983,6 +1065,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                 isFocusable = false
                 isAllCaps = false
                 elevation = 0f
+                typeface = customTypeface
 
                 applyButtonText(this, keyData)
 
@@ -1022,11 +1105,6 @@ class FlickKeyboardView @JvmOverloads constructor(
 
                 when (themeMode) {
                     "custom" -> {
-                        val isEnterKey = keyData.action is KeyAction.Enter ||
-                                keyData.action is KeyAction.Confirm ||
-                                keyData.action is KeyAction.NewLine ||
-                                keyData.action is KeyAction.ForceNewLine
-
                         if (customBorderEnable) {
                             val baseColor = when {
                                 isEnterKey -> customEnterKeyColor
@@ -1060,7 +1138,7 @@ class FlickKeyboardView @JvmOverloads constructor(
 
                             val neumorphDrawable = getDynamicNeumorphDrawable(
                                 baseColor = targetBaseColor,
-                                radius = commonCornerRadius
+                                radius = keyCornerRadius
                             )
 
                             val segmentedDrawable = SegmentedBackgroundDrawable(
@@ -1068,7 +1146,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 baseColor = Color.TRANSPARENT,
                                 highlightColor = targetHighlightColor,
                                 textColor = targetTextColor,
-                                cornerRadius = commonCornerRadius
+                                cornerRadius = keyCornerRadius,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -1155,6 +1234,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                     val controller = CustomAngleFlickController(context, flickSensitivity).apply {
                         setLongPressTimeout(longPressTimeout)
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         val secondaryColor =
                             context.getColorFromAttr(R.attr.colorSecondaryContainer)
                         val surfaceContainerLow =
@@ -1178,27 +1258,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customSpecialKeyColor,
-                                segmentHighlightGradientStartColor = customSpecialKeyColor,
-                                segmentHighlightGradientEndColor = customSpecialKeyColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customSpecialKeyTextColor,
-                                textColor = customSpecialKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(
@@ -1327,6 +1407,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                     val controller = CrossFlickInputController(context).apply {
                         setLongPressTimeout(longPressTimeout)
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyleSet(
                             popupViewStyleSet.directional,
                             popupViewStyleSet.cross
@@ -1418,27 +1499,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                         "custom" -> {
                             controller.setPopupColors(
                                 FlickPopupColorTheme(
-                                    segmentColor = customSpecialKeyColor,
+                                    segmentColor = customPopupBgColor,
                                     segmentHighlightGradientStartColor = manipulateColor(
-                                        customSpecialKeyColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
                                     segmentHighlightGradientEndColor = manipulateColor(
-                                        customSpecialKeyColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
-                                    centerGradientStartColor = customSpecialKeyColor,
-                                    centerGradientEndColor = customSpecialKeyColor,
+                                    centerGradientStartColor = customPopupBgColor,
+                                    centerGradientEndColor = customPopupBgColor,
                                     centerHighlightGradientStartColor = manipulateColor(
-                                        customSpecialKeyColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
                                     centerHighlightGradientEndColor = manipulateColor(
-                                        customSpecialKeyColor,
+                                        customPopupBgColor,
                                         1.2f
                                     ),
-                                    separatorColor = customSpecialKeyTextColor,
-                                    textColor = customSpecialKeyTextColor
+                                    separatorColor = customPopupTextColor,
+                                    textColor = customPopupTextColor
                                 )
                             )
                         }
@@ -1480,7 +1561,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 textColor = customKeyTextColor,
                                 cornerRadius = baseCorner,
                                 primaryTextSizePx = primaryTextSizePx,
-                                secondaryTextSizePx = secondaryTextSizePx
+                                secondaryTextSizePx = secondaryTextSizePx,
+                                initialTypeface = customTypeface
                             )
 
                             val layer = LayerDrawable(arrayOf(baseWithBorder, segmentedDrawable))
@@ -1502,7 +1584,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 textColor = customKeyTextColor,
                                 cornerRadius = dpToPx(8).toFloat(),
                                 primaryTextSizePx = primaryTextSizePx,
-                                secondaryTextSizePx = secondaryTextSizePx
+                                secondaryTextSizePx = secondaryTextSizePx,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -1532,7 +1615,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                             textColor = keyTextColor,
                             cornerRadius = 20f,
                             primaryTextSizePx = primaryTextSizePx,
-                            secondaryTextSizePx = secondaryTextSizePx
+                            secondaryTextSizePx = secondaryTextSizePx,
+                            initialTypeface = customTypeface
                         )
 
                         keyView.background = segmentedDrawable
@@ -1545,6 +1629,7 @@ class FlickKeyboardView @JvmOverloads constructor(
 
                     val controller = StandardFlickInputController(context).apply {
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyle(popupViewStyleSet.standard)
                         this.listener =
                             object : StandardFlickInputController.StandardFlickListener {
@@ -1593,27 +1678,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customSpecialKeyColor,
-                                segmentHighlightGradientStartColor = customSpecialKeyColor,
-                                segmentHighlightGradientEndColor = customSpecialKeyColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customSpecialKeyTextColor,
-                                textColor = customSpecialKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(
@@ -1646,6 +1731,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                     val controller = CrossFlickInputController(context, flickSensitivity).apply {
                         setLongPressTimeout(longPressTimeout)
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyleSet(
                             popupViewStyleSet.directional,
                             popupViewStyleSet.cross
@@ -1678,27 +1764,27 @@ class FlickKeyboardView @JvmOverloads constructor(
                             )
 
                             "custom" -> FlickPopupColorTheme(
-                                segmentColor = customSpecialKeyColor,
-                                segmentHighlightGradientStartColor = customSpecialKeyColor,
-                                segmentHighlightGradientEndColor = customSpecialKeyColor,
+                                segmentColor = customPopupBgColor,
+                                segmentHighlightGradientStartColor = customPopupBgColor,
+                                segmentHighlightGradientEndColor = customPopupBgColor,
                                 centerGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
                                 centerHighlightGradientStartColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     1.2f
                                 ),
                                 centerHighlightGradientEndColor = manipulateColor(
-                                    customSpecialKeyColor,
+                                    customPopupBgColor,
                                     0.8f
                                 ),
-                                separatorColor = customSpecialKeyTextColor,
-                                textColor = customSpecialKeyTextColor
+                                separatorColor = customPopupTextColor,
+                                textColor = customPopupTextColor
                             )
 
                             else -> FlickPopupColorTheme(
@@ -1854,6 +1940,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                     ).apply {
                         setLongPressTimeout(longPressTimeout)
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyle(popupViewStyleSet.tfbi)
                         this.listener = object : TfbiInputController.TfbiListener {
                             override fun onPress(
@@ -1935,6 +2022,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                         flickSensitivity = flickSensitivity.toFloat()
                     ).apply {
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyle(popupViewStyleSet.tfbi)
                         this.listener = object : TfbiStickyFlickController.TfbiListener {
                             override fun onPress(
@@ -1993,6 +2081,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                         flickSensitivity = flickSensitivity.toFloat()
                     ).apply {
                         setPopupWindowAnchorProvider(popupWindowAnchorProvider)
+                        setCustomTypeface(customTypeface)
                         applyPopupViewStyle(popupViewStyleSet.tfbi)
                         this.listener = object : TfbiHierarchicalFlickController.TfbiListener {
                             override fun onPress(character: String) {

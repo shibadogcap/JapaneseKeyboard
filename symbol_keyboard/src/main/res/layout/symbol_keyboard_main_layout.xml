@@ -35,7 +35,7 @@
     <LinearLayout
         android:id="@+id/clipboard_control_layout"
         android:layout_width="0dp"
-        android:layout_height="44dp"
+        android:layout_height="38dp"
         android:orientation="horizontal"
         android:visibility="gone"
         android:paddingHorizontal="8dp"
@@ -58,8 +58,8 @@
 
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/clipboard_clear_all_button"
-            android:layout_width="38dp"
-            android:layout_height="38dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/symbol_keyboard_buttons_bg"
             android:scaleType="center"
@@ -141,22 +141,21 @@
     <LinearLayout
         android:id="@+id/bottom_bar"
         android:layout_width="0dp"
-        android:layout_height="64dp"
+        android:layout_height="56dp"
         android:orientation="horizontal"
         android:weightSum="5"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <com.google.android.material.imageview.ShapeableImageView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/return_jp_keyboard_button"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@drawable/symbol_keyboard_buttons_bg"
-            android:scaleType="center"
-            android:src="@drawable/language_japanese_kana_24px"
-            android:tint="@color/tab_unselected" />
+            android:gravity="center"
+            android:textColor="@color/tab_unselected" />
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/mode_tab_layout"

@@ -32,7 +32,7 @@ private val JP_KEYS_MA = listOf(
 )
 
 private val JP_KEYS_YA = listOf(
-    'や','(','ゆ',')','よ',
+    'や','「','ゆ','」','よ',
 )
 
 private val JP_KEYS_RA = listOf(

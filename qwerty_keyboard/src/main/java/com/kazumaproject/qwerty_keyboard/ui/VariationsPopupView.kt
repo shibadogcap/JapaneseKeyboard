@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
 import androidx.annotation.ColorInt
@@ -26,7 +27,8 @@ class VariationsPopupView(context: Context) : View(context) {
     var maxColumns = 3 // デフォルトは3 (元のコードに合わせる)
 
     // ■■■ 共通設定 ■■■
-    private val cornerRadius = 30f
+    private val cornerRadius: Float
+        get() = 30f * context.resources.displayMetrics.density
     private val clipPath = Path()
     private var chars: List<Char> = emptyList()
     private var selectedIndex = -1
@@ -34,6 +36,7 @@ class VariationsPopupView(context: Context) : View(context) {
     private var itemHeight = 0f
     private var numColumns = 1
     private var numRows = 1
+    private val textBounds = android.graphics.Rect()
 
     // ■■■ FLATモード用 (元のコードの変数) ■■■
     private val flatTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -78,6 +81,12 @@ class VariationsPopupView(context: Context) : View(context) {
         )
         flatTextPaint.textSize = textSizePx
         neuTextPaint.textSize = textSizePx
+        invalidate()
+    }
+
+    fun setTypeface(typeface: Typeface?) {
+        flatTextPaint.typeface = typeface
+        neuTextPaint.typeface = typeface
         invalidate()
     }
 
@@ -146,6 +155,8 @@ class VariationsPopupView(context: Context) : View(context) {
             0f, 0f, width.toFloat(), height.toFloat(),
             cornerRadius, cornerRadius, Path.Direction.CW
         )
+        
+        canvas.save()
         canvas.clipPath(clipPath)
 
         // 背景描画
@@ -178,9 +189,46 @@ class VariationsPopupView(context: Context) : View(context) {
             val targetPaint =
                 if (currentStyle == PopupStyle.NEUMORPHISM) neuTextPaint else flatTextPaint
             val cx = left + itemWidth / 2f
+            val originalTextSize = targetPaint.textSize
+            targetPaint.textSize = fittedTextSize(targetPaint, char.toString(), itemWidth, itemHeight)
             val cy = top + (itemHeight / 2f) - ((targetPaint.descent() + targetPaint.ascent()) / 2f)
             canvas.drawText(char.toString(), cx, cy, targetPaint)
+            targetPaint.textSize = originalTextSize
         }
+        
+        canvas.restore()
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = context.resources.displayMetrics.density * 1f
+            color = if (currentStyle == PopupStyle.NEUMORPHISM) {
+                manipulateColor(neuBackgroundPaint.color, 0.85f)
+            } else {
+                manipulateColor(flatBackgroundPaint.color, if (flatBackgroundPaint.color == Color.WHITE) 0.85f else 0.8f)
+            }
+        }
+        val rectF = RectF(
+            strokePaint.strokeWidth / 2f,
+            strokePaint.strokeWidth / 2f,
+            width.toFloat() - strokePaint.strokeWidth / 2f,
+            height.toFloat() - strokePaint.strokeWidth / 2f
+        )
+        canvas.drawRoundRect(rectF, cornerRadius, cornerRadius, strokePaint)
+    }
+
+    private fun fittedTextSize(paint: Paint, text: String, cellWidth: Float, cellHeight: Float): Float {
+        val maxWidth = cellWidth * 0.62f
+        val maxHeight = cellHeight * 0.56f
+        var size = paint.textSize.coerceAtMost(maxHeight)
+        while (size > 10f) {
+            paint.textSize = size
+            paint.getTextBounds(text, 0, text.length, textBounds)
+            if (textBounds.width() <= maxWidth && textBounds.height() <= maxHeight) {
+                return size
+            }
+            size -= 1.5f
+        }
+        return size
     }
 
     // ニューモーフィズムの凹み描画ロジックを分離

@@ -118,6 +118,10 @@ class StandardFlickPopupView(context: Context) : AppCompatTextView(context) {
         colorTheme?.let { applyTheme(it, direction) }
     }
 
+    fun setCustomTypeface(typeface: Typeface?) {
+        this.typeface = typeface ?: Typeface.DEFAULT
+    }
+
     fun updateText(text: String?) {
         if (text.isNullOrEmpty()) {
             this.text = ""
@@ -163,9 +167,17 @@ class StandardFlickPopupView(context: Context) : AppCompatTextView(context) {
         }
 
         // Line 2: TAP
+        val boldSpan = this.typeface?.let {
+            if (it != Typeface.DEFAULT) {
+                CustomTypefaceSpan(it, true)
+            } else {
+                StyleSpan(Typeface.BOLD)
+            }
+        } ?: StyleSpan(Typeface.BOLD)
+
         builder.inSpans(
             AbsoluteSizeSpan(spToPx(tapSize)),
-            StyleSpan(Typeface.BOLD)
+            boldSpan
         ) { append(tap) }
 
         // Line 2: RIGHT

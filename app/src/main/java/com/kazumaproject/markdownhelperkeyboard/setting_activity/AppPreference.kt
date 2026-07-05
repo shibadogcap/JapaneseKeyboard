@@ -48,6 +48,7 @@ object AppPreference {
     private val KEY_SOUND_VOLUME_PERCENT_PREFERENCE =
         Pair("key_sound_volume_percent_preference", 0)
     private val LEARN_DICTIONARY_PREFERENCE = Pair("learn_dictionary_preference", true)
+    private val LEARNING_TYPE_PREFERENCE = Pair("learning_type_preference", "input_and_output")
     private val USER_DICTIONARY_PREFERENCE = Pair("user_dictionary_preference", true)
     private val USER_DICTIONARY_PREFIX_PREFERENCE = Pair("user_dictionary_prefix_match_number", 2)
     private val USER_TEMPLATE_PREFERENCE = Pair("user_template_preference", true)
@@ -126,10 +127,10 @@ object AppPreference {
         Pair("qwerty_romaji_zenkaku_space_preference", false)
 
     private val QWERTY_ROMAJI_HANKAKU_NUMBER_PREFERENCE =
-        Pair("qwerty_romaji_hankaku_number_preference", false)
+        Pair("qwerty_romaji_hankaku_number_preference", true)
 
     private val QWERTY_ROMAJI_HANKAKU_SYMBOL_PREFERENCE =
-        Pair("qwerty_romaji_hankaku_symbol_preference", false)
+        Pair("qwerty_romaji_hankaku_symbol_preference", true)
 
     private val QWERTY_SHOW_POPUP_WINDOW = Pair("qwerty_show_popup_window_preference", true)
 
@@ -192,10 +193,12 @@ object AppPreference {
     private val SPACE_HANKAKU_ENABLE = Pair("space_key_preference", false)
     private val CUSTOM_DIRECT_MODE_SPACE_HANKAKU_ENABLE =
         Pair("custom_direct_mode_space_hankaku_preference", true)
-    private val LIVE_CONVERSION_ENABLE = Pair("live_conversion_preference", false)
+    private val LIVE_CONVERSION_ENABLE = Pair("live_conversion_preference", true)
     private val LIVE_CONVERSION_START_LENGTH = Pair("live_conversion_start_length_preference", 1)
     private val LIVE_CONVERSION_CANDIDATE_YOMI =
         Pair("live_conversion_candidate_yomi_preference", false)
+    private val LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH =
+        Pair("live_conversion_automatic_completion_strength_preference", "weak")
     private const val OLD_SUMIRE_PREFERENCE_KEY = "sumire_keyboard_input_type_preference"
     private const val NEW_SUMIRE_STYLE_KEY = "sumire_keyboard_style_preference"
     private const val NEW_SUMIRE_METHOD_KEY = "sumire_input_method_preference"
@@ -285,6 +288,10 @@ object AppPreference {
         Pair("custom_theme_enter_key_color_preference", Color.BLUE)
     private val CUSTOM_THEME_ENTER_KEY_TEXT_COLOR =
         Pair("custom_theme_enter_key_text_color_preference", Color.WHITE)
+    private val CUSTOM_THEME_POPUP_BG_COLOR_VAL =
+        Pair("custom_theme_popup_bg_color_preference", Color.WHITE)
+    private val CUSTOM_THEME_POPUP_TEXT_COLOR_VAL =
+        Pair("custom_theme_popup_text_color_preference", Color.BLACK)
 
     // New variables for Custom Border
     private val CUSTOM_THEME_BORDER_ENABLE = Pair("theme_custom_border_enable", false)
@@ -423,6 +430,9 @@ object AppPreference {
 
     private val ENABLE_ZENZAI_PREFERENCE =
         Pair("enable_ai_conversion_zenzai_preference", false)
+
+    private val EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE =
+        Pair("experimental_zenzai_predictive_input_preference", false)
 
     private val ZENZ_PROFILE_PREFERENCE =
         Pair("zenz_profile_string_preference", "")
@@ -1026,6 +1036,15 @@ object AppPreference {
             it.putBoolean(LEARN_DICTIONARY_PREFERENCE.first, value ?: true)
         }
 
+    var learning_type_preference: String?
+        get() = preferences.getString(
+            LEARNING_TYPE_PREFERENCE.first,
+            LEARNING_TYPE_PREFERENCE.second,
+        )
+        set(value) = preferences.edit {
+            it.putString(LEARNING_TYPE_PREFERENCE.first, value ?: LEARNING_TYPE_PREFERENCE.second)
+        }
+
     var user_dictionary_preference: Boolean?
         get() = preferences.getBoolean(
             USER_DICTIONARY_PREFERENCE.first, USER_DICTIONARY_PREFERENCE.second
@@ -1317,6 +1336,18 @@ object AppPreference {
             )
         }
 
+    var live_conversion_automatic_completion_strength_preference: String?
+        get() = preferences.getString(
+            LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.first,
+            LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.second
+        )
+        set(value) = preferences.edit {
+            it.putString(
+                LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.first,
+                value ?: LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.second
+            )
+        }
+
     var delete_key_high_light_preference: Boolean?
         get() = preferences.getBoolean(DELETE_KEY_HIGH_LIGHT.first, DELETE_KEY_HIGH_LIGHT.second)
         set(value) = preferences.edit {
@@ -1498,6 +1529,18 @@ object AppPreference {
         get() = readIntPreference(CUSTOM_THEME_BG_COLOR.first, CUSTOM_THEME_BG_COLOR.second)
         set(value) = preferences.edit {
             it.putInt(CUSTOM_THEME_BG_COLOR.first, value)
+        }
+
+    var custom_theme_popup_bg_color: Int
+        get() = readIntPreference(CUSTOM_THEME_POPUP_BG_COLOR_VAL.first, CUSTOM_THEME_POPUP_BG_COLOR_VAL.second)
+        set(value) = preferences.edit {
+            it.putInt(CUSTOM_THEME_POPUP_BG_COLOR_VAL.first, value)
+        }
+
+    var custom_theme_popup_text_color: Int
+        get() = readIntPreference(CUSTOM_THEME_POPUP_TEXT_COLOR_VAL.first, CUSTOM_THEME_POPUP_TEXT_COLOR_VAL.second)
+        set(value) = preferences.edit {
+            it.putInt(CUSTOM_THEME_POPUP_TEXT_COLOR_VAL.first, value)
         }
 
     var custom_theme_key_color: Int
@@ -2114,6 +2157,15 @@ object AppPreference {
         )
         set(value) = preferences.edit {
             it.putBoolean(ENABLE_ZENZAI_PREFERENCE.first, value)
+        }
+
+    var experimental_zenzai_predictive_input_preference: Boolean
+        get() = preferences.getBoolean(
+            EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.first,
+            EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.second
+        )
+        set(value) = preferences.edit {
+            it.putBoolean(EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.first, value)
         }
 
     var zenz_profile_preference: String
@@ -2976,6 +3028,9 @@ object AppPreference {
     private val CUSTOM_ICON_SPACE_PATH = Pair("custom_icon_space_path", "")
     private val CUSTOM_ICON_ARROW_LEFT_PATH = Pair("custom_icon_arrow_left_path", "")
     private val CUSTOM_ICON_ARROW_RIGHT_PATH = Pair("custom_icon_arrow_right_path", "")
+    private val CUSTOM_ICON_SHIFT_OFF_PATH = Pair("custom_icon_shift_off_path", "")
+    private val CUSTOM_ICON_SHIFT_ON_PATH = Pair("custom_icon_shift_on_path", "")
+    private val CUSTOM_ICON_SHIFT_LOCK_PATH = Pair("custom_icon_shift_lock_path", "")
 
     private val CUSTOM_FONT_KEY_PATH = Pair("custom_font_key_path", "")
     private val CUSTOM_FONT_CANDIDATE_PATH = Pair("custom_font_candidate_path", "")
@@ -2997,6 +3052,29 @@ object AppPreference {
     private val CUSTOM_TEXT_SYMBOL = Pair("custom_text_symbol", "")
     private val CUSTOM_TEXT_123 = Pair("custom_text_123", "")
 
+    private val CUSTOM_ICON_ENTER_ACCESS_PATH = Pair("custom_icon_enter_access_path", "")
+    private val CUSTOM_ICON_ENTER_DONE_PATH = Pair("custom_icon_enter_done_path", "")
+    private val CUSTOM_ICON_ENTER_GO_PATH = Pair("custom_icon_enter_go_path", "")
+    private val CUSTOM_ICON_ENTER_NEXT_PATH = Pair("custom_icon_enter_next_path", "")
+    private val CUSTOM_ICON_ENTER_PREVIOUS_PATH = Pair("custom_icon_enter_previous_path", "")
+    private val CUSTOM_ICON_ENTER_SEARCH_PATH = Pair("custom_icon_enter_search_path", "")
+    private val CUSTOM_ICON_ENTER_SEND_PATH = Pair("custom_icon_enter_send_path", "")
+    private val CUSTOM_ICON_CONVERT_PATH = Pair("custom_icon_convert_path", "")
+
+    private val CUSTOM_TEXT_ENTER_ACCESS = Pair("custom_text_enter_access", "")
+    private val CUSTOM_TEXT_ENTER_DONE = Pair("custom_text_enter_done", "")
+    private val CUSTOM_TEXT_ENTER_GO = Pair("custom_text_enter_go", "")
+    private val CUSTOM_TEXT_ENTER_NEXT = Pair("custom_text_enter_next", "")
+    private val CUSTOM_TEXT_ENTER_PREVIOUS = Pair("custom_text_enter_previous", "")
+    private val CUSTOM_TEXT_ENTER_SEARCH = Pair("custom_text_enter_search", "")
+    private val CUSTOM_TEXT_ENTER_SEND = Pair("custom_text_enter_send", "")
+    private val CUSTOM_TEXT_CONVERT = Pair("custom_text_convert", "")
+
+    // Keyboard UI appearance preferences
+    private val KEY_BORDER_ENABLE = Pair("key_border_enable_preference", false)
+    private val KEY_CORNER_RADIUS_DP = Pair("key_corner_radius_dp_preference", 8)
+    private val KEY_POPUP_STYLE = Pair("key_popup_style_preference", "default")
+
     var custom_icon_enter_path: String
         get() = preferences.getString(CUSTOM_ICON_ENTER_PATH.first, CUSTOM_ICON_ENTER_PATH.second) ?: ""
         set(value) = preferences.edit {
@@ -3009,6 +3087,54 @@ object AppPreference {
             it.putString(CUSTOM_ICON_SPACE_PATH.first, value)
         }
 
+    var custom_icon_enter_access_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_ACCESS_PATH.first, CUSTOM_ICON_ENTER_ACCESS_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_ACCESS_PATH.first, value)
+        }
+
+    var custom_icon_enter_done_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_DONE_PATH.first, CUSTOM_ICON_ENTER_DONE_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_DONE_PATH.first, value)
+        }
+
+    var custom_icon_enter_go_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_GO_PATH.first, CUSTOM_ICON_ENTER_GO_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_GO_PATH.first, value)
+        }
+
+    var custom_icon_enter_next_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_NEXT_PATH.first, CUSTOM_ICON_ENTER_NEXT_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_NEXT_PATH.first, value)
+        }
+
+    var custom_icon_enter_previous_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_PREVIOUS_PATH.first, CUSTOM_ICON_ENTER_PREVIOUS_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_PREVIOUS_PATH.first, value)
+        }
+
+    var custom_icon_enter_search_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_SEARCH_PATH.first, CUSTOM_ICON_ENTER_SEARCH_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_SEARCH_PATH.first, value)
+        }
+
+    var custom_icon_enter_send_path: String
+        get() = preferences.getString(CUSTOM_ICON_ENTER_SEND_PATH.first, CUSTOM_ICON_ENTER_SEND_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_ENTER_SEND_PATH.first, value)
+        }
+
+    var custom_icon_convert_path: String
+        get() = preferences.getString(CUSTOM_ICON_CONVERT_PATH.first, CUSTOM_ICON_CONVERT_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_CONVERT_PATH.first, value)
+        }
+
     var custom_icon_arrow_left_path: String
         get() = preferences.getString(CUSTOM_ICON_ARROW_LEFT_PATH.first, CUSTOM_ICON_ARROW_LEFT_PATH.second) ?: ""
         set(value) = preferences.edit {
@@ -3019,6 +3145,24 @@ object AppPreference {
         get() = preferences.getString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, CUSTOM_ICON_ARROW_RIGHT_PATH.second) ?: ""
         set(value) = preferences.edit {
             it.putString(CUSTOM_ICON_ARROW_RIGHT_PATH.first, value)
+        }
+
+    var custom_icon_shift_off_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_OFF_PATH.first, CUSTOM_ICON_SHIFT_OFF_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_OFF_PATH.first, value)
+        }
+
+    var custom_icon_shift_on_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_ON_PATH.first, CUSTOM_ICON_SHIFT_ON_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_ON_PATH.first, value)
+        }
+
+    var custom_icon_shift_lock_path: String
+        get() = preferences.getString(CUSTOM_ICON_SHIFT_LOCK_PATH.first, CUSTOM_ICON_SHIFT_LOCK_PATH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_ICON_SHIFT_LOCK_PATH.first, value)
         }
 
     var custom_font_key_path: String
@@ -3093,6 +3237,54 @@ object AppPreference {
             it.putString(CUSTOM_TEXT_SPACE.first, value)
         }
 
+    var custom_text_enter_access: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_ACCESS.first, CUSTOM_TEXT_ENTER_ACCESS.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_ACCESS.first, value)
+        }
+
+    var custom_text_enter_done: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_DONE.first, CUSTOM_TEXT_ENTER_DONE.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_DONE.first, value)
+        }
+
+    var custom_text_enter_go: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_GO.first, CUSTOM_TEXT_ENTER_GO.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_GO.first, value)
+        }
+
+    var custom_text_enter_next: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_NEXT.first, CUSTOM_TEXT_ENTER_NEXT.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_NEXT.first, value)
+        }
+
+    var custom_text_enter_previous: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_PREVIOUS.first, CUSTOM_TEXT_ENTER_PREVIOUS.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_PREVIOUS.first, value)
+        }
+
+    var custom_text_enter_search: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_SEARCH.first, CUSTOM_TEXT_ENTER_SEARCH.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_SEARCH.first, value)
+        }
+
+    var custom_text_enter_send: String
+        get() = preferences.getString(CUSTOM_TEXT_ENTER_SEND.first, CUSTOM_TEXT_ENTER_SEND.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_ENTER_SEND.first, value)
+        }
+
+    var custom_text_convert: String
+        get() = preferences.getString(CUSTOM_TEXT_CONVERT.first, CUSTOM_TEXT_CONVERT.second) ?: ""
+        set(value) = preferences.edit {
+            it.putString(CUSTOM_TEXT_CONVERT.first, value)
+        }
+
     var custom_text_symbol: String
         get() = preferences.getString(CUSTOM_TEXT_SYMBOL.first, CUSTOM_TEXT_SYMBOL.second) ?: ""
         set(value) = preferences.edit {
@@ -3103,5 +3295,24 @@ object AppPreference {
         get() = preferences.getString(CUSTOM_TEXT_123.first, CUSTOM_TEXT_123.second) ?: ""
         set(value) = preferences.edit {
             it.putString(CUSTOM_TEXT_123.first, value)
+        }
+
+    // Keyboard UI appearance properties
+    var key_border_enable: Boolean?
+        get() = preferences.getBoolean(KEY_BORDER_ENABLE.first, KEY_BORDER_ENABLE.second)
+        set(value) = preferences.edit {
+            it.putBoolean(KEY_BORDER_ENABLE.first, value ?: KEY_BORDER_ENABLE.second)
+        }
+
+    var key_corner_radius_dp: Int?
+        get() = preferences.getInt(KEY_CORNER_RADIUS_DP.first, KEY_CORNER_RADIUS_DP.second)
+        set(value) = preferences.edit {
+            it.putInt(KEY_CORNER_RADIUS_DP.first, value ?: KEY_CORNER_RADIUS_DP.second)
+        }
+
+    var key_popup_style: String?
+        get() = preferences.getString(KEY_POPUP_STYLE.first, KEY_POPUP_STYLE.second)
+        set(value) = preferences.edit {
+            it.putString(KEY_POPUP_STYLE.first, value ?: KEY_POPUP_STYLE.second)
         }
 }

@@ -45,10 +45,11 @@ class LearnRepository @Inject constructor(
         Timber.d("upsertLearnedData: ${learnData.input} ${learnData.out} ${learnData.input.isAllHiragana()}")
         if (learnData.out.containsSymbolNumberOrEmoji()) return
         if (existingData == null) {
-            learnDao.insert(learnData)
+            val initialScore = learnData.score.toInt().coerceAtMost(5500).toShort()
+            learnDao.insert(learnData.copy(score = initialScore))
         } else {
             val score =
-                if (existingData.score > 0) ((existingData.score - 1500).coerceAtLeast(0)).toShort() else (0).toShort()
+                if (existingData.score > 0) ((existingData.score - 1200).coerceAtLeast(0)).toShort() else (0).toShort()
             learnDao.updateLearnedData(
                 learnData.copy(
                     input = learnData.input,
