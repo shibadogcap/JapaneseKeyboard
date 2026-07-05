@@ -181,6 +181,9 @@ class LiveConversionManagerTest {
 
         assertEquals("かんこく", result)
     }
+
+    @Test
+    fun testFirstClauseAutoCompletion() {
         val manager = LiveConversionManager(enabled = true)
         
         val entry1 = AzooKeyDictionaryEntryMapper.systemDictionary(
