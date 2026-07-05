@@ -113,7 +113,7 @@ class AzooKeyZenzaiConverter(
                     )
                 }
 
-                val reviewResult = if (zenzEngine != null && options.zenzProfile.isNotBlank()) {
+                val reviewResult = if (zenzEngine != null) {
                     AzooKeyZenzaiCandidateEvaluator.evaluate(
                         zenzEngine = zenzEngine,
                         options = options,

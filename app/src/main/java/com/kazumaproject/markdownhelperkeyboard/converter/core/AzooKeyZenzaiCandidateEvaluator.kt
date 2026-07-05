@@ -20,7 +20,6 @@ internal object AzooKeyZenzaiCandidateEvaluator {
         prefixConstraint: AzooKeyPrefixConstraint,
         requestRichCandidates: Boolean,
     ): ZenzaiCandidateEvaluationResult {
-        if (prompt.profile.isBlank()) return ZenzaiCandidateEvaluationResult.Error
         val cursorPosition = if (inputData.isAtEndIndex) null else inputData.convertTargetCursorPosition
         val inputKatakana = inputWithAlignmentSeparator(
             inputData.convertTarget.hiraganaToKatakana(),
