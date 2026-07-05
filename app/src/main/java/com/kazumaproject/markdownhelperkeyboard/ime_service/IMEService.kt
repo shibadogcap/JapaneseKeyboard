@@ -66,6 +66,7 @@ import androidx.appcompat.view.ContextThemeWrapper
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -2509,6 +2510,24 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
         applyThemeToFloatingDockView()
         applyThemeToFloatingCandidateListAdapter()
+        applyThemeToSymbolKeyboard()
+    }
+
+    private fun resolveSymbolKeyboardKeyColor(@ColorInt panelColor: Int, @ColorInt keyColor: Int): Int {
+        val dr = Color.red(panelColor) - Color.red(keyColor)
+        val dg = Color.green(panelColor) - Color.green(keyColor)
+        val db = Color.blue(panelColor) - Color.blue(keyColor)
+        val distance = kotlin.math.sqrt(
+            (dr * dr + dg * dg + db * db).toFloat(),
+        )
+        if (distance >= 40f) {
+            return keyColor
+        }
+        return if (ColorUtils.calculateLuminance(panelColor) > 0.5) {
+            manipulateColor(panelColor, 0.82f)
+        } else {
+            manipulateColor(panelColor, 1.18f)
+        }
     }
 
     private fun applyFloatingKeyboardContainerBackgrounds(
@@ -12799,7 +12818,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         // Resolve backgrounds per theme mode
-        val (bgColor, keyBgColor) = when (keyboardThemeMode) {
+        var (bgColor, keyBgColor) = when (keyboardThemeMode) {
             "custom" -> Pair(
                 customThemeBgColor ?: Color.WHITE,
                 customThemeKeyColor ?: Color.WHITE
@@ -12814,10 +12833,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
             else -> Pair(defaultBg, defaultKeyBg)
         }
+        keyBgColor = resolveSymbolKeyboardKeyColor(bgColor, keyBgColor)
 
-        // 選択タブは濃いアイコン、非選択は薄いアイコン
-        val selectedIconColor = if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
-        val iconColor = manipulateColor(selectedIconColor, 0.55f)
+        // 選択タブは濃いアイコン、非選択はやや薄いアイコン
+        val selectedIconColor = when (keyboardThemeMode) {
+            "custom" -> customThemeKeyTextColor
+                ?: if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+            else -> if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        }
+        val iconColor = ColorUtils.setAlphaComponent(selectedIconColor, 200)
 
         symbolViews.forEach { symbolView ->
             symbolView.setKeyboardTheme(

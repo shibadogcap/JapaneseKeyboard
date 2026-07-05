@@ -427,7 +427,20 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             sessionState.stablePredictionCache = null
             sessionState.predictiveInputCache = null
             val additional = getAdditionalCandidate(inputData, options)
-            return AzooKeyStyleConversionResult(mainResults = additional, firstClauseResults = additional)
+            val request = CandidateRequestBridge.toCandidateRequest(
+                composingText = inputData,
+                options = options,
+                runtime = com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext(),
+                mode = CandidateRequestMode.Normal,
+            )
+            val seenCandidate = additional.map { it.string }.toMutableSet()
+            val specialCandidates = getUniqueCandidate(
+                options.specialCandidateProviders.flatMap { it.provide(request) },
+                seenCandidate,
+            )
+            val mainResults = (additional + specialCandidates)
+                .map { it.applyAppropriateActions().parseTemplate() }
+            return AzooKeyStyleConversionResult(mainResults = mainResults, firstClauseResults = mainResults)
         }
 
         val wholeSentenceUniqueCandidates: List<Candidate>

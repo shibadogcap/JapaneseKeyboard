@@ -8,15 +8,17 @@ import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat.getSystemService
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.preference.PreferenceFragmentCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.tabs.TabLayoutMediator
 import com.kazumaproject.markdownhelperkeyboard.R
 import com.kazumaproject.markdownhelperkeyboard.databinding.FragmentSettingMainBinding
 import com.kazumaproject.markdownhelperkeyboard.repository.RomajiMapRepository
 import com.kazumaproject.markdownhelperkeyboard.repository.UserDictionaryRepository
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
-import com.kazumaproject.markdownhelperkeyboard.user_dictionary.database.UserWord
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,8 +31,10 @@ class SettingMainFragment : Fragment() {
     private var _binding: FragmentSettingMainBinding? = null
     private val binding get() = _binding!!
 
-    // リーク対策: Mediatorを変数で保持してonDestroyViewで解放できるようにする
     private var tabLayoutMediator: TabLayoutMediator? = null
+    private lateinit var searchAdapter: SettingsSearchResultAdapter
+    private var allSearchEntries: List<SettingsPreferenceIndex.Entry> = emptyList()
+    private var pendingScrollPreferenceKey: String? = null
 
     @Inject
     lateinit var appPreference: AppPreference
@@ -41,11 +45,10 @@ class SettingMainFragment : Fragment() {
     @Inject
     lateinit var romajiMapRepository: RomajiMapRepository
 
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
-        savedInstanceState: Bundle?
+        savedInstanceState: Bundle?,
     ): View {
         _binding = FragmentSettingMainBinding.inflate(inflater, container, false)
         return binding.root
@@ -62,19 +65,22 @@ class SettingMainFragment : Fragment() {
                 userDictionaryRepository.apply {
                     if (searchByReadingExactMatchSuspend("びゃんびゃんめん").isEmpty()) {
                         insert(
-                            UserWord(
+                            com.kazumaproject.markdownhelperkeyboard.user_dictionary.database.UserWord(
                                 reading = "びゃんびゃんめん",
                                 word = "\uD883\uDEDE\uD883\uDEDE麺",
                                 posIndex = 0,
-                                posScore = 4000
-                            )
+                                posScore = 4000,
+                            ),
                         )
                     }
                     if (searchByReadingExactMatchSuspend("びゃん").isEmpty()) {
                         insert(
-                            UserWord(
-                                reading = "びゃん", word = "\uD883\uDEDE", posIndex = 0, posScore = 3000
-                            )
+                            com.kazumaproject.markdownhelperkeyboard.user_dictionary.database.UserWord(
+                                reading = "びゃん",
+                                word = "\uD883\uDEDE",
+                                posIndex = 0,
+                                posScore = 3000,
+                            ),
                         )
                     }
                 }
@@ -86,21 +92,74 @@ class SettingMainFragment : Fragment() {
         val adapter = SettingPagerAdapter(this)
         binding.settingViewPager.adapter = adapter
 
-        // タブのタイトル設定
-        // 変数に代入してからattachする
         tabLayoutMediator =
             TabLayoutMediator(binding.settingTabLayout, binding.settingViewPager) { tab, position ->
                 tab.text = adapter.getTitle(position, this)
             }
         tabLayoutMediator?.attach()
 
+        setupSettingsSearch()
+
         requireActivity().onBackPressedDispatcher.addCallback(
             viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
+                    if (binding.settingsSearchResults.isVisible) {
+                        clearSettingsSearch()
+                        return
+                    }
                     requireActivity().finish()
                 }
-            })
+            },
+        )
+    }
+
+    private fun setupSettingsSearch() {
+        allSearchEntries = SettingsPreferenceIndex.load(requireContext())
+        searchAdapter = SettingsSearchResultAdapter { entry ->
+            handleSearchSelection(entry)
+        }
+        binding.settingsSearchResults.layoutManager = LinearLayoutManager(requireContext())
+        binding.settingsSearchResults.adapter = searchAdapter
+
+        binding.settingsSearchInput.doAfterTextChanged { editable ->
+            val query = editable?.toString().orEmpty()
+            if (query.isBlank()) {
+                clearSettingsSearch()
+                return@doAfterTextChanged
+            }
+            val results = allSearchEntries.filter { it.matches(query) }.take(40)
+            searchAdapter.submitList(results)
+            binding.settingsSearchResults.isVisible = results.isNotEmpty()
+            binding.settingTabLayout.isVisible = false
+        }
+    }
+
+    private fun clearSettingsSearch() {
+        binding.settingsSearchInput.setText("")
+        binding.settingsSearchResults.isVisible = false
+        binding.settingTabLayout.isVisible = true
+        binding.settingsSearchInput.clearFocus()
+    }
+
+    private fun handleSearchSelection(entry: SettingsPreferenceIndex.Entry) {
+        clearSettingsSearch()
+        entry.navigationActionId?.let { actionId ->
+            navigateSafely(actionId)
+            return
+        }
+        pendingScrollPreferenceKey = entry.preferenceKey
+        binding.settingViewPager.setCurrentItem(entry.tabIndex, true)
+        binding.settingViewPager.post {
+            scrollToPreferenceInTab(entry.tabIndex, entry.preferenceKey)
+            pendingScrollPreferenceKey = null
+        }
+    }
+
+    private fun scrollToPreferenceInTab(tabIndex: Int, preferenceKey: String?) {
+        if (preferenceKey.isNullOrBlank()) return
+        val fragment = childFragmentManager.findFragmentByTag("f$tabIndex") as? PreferenceFragmentCompat
+        fragment?.scrollToPreference(preferenceKey)
     }
 
     override fun onResume() {
@@ -113,18 +172,16 @@ class SettingMainFragment : Fragment() {
             binding.settingProgressBar.isVisible = false
             if (enabled == false) {
                 navigateSafely(
-                    R.id.action_navigation_setting_to_enableKeyboardFragment
+                    R.id.action_navigation_setting_to_enableKeyboardFragment,
                 )
             }
         }
     }
 
     override fun onDestroyView() {
-        // リーク対策: ViewPagerとMediatorの参照を断つ
         tabLayoutMediator?.detach()
         tabLayoutMediator = null
         binding.settingViewPager.adapter = null
-
         super.onDestroyView()
         _binding = null
     }
