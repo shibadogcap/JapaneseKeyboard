@@ -21,6 +21,23 @@ class AzooKeyJapaneseConversionTextTest {
     }
 
     @Test
+    fun rejectsHalfWidthKanaSurfaces() {
+        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳｷｮｳ"))
+        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ｱｲｳ"))
+    }
+
+    @Test
+    fun rejectsMixedHangulAndHalfWidthKanaSurfaces() {
+        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳ한국"))
+    }
+
+    @Test
+    fun acceptsParenthesisSymbolSurfaces() {
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("（）"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("「」"))
+    }
+
+    @Test
     fun parsePassFiltersHangulAlternatives() {
         val parsed = ZenzaiCandidateEvaluationResult.parse(
             "PASS:-1.0|ALT:0.8:東京|ALT:0.7:한국",

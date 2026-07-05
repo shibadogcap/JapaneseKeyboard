@@ -7,6 +7,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLan
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.adjustCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.makePrefixClauseCandidate
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
 
 class LiveConversionManager(var enabled: Boolean) {
 
@@ -141,6 +142,9 @@ class LiveConversionManager(var enabled: Boolean) {
      * 該当なし時は [convertTarget] そのものを表示する。
      */
     private fun isEligibleForLiveConversion(candidate: Candidate): Boolean {
+        if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(candidate.string)) {
+            return false
+        }
         return when (CandidateType.laneOf(candidate)) {
             CandidateLane.Transform,
             CandidateLane.Special,

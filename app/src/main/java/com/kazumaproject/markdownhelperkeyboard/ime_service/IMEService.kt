@@ -13167,14 +13167,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
     }
 
-    private val directInsertPunctuation = setOf(
-        '(', ')', '（', '）', '[', ']', '{', '}', '「', '」', '『', '』',
-        '【', '】', '《', '》', '〈', '〉', '［', '］', '＜', '＞', '＝',
-        '＋', '－', '＊', '／', '＼', '｜', '＿', '．', '，', '：', '；',
-        '！', '？', '…', '‥', '・', '、', '。', '"', '\'', '￥', '¥',
-        '@', '#', '$', '%', '&', '*', '+', '=', '-', '_', '/', '\\', '|',
-        '<', '>', '^', '~', '`',
-    )
+    private fun shouldDirectInsertCharacter(char: Char): Boolean {
+        return char == '\n' || char == ' ' || char == '　' || char == '\t'
+    }
 
     private fun candidateReadingLength(candidate: Candidate): Int {
         val fromData = candidate.data.sumOf { it.reading.length }
@@ -13185,9 +13180,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         return candidateReadingLength(candidate) == insertString.length
     }
 
-    private fun shouldDirectInsertCharacter(char: Char): Boolean {
-        if (char == '\n' || char == ' ' || char == '　' || char == '\t') return true
-        return char in directInsertPunctuation
+    /**
+     * AzooKey [InputManager.userMovedCursor] 相当。
+     * ライブ変換中は composing 内カーソル移動（stringInTail 分割）を行わない。
+     */
+    private fun shouldDisableInternalPreeditCursorMove(): Boolean {
+        return isLiveConversionEnable == true && !isHenkan.get() && inputString.value.isNotEmpty()
     }
 
     private fun invalidateLiveConversionAfterInternalCursorMove() {
@@ -17529,7 +17527,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 return
             }
 
-            if (liveText.isNotEmpty() && liveText != lastCandidate) {
+            if (liveText.isNotEmpty() &&
+                liveText != lastCandidate &&
+                com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+                    .isValidCandidateSurface(liveText)
+            ) {
                 applyLiveConversionDisplay(liveText)
             }
             isContinuousTapInputEnabled.set(true)
@@ -18687,6 +18689,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sendDpadLeftIfPossible()
             }
         } else if (!isHenkan.get()) {
+            if (shouldDisableInternalPreeditCursorMove()) {
+                return
+            }
             lastFlickConvertedNextHiragana.set(true)
             isContinuousTapInputEnabled.set(true)
             englishSpaceKeyPressed.set(false)
@@ -18763,6 +18768,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
 
                 if (insertString.isNotEmpty()) {
+                    if (shouldDisableInternalPreeditCursorMove()) {
+                        delay(LONG_DELAY_TIME)
+                        continue
+                    }
                     updateLeftInputString(insertString)
                 } else if (stringInTail.get().isEmpty() && !isCursorAtBeginning()) {
                     if (selectMode.value) {
@@ -18789,6 +18798,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             var finalSuggestionFlag: CandidateShowFlag? = null
             while (isActive && rightCursorKeyLongKeyPressed.get() && !onRightKeyLongPressUp.get()) {
                 val insertString = inputString.value
+                if (shouldDisableInternalPreeditCursorMove()) {
+                    delay(LONG_DELAY_TIME)
+                    continue
+                }
                 if (stringInTail.get().isEmpty() && insertString.isNotEmpty()) {
                     finalSuggestionFlag = CandidateShowFlag.Updating
                     break
@@ -18805,6 +18818,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun updateLeftInputString(insertString: String) {
+        if (shouldDisableInternalPreeditCursorMove()) return
         if (insertString.isNotEmpty()) {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18842,7 +18856,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 insertString.isNotEmpty() &&
                 stringInTail.get().isNotEmpty()
             ) {
-                handleNonHenkan(insertString)
+                if (!shouldDisableInternalPreeditCursorMove()) {
+                    handleNonHenkan(insertString)
+                }
             } else {
                 handleEmptyInputString(gestureType)
             }
@@ -18870,6 +18886,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         if (stringInTail.get().isEmpty()) {
+            if (gestureType == GestureType.Tap) {
+                sendDpadRightIfPossible()
+            }
+        } else if (isLiveConversionEnable == true) {
             if (gestureType == GestureType.Tap) {
                 sendDpadRightIfPossible()
             }
@@ -18941,6 +18961,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             } else {
                 handleRightCursorMoveAction()
             }
+        } else if (isLiveConversionEnable == true) {
+            handleRightCursorMoveAction()
         } else {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18952,6 +18974,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun handleNonHenkanTap(insertString: String) {
+        if (shouldDisableInternalPreeditCursorMove()) return
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)
         isContinuousTapInputEnabled.set(true)
@@ -18966,6 +18989,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun handleNonHenkan(insertString: String) {
+        if (shouldDisableInternalPreeditCursorMove()) return
         Timber.d("handleNonHenkan: $insertString ${stringInTail.get()}")
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)

@@ -10,7 +10,9 @@ internal object AzooKeyJapaneseConversionText {
     private val allowedAsciiSymbols = setOf(
         ' ', '-', '_', '.', ',', '!', '?', ':', ';', '/', '\\',
         '(', ')', '[', ']', '{', '}', '@', '#', '$', '%', '&', '*', '+', '=',
-        '\'', '"', '|', '~', '^', '¥', '€', '£', '·', '￥', '「', '」', 'ー', '〜',
+        '\'', '"', '|', '~', '^', '¥', '€', '£', '·', '￥', '「', '」', '『', '』',
+        '（', '）', '［', '］', '｛', '｝', '【', '】', '《', '》', '〈', '〉',
+        '、', '。', '・', 'ー', '〜',
     )
 
     fun isValidPrefix(prefix: String): Boolean {
@@ -24,9 +26,10 @@ internal object AzooKeyJapaneseConversionText {
     }
 
     private fun isAllowedConversionChar(char: Char): Boolean {
+        if (isHangul(char)) return false
         if (char in '\u3041'..'\u3096') return true // ひらがな
         if (char in '\u30A1'..'\u30F6') return true // カタカナ
-        if (char in '\uFF66'..'\uFF9F') return true // 半角カナ
+        if (char in '\uFF66'..'\uFF9F') return false // 半角カナは変換候補から除外
         if (char in 'a'..'z' || char in 'A'..'Z') return true
         if (char in 'ａ'..'ｚ' || char in 'Ａ'..'Ｚ') return true
         if (char in '0'..'9' || char in '０'..'９') return true
@@ -34,6 +37,18 @@ internal object AzooKeyJapaneseConversionText {
         if (char == '\uEE08') return true // Zenz alignment separator
         if (isCjkIdeograph(char)) return true
         return false
+    }
+
+    private fun isHangul(char: Char): Boolean {
+        return when (UnicodeBlock.of(char)) {
+            UnicodeBlock.HANGUL_SYLLABLES,
+            UnicodeBlock.HANGUL_JAMO,
+            UnicodeBlock.HANGUL_COMPATIBILITY_JAMO,
+            UnicodeBlock.HANGUL_JAMO_EXTENDED_A,
+            UnicodeBlock.HANGUL_JAMO_EXTENDED_B,
+            -> true
+            else -> false
+        }
     }
 
     private fun isCjkIdeograph(char: Char): Boolean {
