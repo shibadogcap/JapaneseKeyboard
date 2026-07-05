@@ -10,18 +10,44 @@ class PostCommitEmojiDictionaryProviderTest {
     fun provideReturnsEmptyForBlankCommittedText() = runTest {
         val provider = PostCommitEmojiDictionaryProvider(
             limit = 3,
-            search = { _, _, _ -> error("search should not be called") },
+            fallbackSearch = { _, _, _ -> error("search should not be called") },
         )
 
-        assertTrue(provider.provide(" ").isEmpty())
+        assertTrue(provider.provide(leftSideCandidate(" ")).isEmpty())
     }
 
     @Test
-    fun provideMapsEmojiEntriesForPostCommitPrediction() = runTest {
+    fun provideUsesTextReplacerForCandidateDataWords() = runTest {
+        val textReplacer = AzooKeyTextReplacer.fromEmojiTextReplacerText(
+            """
+            🎂	ケーキ,たんじょうび	🥳
+            🍣	すし	
+            """.trimIndent()
+        )
+        val provider = PostCommitEmojiDictionaryProvider(
+            limit = 3,
+            textReplacer = textReplacer,
+        )
+
+        val result = provider.provide(
+            leftSideCandidate(
+                string = "誕生日",
+                data = listOf(
+                    dictionaryEntry(surface = "ケーキ", reading = "ケーキ"),
+                ),
+            ),
+        )
+
+        assertEquals(listOf("🎂"), result.map { it.string })
+        assertEquals(listOf(CandidateType.EMOJI_SUFFIX), result.map { it.type })
+    }
+
+    @Test
+    fun provideMapsFallbackEmojiEntriesForPostCommitPrediction() = runTest {
         val calls = mutableListOf<String>()
         val provider = PostCommitEmojiDictionaryProvider(
             limit = 3,
-            search = { committedText, reading, limit ->
+            fallbackSearch = { committedText, reading, limit ->
                 calls += "$committedText:${reading ?: ""}:$limit"
                 listOf(
                     AzooKeyDictionaryEntryMapper.emoji("🍣", "すし", score = -8),
@@ -32,30 +58,31 @@ class PostCommitEmojiDictionaryProviderTest {
             },
         )
 
-        val result = provider.provide("寿司")
+        val result = provider.provide(leftSideCandidate("寿司"))
 
         assertEquals(listOf("寿司::3"), calls)
         assertEquals(listOf("🍣", "🍺"), result.map { it.string })
         assertEquals(listOf(CandidateType.EMOJI_SUFFIX, CandidateType.EMOJI_SUFFIX), result.map { it.type })
-        assertEquals(listOf(AzooKeyCid.SYMBOL.toShort(), AzooKeyCid.SYMBOL.toShort()), result.map { it.leftId })
-        assertEquals(listOf(-8, -7), result.map { it.score })
     }
 
     @Test
     fun providedEmojiCandidatesCanFeedComposerAheadOfPredictions() = runTest {
+        val textReplacer = AzooKeyTextReplacer.fromEmojiTextReplacerText(
+            "🎂\tケーキ,たんじょうび\t🥳"
+        )
         val provider = PostCommitEmojiDictionaryProvider(
             limit = 3,
-            search = { _, _, _ ->
-                listOf(
-                    AzooKeyDictionaryEntryMapper.emoji("🎂", "けーき", score = -3),
-                    AzooKeyDictionaryEntryMapper.emoji("🥳", "ぱーてぃー", score = -2),
-                )
-            },
+            textReplacer = textReplacer,
         )
 
         val result = PostCommitPredictionComposer.compose(
             committedText = "誕生日",
-            emojiCandidates = provider.provide("誕生日"),
+            emojiCandidates = provider.provide(
+                leftSideCandidate(
+                    string = "誕生日",
+                    data = listOf(dictionaryEntry(surface = "ケーキ", reading = "ケーキ")),
+                ),
+            ),
             learnedTransitions = listOf(
                 Candidate(
                     string = "おめでとう",
@@ -66,6 +93,35 @@ class PostCommitEmojiDictionaryProviderTest {
             ),
         )
 
-        assertEquals(listOf("🎂", "🥳", "おめでとう"), result.map { it.string })
+        assertEquals(listOf("🎂", "おめでとう"), result.map { it.string })
+    }
+
+    private fun leftSideCandidate(
+        string: String,
+        data: List<AzooKeyDictionaryEntry> = listOf(dictionaryEntry(surface = string, reading = string)),
+    ): Candidate {
+        return Candidate(
+            string = string,
+            type = CandidateType.NBEST,
+            length = string.length.toUByte(),
+            score = 0,
+            yomi = data.firstOrNull()?.reading,
+            data = data,
+        )
+    }
+
+    private fun dictionaryEntry(
+        surface: String,
+        reading: String,
+    ): AzooKeyDictionaryEntry {
+        return AzooKeyDictionaryEntry(
+            surface = surface,
+            reading = reading,
+            leftId = AzooKeyCid.GENERAL_NOUN,
+            rightId = AzooKeyCid.GENERAL_NOUN,
+            mid = AzooKeyMid.GENERAL,
+            wordCost = 0,
+            sourceKind = AzooKeyDictionarySourceKind.System,
+        )
     }
 }

@@ -334,10 +334,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 buildCategoryTabs()
                 categoryTab.getTabAt(0)?.select()
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+                reapplyTabThemesIfNeeded()
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+                reapplyTabThemesIfNeeded()
             }
             override fun onTabReselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -348,10 +350,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 updateSymbolsForCategory(tab?.position ?: 0)
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+                reapplyTabThemesIfNeeded()
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+                reapplyTabThemesIfNeeded()
             }
             override fun onTabReselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
@@ -386,13 +390,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // 2. ColorStateList の作成（選択中を濃く、非選択を薄く）
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
-            intArrayOf(-android.R.attr.state_selected)
+            intArrayOf(),
         )
         val colors = intArrayOf(
             selectedIconColor,
-            iconColor
+            iconColor,
         )
         val tabColorStateList = ColorStateList(states, colors)
+        val effectiveKeyColor = ensureKeyContrast(backgroundColor, keyBackgroundColor)
         val bgTintList = ColorStateList.valueOf(backgroundColor)
         val tabButtonRadius = dpToPx(8).toFloat()
         val auxiliaryButtonRadius = dpToPx(8).toFloat()
@@ -410,7 +415,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★重要: タブの生成完了を待ってから背景を適用 (postを使用)
         categoryTab.post {
-            applyThemeToTabs(categoryTab, keyBackgroundColor, tabButtonRadius)
+            applyThemeToTabs(categoryTab, effectiveKeyColor, tabButtonRadius)
         }
 
         // 4. Mode Tab (Bottom Bar) の全体設定
@@ -422,13 +427,13 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // ★重要: クリッピング無効化と遅延適用
         disableClipping(modeTab)
         modeTab.post {
-            applyThemeToTabs(modeTab, keyBackgroundColor, tabButtonRadius)
+            applyThemeToTabs(modeTab, effectiveKeyColor, tabButtonRadius)
         }
 
         // 5. 機能キー (Return/Delete) のニューモーフィズム設定
         val keyRadius = dpToPx(25).toFloat()
-        returnButton.background = getTabNeumorphDrawable(keyBackgroundColor, keyRadius)
-        deleteButton.background = getTabNeumorphDrawable(keyBackgroundColor, keyRadius)
+        returnButton.background = getTabNeumorphDrawable(effectiveKeyColor, keyRadius)
+        deleteButton.background = getTabNeumorphDrawable(effectiveKeyColor, keyRadius)
 
         val p = dpToPx(8)
         returnButton.setPadding(p, p, p, p)
@@ -438,7 +443,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         deleteButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
         applyThemeToAuxiliaryControls(
-            keyBackgroundColor = keyBackgroundColor,
+            keyBackgroundColor = effectiveKeyColor,
             iconColor = iconColor,
             cornerRadius = auxiliaryButtonRadius,
         )
@@ -448,9 +453,42 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         }
 
         symbolAdapter.setThemeColors(
-            textColor = iconColor,
+            textColor = selectedIconColor,
             highlightColor = selectedIconColor
         )
+    }
+
+    @ColorInt
+    private fun ensureKeyContrast(@ColorInt panelColor: Int, @ColorInt keyColor: Int): Int {
+        if (colorDistance(panelColor, keyColor) >= 40f) {
+            return keyColor
+        }
+        return if (ColorUtils.calculateLuminance(panelColor) > 0.5) {
+            manipulateColor(panelColor, 0.82f)
+        } else {
+            manipulateColor(panelColor, 1.18f)
+        }
+    }
+
+    private fun colorDistance(@ColorInt left: Int, @ColorInt right: Int): Float {
+        val lr = Color.red(left)
+        val lg = Color.green(left)
+        val lb = Color.blue(left)
+        val rr = Color.red(right)
+        val rg = Color.green(right)
+        val rb = Color.blue(right)
+        val dr = (lr - rr).toFloat()
+        val dg = (lg - rg).toFloat()
+        val db = (lb - rb).toFloat()
+        return kotlin.math.sqrt(dr * dr + dg * dg + db * db)
+    }
+
+    private fun reapplyTabThemesIfNeeded() {
+        if (!isCustomThemeApplied) return
+        val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+        val tabButtonRadius = dpToPx(8).toFloat()
+        applyThemeToTabs(categoryTab, effectiveKeyColor, tabButtonRadius)
+        applyThemeToTabs(modeTab, effectiveKeyColor, tabButtonRadius)
     }
 
     private fun applyThemeToAuxiliaryControls(
@@ -517,7 +555,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             }
 
             // キー背景色でボタン面を描画（パネル背景色だと影が見えなくなる）
-            tabView.background = getTabNeumorphDrawable(buttonColor, cornerRadius)
+            tabView.backgroundTintList = null
+            tabView.background = getTabNeumorphDrawable(
+                baseColor = buttonColor,
+                radius = cornerRadius,
+                selectedAccentColor = if (isCustomThemeApplied) themeSelectedIconColor else null,
+            )
 
             // パディング調整 (Drawable内のpaddingとは別に、Viewのコンテンツ位置調整)
             // TenKeyのロジックではDrawable自体がpaddingを持つため、View自体のpaddingは少なめでOK
@@ -533,7 +576,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     /**
      * TenKeyの getDynamicNeumorphDrawable と同等の実装
      */
-    private fun getTabNeumorphDrawable(@ColorInt baseColor: Int, radius: Float): Drawable {
+    private fun getTabNeumorphDrawable(
+        @ColorInt baseColor: Int,
+        radius: Float,
+        @ColorInt selectedAccentColor: Int? = null,
+    ): Drawable {
         // 1. 色の計算 (TenKeyと同じ係数を使用)
         // ハイライト色: 明るくする
         val highlightColor = manipulateColor(baseColor, 1.25f)
@@ -568,6 +615,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
             setColor(baseColor)
+            val strokeColor = if (ColorUtils.calculateLuminance(baseColor) > 0.5) {
+                manipulateColor(baseColor, 0.78f)
+            } else {
+                manipulateColor(baseColor, 1.22f)
+            }
+            setStroke((1 * density).toInt().coerceAtLeast(1), strokeColor)
         }
 
         // LayerDrawableで重ねる (下から順に描画)
@@ -584,14 +637,19 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // --- B. 押下・選択状態 (Pressed / Selected) の作成 ---
 
-        val pressedDrawable = GradientDrawable().apply {
+        val selectedSurfaceDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
-            setColor(pressedColor)
+            if (selectedAccentColor != null) {
+                setColor(manipulateColor(baseColor, 0.88f))
+                setStroke((2 * density).toInt().coerceAtLeast(2), selectedAccentColor)
+            } else {
+                setColor(pressedColor)
+            }
         }
 
         // サイズが変わらないようにLayerDrawableにして同じInsetを与える
-        val pressedLayer = LayerDrawable(arrayOf(pressedDrawable))
+        val pressedLayer = LayerDrawable(arrayOf(selectedSurfaceDrawable))
         pressedLayer.setLayerInset(0, padding, padding, padding, padding)
 
 
@@ -857,9 +915,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★ テーマ適用フラグが立っている場合、タブ再構築後にテーマを適用
         if (isCustomThemeApplied) {
-            // postを使って描画後に適用
             modeTab.post {
-                applyThemeToTabs(modeTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
+                val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+                applyThemeToTabs(modeTab, effectiveKeyColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -877,11 +935,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
-            intArrayOf(-android.R.attr.state_selected)
+            intArrayOf(),
         )
         val colors = intArrayOf(
             selectedColor,
-            normalColor
+            normalColor,
         )
         val tabColorStateList = ColorStateList(states, colors)
         categoryTab.tabIconTint = tabColorStateList
@@ -969,9 +1027,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★ テーマ適用フラグが立っている場合、タブ再構築後にテーマを適用
         if (isCustomThemeApplied) {
-            // postを使って描画後に適用
             categoryTab.post {
-                applyThemeToTabs(categoryTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
+                val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+                applyThemeToTabs(categoryTab, effectiveKeyColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }

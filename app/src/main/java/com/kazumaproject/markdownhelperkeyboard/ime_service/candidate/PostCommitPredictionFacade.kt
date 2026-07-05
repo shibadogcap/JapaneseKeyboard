@@ -56,7 +56,8 @@ class PostCommitPredictionFacade @Inject constructor(
         },
         emojiProvider = PostCommitEmojiDictionaryProvider(
             limit = 8,
-            search = { surface, reading, limit ->
+            textReplacer = azooKeyDictionaryAssets.textReplacer,
+            fallbackSearch = { surface, reading, limit ->
                 azooKeyDictionaryAssets.emojiDictionarySearch?.searchPostCommit(
                     committedText = surface,
                     limit = limit,

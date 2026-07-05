@@ -61,6 +61,16 @@ class DictionaryPreferenceFragment : PreferenceFragmentCompat() {
             true
         }
 
+        findPreference<Preference>("learn_dictionary_view_preference")?.setOnPreferenceClickListener {
+            navigateSafely(R.id.navigation_learn_dictionary)
+            true
+        }
+
+        findPreference<Preference>("ngram_rule_preference")?.setOnPreferenceClickListener {
+            navigateSafely(R.id.action_navigation_setting_to_ngramRuleFragment)
+            true
+        }
+
         val learnDictionaryPrefixSeekBar =
             findPreference<SeekBarPreference>("learn_prediction_preference")
         learnDictionaryPrefixSeekBar?.apply {

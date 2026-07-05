@@ -691,6 +691,13 @@
     <string name="qwerty_romaji_hankaku_symbol_preference_summary">オンにすると、ローマ字 QWERTY キーボードで記号を半角で入力します。</string>
     <string name="zenz_preference_category_title">zenz の設定</string>
     <string name="category_common">共通</string>
+    <string name="settings_search_hint">設定を検索</string>
+    <string name="settings_theme_tab_summary">テーマモード、色、フォント、アイコン</string>
+    <string name="settings_open_learn_dictionary_title">学習した単語を表示</string>
+    <string name="settings_open_learn_dictionary_summary">下部ナビゲーションの学習辞書画面を開きます</string>
+    <string name="ngram_rule_settings_category_title">変換ルール</string>
+    <string name="ngram_rule_settings_title">N-gramルール</string>
+    <string name="ngram_rule_settings_summary">単語列ルールで候補のスコアを調整します</string>
     <string name="category_dictionary">辞書</string>
     <string name="category_kana">かな</string>
     <string name="tenkey_keymap_guide_title">キーガイドの表示</string>

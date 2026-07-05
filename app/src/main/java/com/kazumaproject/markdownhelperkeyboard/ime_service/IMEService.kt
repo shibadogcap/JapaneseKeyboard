@@ -66,6 +66,7 @@ import androidx.appcompat.view.ContextThemeWrapper
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColorInt
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
@@ -2509,6 +2510,24 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
         applyThemeToFloatingDockView()
         applyThemeToFloatingCandidateListAdapter()
+        applyThemeToSymbolKeyboard()
+    }
+
+    private fun resolveSymbolKeyboardKeyColor(@ColorInt panelColor: Int, @ColorInt keyColor: Int): Int {
+        val dr = Color.red(panelColor) - Color.red(keyColor)
+        val dg = Color.green(panelColor) - Color.green(keyColor)
+        val db = Color.blue(panelColor) - Color.blue(keyColor)
+        val distance = kotlin.math.sqrt(
+            (dr * dr + dg * dg + db * db).toFloat(),
+        )
+        if (distance >= 40f) {
+            return keyColor
+        }
+        return if (ColorUtils.calculateLuminance(panelColor) > 0.5) {
+            manipulateColor(panelColor, 0.82f)
+        } else {
+            manipulateColor(panelColor, 1.18f)
+        }
     }
 
     private fun applyFloatingKeyboardContainerBackgrounds(
@@ -3843,10 +3862,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (candidatesStart != -1 && candidatesEnd != -1) {
             // User moved cursor inside composing text.
             if (newSelStart == newSelEnd && newSelStart >= candidatesStart && newSelStart <= candidatesEnd) {
-                if (isLiveConversionEnable == true && !isHenkan.get()) {
-                    refreshReconversionUi()
-                    return
-                }
                 if (newSelStart < candidatesEnd) {
                     val fullComposing = inputString.value + stringInTail.get()
                     val composingRangeLength = candidatesEnd - candidatesStart
@@ -3943,7 +3958,37 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun refreshCandidateForCurrentPreedit() {
         val head = inputString.value
-        if (head.isBlank()) return
+        if (head.isBlank() && stringInTail.get().isEmpty()) return
+        invalidateLiveConversionAfterInternalCursorMove()
+        beginZenzRerankRequest()
+        lastCandidate = null
+        if (head.isNotEmpty()) {
+            val spannable = createSpannableWithTail(head)
+            val preEditBackground = if (customComposingTextPreference == true) {
+                inputCompositionBackgroundColor
+                    ?: getColor(com.kazumaproject.core.R.color.char_in_edit_color)
+            } else {
+                getColor(com.kazumaproject.core.R.color.char_in_edit_color)
+            }
+            val afterEditBackground = if (customComposingTextPreference == true) {
+                inputCompositionAfterBackgroundColor
+                    ?: getColor(com.kazumaproject.core.R.color.blue)
+            } else {
+                getColor(com.kazumaproject.core.R.color.blue)
+            }
+            setComposingTextPreEdit(
+                inputString = head,
+                spannableString = spannable,
+                backgroundColor = preEditBackground,
+                textColor = if (customComposingTextPreference == true) inputCompositionTextColor else null,
+            )
+            setComposingTextAfterEdit(
+                inputString = head,
+                spannableString = spannable,
+                backgroundColor = afterEditBackground,
+                textColor = if (customComposingTextPreference == true) inputCompositionTextColor else null,
+            )
+        }
         scope.launch {
             _suggestionFlag.emit(CandidateShowFlag.Updating)
         }
@@ -11476,7 +11521,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return
         }
         // supplementaryCandidates は main と分離済み。ライブ変換は mainResults のみ参照する。
-        val displayCandidates = candidates
+        val displayCandidates = com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+            .filterDisplayedCandidates(candidates)
         val request = keyboardSurfaceCoordinator.buildCandidateSurfaceRequest(
             physicalKeyboardEnableReplayFirst = physicalKeyboardEnable.replayCache.firstOrNull() == true &&
                 hasHardwareKeyboardConnected == true,
@@ -12772,7 +12818,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         // Resolve backgrounds per theme mode
-        val (bgColor, keyBgColor) = when (keyboardThemeMode) {
+        var (bgColor, keyBgColor) = when (keyboardThemeMode) {
             "custom" -> Pair(
                 customThemeBgColor ?: Color.WHITE,
                 customThemeKeyColor ?: Color.WHITE
@@ -12787,10 +12833,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             )
             else -> Pair(defaultBg, defaultKeyBg)
         }
+        keyBgColor = resolveSymbolKeyboardKeyColor(bgColor, keyBgColor)
 
-        // 選択タブは濃いアイコン、非選択は薄いアイコン
-        val selectedIconColor = if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
-        val iconColor = manipulateColor(selectedIconColor, 0.55f)
+        // 選択タブは濃いアイコン、非選択はやや薄いアイコン
+        val selectedIconColor = when (keyboardThemeMode) {
+            "custom" -> customThemeKeyTextColor
+                ?: if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+            else -> if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        }
+        val iconColor = ColorUtils.setAlphaComponent(selectedIconColor, 200)
 
         symbolViews.forEach { symbolView ->
             symbolView.setKeyboardTheme(
@@ -13192,27 +13243,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     /**
      * AzooKey [InputManager.moveCursor] 相当。
-     * ライブ変換中のキーボード ←→ は enter() で確定してから committed text 上を移動する。
+     * カーソル移動時は preedit を head/tail に分割し、ライブ変換は一時停止して候補を再取得する。
      */
-    private enum class LiveConversionCursorDirection {
-        LEFT, RIGHT,
-    }
-
-    private fun isLiveConversionComposingActive(): Boolean {
-        return isLiveConversionEnable == true && !isHenkan.get() && inputString.value.isNotEmpty()
-    }
-
-    private fun handleLiveConversionCursorKey(direction: LiveConversionCursorDirection) {
-        val insertString = inputString.value
-        if (insertString.isNotEmpty()) {
-            commitEnterKeyForJapaneseInput(insertString)
-        }
-        when (direction) {
-            LiveConversionCursorDirection.LEFT -> sendDpadLeftIfPossible()
-            LiveConversionCursorDirection.RIGHT -> sendDpadRightIfPossible()
-        }
-    }
-
     private fun invalidateLiveConversionAfterInternalCursorMove() {
         if (isLiveConversionEnable != true) return
         liveConversionManager.setLastUsedCandidate(null)
@@ -18714,12 +18746,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sendDpadLeftIfPossible()
             }
         } else if (!isHenkan.get()) {
-            if (isLiveConversionComposingActive()) {
-                if (gestureType == GestureType.Tap) {
-                    handleLiveConversionCursorKey(LiveConversionCursorDirection.LEFT)
-                }
-                return
-            }
             lastFlickConvertedNextHiragana.set(true)
             isContinuousTapInputEnabled.set(true)
             englishSpaceKeyPressed.set(false)
@@ -18752,6 +18778,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     _inputString.update { it.dropLast(1) }
                 }
                 invalidateLiveConversionAfterInternalCursorMove()
+                refreshCandidateForCurrentPreedit()
             }
         }
     }
@@ -18796,11 +18823,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
 
                 if (insertString.isNotEmpty()) {
-                    if (isLiveConversionComposingActive()) {
-                        handleLiveConversionCursorKey(LiveConversionCursorDirection.LEFT)
-                    } else {
-                        updateLeftInputString(insertString)
-                    }
+                    updateLeftInputString(insertString)
                 } else if (stringInTail.get().isEmpty() && !isCursorAtBeginning()) {
                     if (selectMode.value) {
                         extendOrShrinkLeftOneChar()
@@ -18826,11 +18849,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             var finalSuggestionFlag: CandidateShowFlag? = null
             while (isActive && rightCursorKeyLongKeyPressed.get() && !onRightKeyLongPressUp.get()) {
                 val insertString = inputString.value
-                if (isLiveConversionComposingActive()) {
-                    handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
-                    delay(LONG_DELAY_TIME)
-                    continue
-                }
                 if (stringInTail.get().isEmpty() && insertString.isNotEmpty()) {
                     finalSuggestionFlag = CandidateShowFlag.Updating
                     break
@@ -18847,7 +18865,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun updateLeftInputString(insertString: String) {
-        if (isLiveConversionComposingActive()) return
         if (insertString.isNotEmpty()) {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18874,6 +18891,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 _inputString.update { it.dropLast(1) }
             }
             invalidateLiveConversionAfterInternalCursorMove()
+            refreshCandidateForCurrentPreedit()
         }
     }
 
@@ -18885,13 +18903,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 insertString.isNotEmpty() &&
                 stringInTail.get().isNotEmpty()
             ) {
-                if (isLiveConversionComposingActive()) {
-                    handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
-                } else {
-                    handleNonHenkan(insertString)
-                }
-            } else if (isLiveConversionComposingActive() && gestureType == GestureType.Tap) {
-                handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
+                handleNonHenkan(insertString)
             } else {
                 handleEmptyInputString(gestureType)
             }
@@ -18922,8 +18934,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             if (gestureType == GestureType.Tap) {
                 sendDpadRightIfPossible()
             }
-        } else if (isLiveConversionEnable == true) {
-            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
         } else {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18931,6 +18941,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val dropString = stringInTail.get().first()
             stringInTail.set(stringInTail.get().drop(1))
             _inputString.update { dropString.toString() }
+            invalidateLiveConversionAfterInternalCursorMove()
+            refreshCandidateForCurrentPreedit()
         }
     }
 
@@ -18992,8 +19004,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             } else {
                 handleRightCursorMoveAction()
             }
-        } else if (isLiveConversionEnable == true) {
-            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
         } else {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -19001,14 +19011,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val dropString = stringInTail.get().first()
             stringInTail.set(stringInTail.get().drop(1))
             _inputString.update { dropString.toString() }
+            invalidateLiveConversionAfterInternalCursorMove()
+            refreshCandidateForCurrentPreedit()
         }
     }
 
     private fun handleNonHenkanTap(insertString: String) {
-        if (isLiveConversionComposingActive()) {
-            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
-            return
-        }
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)
         isContinuousTapInputEnabled.set(true)
@@ -19019,14 +19027,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             suppressSelectionCleanupForInternalPreEditMove()
             _inputString.update { insertString + stringInTail.get().first() }
             stringInTail.set(stringInTail.get().drop(1))
+            invalidateLiveConversionAfterInternalCursorMove()
+            refreshCandidateForCurrentPreedit()
         }
     }
 
     private fun handleNonHenkan(insertString: String) {
-        if (isLiveConversionComposingActive()) {
-            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
-            return
-        }
         Timber.d("handleNonHenkan: $insertString ${stringInTail.get()}")
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)
@@ -19038,6 +19044,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             suppressSelectionCleanupForInternalPreEditMove()
             _inputString.update { insertString + stringInTail.get()[0] }
             stringInTail.set(stringInTail.get().substring(1))
+            invalidateLiveConversionAfterInternalCursorMove()
+            refreshCandidateForCurrentPreedit()
         }
     }
 

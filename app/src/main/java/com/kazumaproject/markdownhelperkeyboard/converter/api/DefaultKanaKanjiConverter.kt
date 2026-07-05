@@ -18,6 +18,8 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRunti
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessor
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeySupplementaryCandidateAugmenter
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.TypographySpecialCandidateProvider
 import com.kazumaproject.markdownhelperkeyboard.repository.CandidateOrderOverrideRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +34,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
     private val candidateOrderOverrideRepository: CandidateOrderOverrideRepository,
     private val postCommitPredictionFacade: PostCommitPredictionFacade,
     private val kanaKanjiEngine: KanaKanjiEngine,
+    private val dictionaryAssetProvider: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider,
     private val zenzConversionService: ZenzConversionService,
 ) : KanaKanjiConverter {
 
@@ -86,8 +89,15 @@ class DefaultKanaKanjiConverter @Inject constructor(
             },
         )
         val split = splitConversionResult(engineResult.conversionResult)
-        ConvertCandidatesResponse(
+        val withSupplementary = AzooKeySupplementaryCandidateAugmenter.appendDicdataEmojiInputCandidates(
+            input = input,
             result = split,
+            emojiDictionarySearch = dictionaryAssetProvider.emojiDictionarySearch,
+            kanaKanjiEngine = kanaKanjiEngine,
+            limit = environment.auxiliaryConfig.emojiDictionaryLimit,
+        )
+        ConvertCandidatesResponse(
+            result = withSupplementary,
             bunsetsuResult = engineResult.bunsetsuResult,
             usedAfterComplete = engineResult.usedAfterComplete,
         )
@@ -176,7 +186,16 @@ class DefaultKanaKanjiConverter @Inject constructor(
 
     override fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate> {
         if (input.isEmpty) return emptyList()
-        return kanaKanjiEngine.getCandidatesEnglishKana(input = input.convertTarget).distinctBy { it.string }
+        val base = kanaKanjiEngine.getCandidatesEnglishKana(input = input.convertTarget)
+        val typographyRequest = CandidateRequestBridge.toCandidateRequest(
+            composingText = input,
+            options = ConvertRequestOptions(),
+            runtime = ConvertRuntimeContext(),
+            mode = CandidateRequestMode.EnglishKana,
+        )
+        val typography = TypographySpecialCandidateProvider.provide(typographyRequest)
+        val seen = linkedSetOf<String>()
+        return (base + typography).filter { seen.add(it.string) }
     }
 
     private fun syncSessionState(runtime: ConvertRuntimeContext, environment: ImeCandidateEnvironment) {

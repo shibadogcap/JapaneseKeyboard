@@ -43,7 +43,7 @@ class PostCommitPredictionService(
             emptyList()
         }
         val emojiCandidates = emojiProvider.provide(
-            committedText = committedText,
+            leftSideCandidate = leftSideCandidate,
             committedReading = leftSideCandidate.yomi?.takeIf { it.isNotBlank() },
         )
 

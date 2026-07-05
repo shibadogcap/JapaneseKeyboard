@@ -30,14 +30,14 @@ object SettingTabRegistry {
 
         if (AppVariantConfig.hasZenz) {
             tabs += SettingTabSpec(
-                title = { "zenz" },
+                title = { context -> context.getString(R.string.zenz_preference_category_title) },
                 fragmentClass = ZenzPreferenceFragment::class.java,
             )
         }
 
         if (AppVariantConfig.hasGemma) {
             tabs += SettingTabSpec(
-                title = { "Gemma" },
+                title = { context -> context.getString(R.string.category_gemma_translation_title) },
                 fragmentClass = GemmaPreferenceFragment::class.java,
             )
         }
@@ -52,7 +52,7 @@ object SettingTabRegistry {
                 fragmentClass = KanaPreferenceFragment::class.java,
             ),
             SettingTabSpec(
-                title = { "QWERTY" },
+                title = { context -> context.getString(R.string.category_qwerty_keyboard_title) },
                 fragmentClass = QwertyPreferenceFragment::class.java,
             ),
             SettingTabSpec(
