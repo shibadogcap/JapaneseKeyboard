@@ -383,7 +383,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             this.setBackgroundColor(backgroundColor)
         }
 
-        // 2. ColorStateList の作成
+        // 2. ColorStateList の作成（選択中を濃く、非選択を薄く）
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
             intArrayOf(-android.R.attr.state_selected)
@@ -394,6 +394,8 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         )
         val tabColorStateList = ColorStateList(states, colors)
         val bgTintList = ColorStateList.valueOf(backgroundColor)
+        val tabButtonRadius = dpToPx(8).toFloat()
+        val auxiliaryButtonRadius = dpToPx(8).toFloat()
 
         // 3. Category Tab の全体設定
         categoryTab.backgroundTintList = bgTintList
@@ -408,7 +410,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★重要: タブの生成完了を待ってから背景を適用 (postを使用)
         categoryTab.post {
-            applyThemeToTabs(categoryTab, backgroundColor)
+            applyThemeToTabs(categoryTab, keyBackgroundColor, tabButtonRadius)
         }
 
         // 4. Mode Tab (Bottom Bar) の全体設定
@@ -420,7 +422,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // ★重要: クリッピング無効化と遅延適用
         disableClipping(modeTab)
         modeTab.post {
-            applyThemeToTabs(modeTab, backgroundColor)
+            applyThemeToTabs(modeTab, keyBackgroundColor, tabButtonRadius)
         }
 
         // 5. 機能キー (Return/Delete) のニューモーフィズム設定
@@ -435,6 +437,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         returnButton.setTextColor(iconColor)
         deleteButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
+        applyThemeToAuxiliaryControls(
+            keyBackgroundColor = keyBackgroundColor,
+            iconColor = iconColor,
+            cornerRadius = auxiliaryButtonRadius,
+        )
+
         if (currentMode == SymbolMode.CLIPBOARD) {
             buildCategoryTabs()
         }
@@ -443,6 +451,36 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             textColor = iconColor,
             highlightColor = selectedIconColor
         )
+    }
+
+    private fun applyThemeToAuxiliaryControls(
+        @ColorInt keyBackgroundColor: Int,
+        @ColorInt iconColor: Int,
+        cornerRadius: Float,
+    ) {
+        val buttonBackground = getTabNeumorphDrawable(keyBackgroundColor, cornerRadius)
+        val hintColor = ColorUtils.setAlphaComponent(iconColor, 160)
+
+        clipboardClearAllButton?.background = buttonBackground
+        clipboardClearAllButton?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        clipboardSearchView?.background = buttonBackground
+        clipboardSearchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text
+        )?.apply {
+            setTextColor(iconColor)
+            setHintTextColor(hintColor)
+        }
+        clipboardSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_mag_icon
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        clipboardSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_close_btn
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        emojiKitchenResetButton?.background = buttonBackground
+        emojiKitchenResetButton?.setTextColor(iconColor)
+        emojiKitchenPreviewLabel?.setTextColor(iconColor)
     }
 
     /**
@@ -460,7 +498,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     /**
      * TabLayout内のすべてのタブViewに対して、ニューモーフィズム背景とマージンを適用する
      */
-    private fun applyThemeToTabs(tabLayout: TabLayout, @ColorInt baseColor: Int) {
+    private fun applyThemeToTabs(
+        tabLayout: TabLayout,
+        @ColorInt buttonColor: Int,
+        cornerRadius: Float,
+    ) {
         val slidingTabStrip = tabLayout.getChildAt(0) as? ViewGroup ?: return
 
         for (i in 0 until slidingTabStrip.childCount) {
@@ -474,9 +516,8 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 tabView.layoutParams = params
             }
 
-            // 背景を設定
-            val radius = dpToPx(8).toFloat()
-            tabView.background = getTabNeumorphDrawable(baseColor, radius)
+            // キー背景色でボタン面を描画（パネル背景色だと影が見えなくなる）
+            tabView.background = getTabNeumorphDrawable(buttonColor, cornerRadius)
 
             // パディング調整 (Drawable内のpaddingとは別に、Viewのコンテンツ位置調整)
             // TenKeyのロジックではDrawable自体がpaddingを持つため、View自体のpaddingは少なめでOK
@@ -494,12 +535,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
      */
     private fun getTabNeumorphDrawable(@ColorInt baseColor: Int, radius: Float): Drawable {
         // 1. 色の計算 (TenKeyと同じ係数を使用)
-        // ハイライト色: 明るくする (1.2f)
-        val highlightColor = manipulateColor(baseColor, 1.2f)
-        // シャドウ色: 暗くする (0.8f)
-        val shadowColor = manipulateColor(baseColor, 0.8f)
-        // 押下時の色: ベースより少し暗く (0.95f)
-        val pressedColor = manipulateColor(baseColor, 0.95f)
+        // ハイライト色: 明るくする
+        val highlightColor = manipulateColor(baseColor, 1.25f)
+        // シャドウ色: 暗くする
+        val shadowColor = manipulateColor(baseColor, 0.75f)
+        // 押下時の色: ベースより少し暗く
+        val pressedColor = manipulateColor(baseColor, 0.92f)
 
         // 2. オフセット量とパディング (TenKeyの設定に合わせる)
         val density = resources.displayMetrics.density
@@ -818,7 +859,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         if (isCustomThemeApplied) {
             // postを使って描画後に適用
             modeTab.post {
-                applyThemeToTabs(modeTab, themeBackgroundColor)
+                applyThemeToTabs(modeTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -916,7 +957,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 categoryTab.addTab(tab)
                 tab.customView?.let { customView ->
                     customView.findViewById<TextView>(R.id.clipboard_tab_text)
-                        .setTextColor(normalColor)
+                        .setTextColor(selectedColor)
                 }
             }
 
@@ -930,7 +971,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         if (isCustomThemeApplied) {
             // postを使って描画後に適用
             categoryTab.post {
-                applyThemeToTabs(categoryTab, themeBackgroundColor)
+                applyThemeToTabs(categoryTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }

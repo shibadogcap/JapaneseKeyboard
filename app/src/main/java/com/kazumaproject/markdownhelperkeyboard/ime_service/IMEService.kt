@@ -12746,7 +12746,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      * for ALL theme modes (custom, dark, light, default/dynamic color).
      */
     private fun applyThemeToSymbolKeyboard() {
-        val symbolView = mainLayoutBinding?.keyboardSymbolView ?: return
+        val symbolViews = listOfNotNull(
+            mainLayoutBinding?.keyboardSymbolView,
+            floatingKeyboardBinding?.floatingSymbolKeyboard,
+        )
+        if (symbolViews.isEmpty()) return
         val isNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         val isDynamic = DynamicColors.isDynamicColorAvailable()
 
@@ -12784,17 +12788,19 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             else -> Pair(defaultBg, defaultKeyBg)
         }
 
-        // Unified: derive icon color from key background color
-        val iconColor = if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
-        val selectedIconColor = manipulateColor(iconColor, 0.6f)
+        // 選択タブは濃いアイコン、非選択は薄いアイコン
+        val selectedIconColor = if (keyBgColor.isLightColor()) Color.BLACK else Color.WHITE
+        val iconColor = manipulateColor(selectedIconColor, 0.55f)
 
-        symbolView.setKeyboardTheme(
-            backgroundColor = manipulateColor(bgColor, 1.1f),
-            iconColor = iconColor,
-            selectedIconColor = selectedIconColor,
-            keyBackgroundColor = keyBgColor,
-            liquidGlassEnable = liquidGlassThemePreference ?: false
-        )
+        symbolViews.forEach { symbolView ->
+            symbolView.setKeyboardTheme(
+                backgroundColor = bgColor,
+                iconColor = iconColor,
+                selectedIconColor = selectedIconColor,
+                keyBackgroundColor = keyBgColor,
+                liquidGlassEnable = liquidGlassThemePreference ?: false
+            )
+        }
     }
 
     /**
