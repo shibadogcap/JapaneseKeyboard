@@ -11479,13 +11479,24 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         zenzContextCache = null
     }
 
-    private fun isSymbolPanelSearchRoutingActive(): Boolean =
-        symbolPanelSearchFocused && keyboardSymbolViewState.value.isShown
+    private fun isSymbolPanelSearchRoutingActive(): Boolean {
+        if (!keyboardSymbolViewState.value.isShown) return false
+        if (symbolPanelSearchFocused) return true
+        return mainLayoutBinding?.keyboardSymbolView?.isSymbolPanelSearchActive() == true ||
+            floatingKeyboardBinding?.floatingSymbolKeyboard?.isSymbolPanelSearchActive() == true
+    }
 
     private fun routeSymbolPanelSearchText(text: String): Boolean {
         if (!isSymbolPanelSearchRoutingActive() || text.isEmpty()) return false
         mainLayoutBinding?.keyboardSymbolView?.appendActiveSearchText(text)
         floatingKeyboardBinding?.floatingSymbolKeyboard?.appendActiveSearchText(text)
+        return true
+    }
+
+    private fun routeSymbolPanelSearchFullText(text: String): Boolean {
+        if (!isSymbolPanelSearchRoutingActive() || text.isEmpty()) return false
+        mainLayoutBinding?.keyboardSymbolView?.setActiveSearchText(text)
+        floatingKeyboardBinding?.floatingSymbolKeyboard?.setActiveSearchText(text)
         return true
     }
 
@@ -13090,6 +13101,14 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private suspend fun processInputString(
         string: String, mainView: MainLayoutBinding,
     ) {
+        if (isSymbolPanelSearchRoutingActive()) {
+            if (string.isNotEmpty()) {
+                routeSymbolPanelSearchFullText(string)
+                _inputString.update { "" }
+                lastQwertyRomajiRawInput = null
+            }
+            return
+        }
         syncComposingTextSession(string)
         if (string.isNotEmpty()) {
             invalidatePostCommitPrediction()
@@ -17584,6 +17603,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         converted: String,
     ) {
         lastQwertyRomajiRawInput = rawBuffer
+        if (routeSymbolPanelSearchFullText(converted)) return
         _inputString.update { converted }
     }
 

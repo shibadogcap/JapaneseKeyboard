@@ -816,6 +816,13 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         searchView.setQuery(updated, true)
     }
 
+    fun setActiveSearchText(text: String) {
+        val searchView = activeSearchView() ?: return
+        val current = searchView.query?.toString().orEmpty()
+        if (current == text) return
+        searchView.setQuery(text, true)
+    }
+
     fun deleteActiveSearchChar(): Boolean {
         val searchView = activeSearchView() ?: return false
         val current = searchView.query?.toString().orEmpty()
@@ -855,12 +862,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         }
         searchView.setOnClickListener { activate() }
         editText.setOnClickListener { activate() }
+        // Keep search routing active while the user types on the IME keyboard below.
+        // Deactivation is handled explicitly via clearSymbolPanelSearchFocus().
         editText.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 activate()
-            } else if (activeSearchTarget == target) {
-                activeSearchTarget = null
-                symbolPanelSearchFocusListener?.invoke(false)
             }
         }
     }
