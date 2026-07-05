@@ -31,10 +31,16 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
         prompt: ZenzPromptContext,
         composingText: String,
         count: Int,
+        minLength: Int,
+        maxEntropy: Float?,
         possibleNexts: List<String>,
     ): String = withContext(Dispatchers.Default) {
         if (count <= 0 || composingText.isEmpty()) return@withContext ""
-        val generated = ZenzEngine.generateWithContextAndConditions(
+        val normalizedNexts = possibleNexts
+            .filter { it.isNotEmpty() }
+            .map { it.hiraganaToKatakana() }
+            .toTypedArray()
+        ZenzEngine.predictNextInputText(
             profile = prompt.profile,
             topic = prompt.topic,
             style = prompt.style,
@@ -42,23 +48,31 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
             leftContext = prompt.leftContext,
             rightContext = prompt.rightContext,
             input = composingText.hiraganaToKatakana(),
-            maxTokens = count,
-        ).trim()
-        if (generated.isEmpty()) return@withContext ""
-        if (possibleNexts.isEmpty()) {
-            return@withContext generated.take(count)
-        }
-        val allowedPrefixes = possibleNexts.filter { it.isNotEmpty() }
-        var candidate = ""
-        for (ch in generated) {
-            val next = candidate + ch
-            val normalized = next.hiraganaToKatakana()
-            if (allowedPrefixes.none { it.startsWith(normalized) }) break
-            candidate = next
-            if (candidate.length >= count) break
-        }
-        candidate
+            count = count,
+            minLength = minLength.coerceAtLeast(1).coerceAtMost(count),
+            maxEntropy = maxEntropy ?: -1f,
+            possibleNexts = normalizedNexts,
+        )
     }
+
+    override suspend fun typoEncodeRaw(text: String): IntArray = withContext(Dispatchers.Default) {
+        ZenzEngine.typoEncodeRaw(text)
+    }
+
+    override suspend fun typoNextLogProbs(
+        promptPrefix: String,
+        emittedTokenIds: IntArray,
+    ): FloatArray? = withContext(Dispatchers.Default) {
+        val values = ZenzEngine.typoNextLogProbs(promptPrefix, emittedTokenIds)
+        if (values.isEmpty()) null else values
+    }
+
+    override fun typoTokenToSingleCharacter(tokenId: Int): Char? {
+        val text = ZenzEngine.typoTokenToSingleCharacter(tokenId)
+        return text.firstOrNull()
+    }
+
+    override fun vocabSize(): Int = ZenzEngine.vocabSize()
 
     override suspend fun candidateEvaluate(
         prompt: ZenzPromptContext,

@@ -21,6 +21,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
             effect.cursorUpdateFlags,
         )
         assertEquals(1f, effect.mainRootAlpha, 0f)
+        assertEquals(0, effect.windowAnimations)
         assertTrue(effect.showFloatingDock)
         assertTrue(effect.resetHenkanState)
     }
@@ -33,6 +34,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
         )
         assertEquals(0, effect.cursorUpdateFlags)
         assertEquals(1f, effect.mainRootAlpha, 0f)
+        assertEquals(android.R.style.Animation_InputMethod, effect.windowAnimations)
         assertTrue(effect.dismissFloatingCandidate)
         assertTrue(effect.dismissFloatingDock)
     }
@@ -41,6 +43,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
     fun applyEffectInvokesHostInLegacyOrder() {
         val events = mutableListOf<String>()
         val host = object : PhysicalKeyboardUiEffectHandler.PhysicalKeyboardUiHost {
+            override fun setWindowAnimations(animations: Int) { events += "anim:$animations" }
             override fun clearWindowBackgroundBlur() { events += "blur" }
             override fun setDockInputModeLabel(label: String) { events += "dock:$label" }
             override fun dismissFloatingKeyboard() { events += "kb" }
@@ -61,6 +64,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
         )
         assertEquals(
             listOf(
+                "anim:0",
                 "blur",
                 "dock:あ",
                 "kb",
@@ -80,6 +84,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
     fun applyEffectInvokesHostInLegacyOrderOnDisconnect() {
         val events = mutableListOf<String>()
         val host = object : PhysicalKeyboardUiEffectHandler.PhysicalKeyboardUiHost {
+            override fun setWindowAnimations(animations: Int) { events += "anim:$animations" }
             override fun clearWindowBackgroundBlur() {}
             override fun setDockInputModeLabel(label: String) {}
             override fun dismissFloatingKeyboard() {}
@@ -100,6 +105,7 @@ class PhysicalKeyboardUiEffectHandlerTest {
         )
         assertEquals(
             listOf(
+                "anim:${android.R.style.Animation_InputMethod}",
                 "alpha:1.0",
                 "cursor:0",
                 "resize",

@@ -65,7 +65,7 @@ object ImeCandidateRequestFactory {
             requireEnglishPrediction = englishPredictionMode,
             learningType = preferences.learningType,
             zenzaiMode = preferences.zenzaiMode,
-            experimentalZenzaiPredictiveInput = false,
+            experimentalZenzaiPredictiveInput = preferences.experimentalZenzaiPredictiveInput,
             typoCorrectionMode = preferences.typoCorrectionMode,
             fullWidthRomanCandidate = true,
             halfWidthKanaCandidate = true,

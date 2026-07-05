@@ -12,6 +12,8 @@ import androidx.core.graphics.withClip
 import com.kazumaproject.custom_keyboard.data.FlickDirection
 import kotlin.math.roundToInt
 
+import android.graphics.Typeface
+
 /**
  * A Drawable that highlights specific areas of the background based on the flick direction.
  */
@@ -22,8 +24,11 @@ class SegmentedBackgroundDrawable(
     private val textColor: Int,
     private val cornerRadius: Float,
     private val primaryTextSizePx: Float = 60f,
-    private val secondaryTextSizePx: Float = 40f
+    private val secondaryTextSizePx: Float = 40f,
+    initialTypeface: Typeface? = null
 ) : Drawable() {
+
+    private var customTypeface: Typeface? = initialTypeface
 
     var highlightDirection: FlickDirection? = null
         set(value) {
@@ -38,6 +43,7 @@ class SegmentedBackgroundDrawable(
         color = textColor
         textAlign = Paint.Align.CENTER
         textSize = primaryTextSizePx
+        typeface = customTypeface
     }
 
     // Paint for the smaller, second line of text
@@ -45,6 +51,7 @@ class SegmentedBackgroundDrawable(
         color = textColor
         textAlign = Paint.Align.CENTER
         textSize = secondaryTextSizePx
+        typeface = customTypeface
     }
 
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -190,5 +197,12 @@ class SegmentedBackgroundDrawable(
 
     override fun getOpacity(): Int {
         return PixelFormat.TRANSLUCENT
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        this.customTypeface = typeface
+        textPaint.typeface = typeface
+        secondaryTextPaint.typeface = typeface
+        invalidateSelf()
     }
 }

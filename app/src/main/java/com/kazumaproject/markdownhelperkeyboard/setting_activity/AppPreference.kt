@@ -48,6 +48,7 @@ object AppPreference {
     private val KEY_SOUND_VOLUME_PERCENT_PREFERENCE =
         Pair("key_sound_volume_percent_preference", 0)
     private val LEARN_DICTIONARY_PREFERENCE = Pair("learn_dictionary_preference", true)
+    private val LEARNING_TYPE_PREFERENCE = Pair("learning_type_preference", "input_and_output")
     private val USER_DICTIONARY_PREFERENCE = Pair("user_dictionary_preference", true)
     private val USER_DICTIONARY_PREFIX_PREFERENCE = Pair("user_dictionary_prefix_match_number", 2)
     private val USER_TEMPLATE_PREFERENCE = Pair("user_template_preference", true)
@@ -126,7 +127,7 @@ object AppPreference {
         Pair("qwerty_romaji_zenkaku_space_preference", false)
 
     private val QWERTY_ROMAJI_HANKAKU_NUMBER_PREFERENCE =
-        Pair("qwerty_romaji_hankaku_number_preference", false)
+        Pair("qwerty_romaji_hankaku_number_preference", true)
 
     private val QWERTY_ROMAJI_HANKAKU_SYMBOL_PREFERENCE =
         Pair("qwerty_romaji_hankaku_symbol_preference", true)
@@ -192,10 +193,12 @@ object AppPreference {
     private val SPACE_HANKAKU_ENABLE = Pair("space_key_preference", false)
     private val CUSTOM_DIRECT_MODE_SPACE_HANKAKU_ENABLE =
         Pair("custom_direct_mode_space_hankaku_preference", true)
-    private val LIVE_CONVERSION_ENABLE = Pair("live_conversion_preference", false)
+    private val LIVE_CONVERSION_ENABLE = Pair("live_conversion_preference", true)
     private val LIVE_CONVERSION_START_LENGTH = Pair("live_conversion_start_length_preference", 1)
     private val LIVE_CONVERSION_CANDIDATE_YOMI =
         Pair("live_conversion_candidate_yomi_preference", false)
+    private val LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH =
+        Pair("live_conversion_automatic_completion_strength_preference", "weak")
     private const val OLD_SUMIRE_PREFERENCE_KEY = "sumire_keyboard_input_type_preference"
     private const val NEW_SUMIRE_STYLE_KEY = "sumire_keyboard_style_preference"
     private const val NEW_SUMIRE_METHOD_KEY = "sumire_input_method_preference"
@@ -427,6 +430,9 @@ object AppPreference {
 
     private val ENABLE_ZENZAI_PREFERENCE =
         Pair("enable_ai_conversion_zenzai_preference", false)
+
+    private val EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE =
+        Pair("experimental_zenzai_predictive_input_preference", false)
 
     private val ZENZ_PROFILE_PREFERENCE =
         Pair("zenz_profile_string_preference", "")
@@ -1030,6 +1036,15 @@ object AppPreference {
             it.putBoolean(LEARN_DICTIONARY_PREFERENCE.first, value ?: true)
         }
 
+    var learning_type_preference: String?
+        get() = preferences.getString(
+            LEARNING_TYPE_PREFERENCE.first,
+            LEARNING_TYPE_PREFERENCE.second,
+        )
+        set(value) = preferences.edit {
+            it.putString(LEARNING_TYPE_PREFERENCE.first, value ?: LEARNING_TYPE_PREFERENCE.second)
+        }
+
     var user_dictionary_preference: Boolean?
         get() = preferences.getBoolean(
             USER_DICTIONARY_PREFERENCE.first, USER_DICTIONARY_PREFERENCE.second
@@ -1318,6 +1333,18 @@ object AppPreference {
             it.putBoolean(
                 LIVE_CONVERSION_CANDIDATE_YOMI.first,
                 value ?: LIVE_CONVERSION_CANDIDATE_YOMI.second
+            )
+        }
+
+    var live_conversion_automatic_completion_strength_preference: String?
+        get() = preferences.getString(
+            LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.first,
+            LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.second
+        )
+        set(value) = preferences.edit {
+            it.putString(
+                LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.first,
+                value ?: LIVE_CONVERSION_AUTOMATIC_COMPLETION_STRENGTH.second
             )
         }
 
@@ -2130,6 +2157,15 @@ object AppPreference {
         )
         set(value) = preferences.edit {
             it.putBoolean(ENABLE_ZENZAI_PREFERENCE.first, value)
+        }
+
+    var experimental_zenzai_predictive_input_preference: Boolean
+        get() = preferences.getBoolean(
+            EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.first,
+            EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.second
+        )
+        set(value) = preferences.edit {
+            it.putBoolean(EXPERIMENTAL_ZENZAI_PREDICTIVE_INPUT_PREFERENCE.first, value)
         }
 
     var zenz_profile_preference: String
@@ -3034,6 +3070,11 @@ object AppPreference {
     private val CUSTOM_TEXT_ENTER_SEND = Pair("custom_text_enter_send", "")
     private val CUSTOM_TEXT_CONVERT = Pair("custom_text_convert", "")
 
+    // Keyboard UI appearance preferences
+    private val KEY_BORDER_ENABLE = Pair("key_border_enable_preference", false)
+    private val KEY_CORNER_RADIUS_DP = Pair("key_corner_radius_dp_preference", 8)
+    private val KEY_POPUP_STYLE = Pair("key_popup_style_preference", "default")
+
     var custom_icon_enter_path: String
         get() = preferences.getString(CUSTOM_ICON_ENTER_PATH.first, CUSTOM_ICON_ENTER_PATH.second) ?: ""
         set(value) = preferences.edit {
@@ -3254,5 +3295,24 @@ object AppPreference {
         get() = preferences.getString(CUSTOM_TEXT_123.first, CUSTOM_TEXT_123.second) ?: ""
         set(value) = preferences.edit {
             it.putString(CUSTOM_TEXT_123.first, value)
+        }
+
+    // Keyboard UI appearance properties
+    var key_border_enable: Boolean?
+        get() = preferences.getBoolean(KEY_BORDER_ENABLE.first, KEY_BORDER_ENABLE.second)
+        set(value) = preferences.edit {
+            it.putBoolean(KEY_BORDER_ENABLE.first, value ?: KEY_BORDER_ENABLE.second)
+        }
+
+    var key_corner_radius_dp: Int?
+        get() = preferences.getInt(KEY_CORNER_RADIUS_DP.first, KEY_CORNER_RADIUS_DP.second)
+        set(value) = preferences.edit {
+            it.putInt(KEY_CORNER_RADIUS_DP.first, value ?: KEY_CORNER_RADIUS_DP.second)
+        }
+
+    var key_popup_style: String?
+        get() = preferences.getString(KEY_POPUP_STYLE.first, KEY_POPUP_STYLE.second)
+        set(value) = preferences.edit {
+            it.putString(KEY_POPUP_STYLE.first, value ?: KEY_POPUP_STYLE.second)
         }
 }

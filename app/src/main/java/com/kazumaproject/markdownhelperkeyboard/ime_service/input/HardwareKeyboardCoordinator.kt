@@ -177,20 +177,36 @@ class HardwareKeyboardCoordinator(
 
     fun isPhysicalKeyboard(device: InputDevice?): Boolean {
         if (device == null) return false
-        val isNotVirtual = !device.isVirtual
-        val isExternal = device.isExternal
-        val hasKeyboardSource = (device.sources and InputDevice.SOURCE_KEYBOARD) != 0
-        val isFullKeyboard = device.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC
-        return isExternal && isNotVirtual && hasKeyboardSource && isFullKeyboard
-    }
-
-    fun hasAnyPhysicalKeyboard(): Boolean {
-        return inputManager.inputDeviceIds.any { deviceId ->
-            isPhysicalKeyboard(inputManager.getInputDevice(deviceId))
+        return try {
+            val isNotVirtual = try {
+                !device.isVirtual
+            } catch (e: NoSuchMethodError) {
+                device.id > 0
+            }
+            val isExternal = try {
+                device.isExternal
+            } catch (e: NoSuchMethodError) {
+                true
+            }
+            val hasKeyboardSource = (device.sources and InputDevice.SOURCE_KEYBOARD) != 0
+            val isFullKeyboard = device.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC
+            isExternal && isNotVirtual && hasKeyboardSource && isFullKeyboard
+        } catch (e: Exception) {
+            false
         }
     }
 
-    fun getDevice(deviceId: Int): InputDevice? = inputManager.getInputDevice(deviceId)
+    fun hasAnyPhysicalKeyboard(): Boolean {
+        return runCatching {
+            inputManager.inputDeviceIds.any { deviceId ->
+                isPhysicalKeyboard(getDevice(deviceId))
+            }
+        }.getOrDefault(false)
+    }
+
+    fun getDevice(deviceId: Int): InputDevice? = runCatching {
+        inputManager.getInputDevice(deviceId)
+    }.getOrNull()
 
     fun isPhysicalDeviceId(deviceId: Int): Boolean {
         return isPhysicalKeyboard(getDevice(deviceId))

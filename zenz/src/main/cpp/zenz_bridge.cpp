@@ -5,8 +5,8 @@
 #include <mutex>
 #include <atomic>
 #include <cstdint>
-#include <cmath>
-#include <android/log.h>
+#include <unordered_map>
+#include <limits>
 #include "llama.h"
 
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  "zenz-bridge", __VA_ARGS__)
@@ -95,6 +95,324 @@ static std::string build_v3_prompt(
         prompt += outputTag;
     }
     return prompt;
+}
+
+static std::vector<std::string> utf8_codepoints(const std::string &text) {
+    std::vector<std::string> out;
+    size_t i = 0;
+    while (i < text.size()) {
+        unsigned char b0 = static_cast<unsigned char>(text[i]);
+        size_t len = 1;
+        if (b0 <= 0x7F) {
+            len = 1;
+        } else if ((b0 & 0xE0) == 0xC0) {
+            len = 2;
+        } else if ((b0 & 0xF0) == 0xE0) {
+            len = 3;
+        } else if ((b0 & 0xF8) == 0xF0) {
+            len = 4;
+        }
+        if (i + len > text.size()) {
+            out.emplace_back(text.substr(i));
+            break;
+        }
+        out.emplace_back(text.substr(i, len));
+        i += len;
+    }
+    return out;
+}
+
+static std::string utf8_suffix_chars(const std::string &text, size_t max_chars) {
+    const auto cps = utf8_codepoints(text);
+    if (cps.size() <= max_chars) {
+        return text;
+    }
+    std::string out;
+    for (size_t i = cps.size() - max_chars; i < cps.size(); ++i) {
+        out += cps[i];
+    }
+    return out;
+}
+
+static std::string utf8_prefix_chars(const std::string &text, size_t max_chars) {
+    const auto cps = utf8_codepoints(text);
+    std::string out;
+    const size_t limit = std::min(max_chars, cps.size());
+    for (size_t i = 0; i < limit; ++i) {
+        out += cps[i];
+    }
+    return out;
+}
+
+static std::string first_utf8_codepoint(const std::string &text) {
+    const auto cps = utf8_codepoints(text);
+    return cps.empty() ? "" : cps.front();
+}
+
+static bool is_input_prediction_stop_char(const std::string &ch) {
+    static const char *stops[] = {
+            u8"、", u8"。", u8"！", u8"？"
+    };
+    for (const char *stop : stops) {
+        if (ch == stop) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::string build_v3_input_prediction_prompt(
+        const std::string &profile,
+        const std::string &topic,
+        const std::string &style,
+        const std::string &preference,
+        const std::string &left,
+        const std::string &right,
+        const std::string &input
+) {
+    return build_v3_prompt(
+            utf8_suffix_chars(profile, 25),
+            utf8_suffix_chars(topic, 25),
+            utf8_suffix_chars(style, 25),
+            utf8_suffix_chars(preference, 25),
+            utf8_suffix_chars(left, 40),
+            utf8_prefix_chars(right, 40),
+            input,
+            /*include_output_tag=*/false
+    );
+}
+
+static std::string build_typo_prompt_prefix(const std::string &left) {
+    const std::string inputTag = u8"\uEE00";
+    const std::string contextTag = u8"\uEE02";
+    if (left.empty()) {
+        return inputTag;
+    }
+    return contextTag + left + inputTag;
+}
+
+static std::vector<float> logits_to_log_probs(const float *logits, int32_t n_vocab) {
+    std::vector<float> log_probs(static_cast<size_t>(n_vocab), -std::numeric_limits<float>::infinity());
+    if (!logits || n_vocab <= 0) {
+        return log_probs;
+    }
+    float max_logit = logits[0];
+    for (int32_t i = 1; i < n_vocab; ++i) {
+        if (logits[i] > max_logit) {
+            max_logit = logits[i];
+        }
+    }
+    float sum_exp = 0.0f;
+    for (int32_t i = 0; i < n_vocab; ++i) {
+        sum_exp += expf(logits[i] - max_logit);
+    }
+    if (sum_exp <= 0.0f) {
+        return log_probs;
+    }
+    const float log_sum_exp = max_logit + logf(sum_exp);
+    for (int32_t i = 0; i < n_vocab; ++i) {
+        log_probs[static_cast<size_t>(i)] = logits[i] - log_sum_exp;
+    }
+    return log_probs;
+}
+
+static bool decode_all_tokens_locked(
+        llama_context *ctx,
+        const std::vector<llama_token> &tokens,
+        bool logits_on_last
+) {
+    if (tokens.empty()) {
+        return false;
+    }
+    const int32_t cap = static_cast<int32_t>(tokens.size());
+    llama_batch batch = llama_batch_init(cap, 0, 1);
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        batch.token[batch.n_tokens] = tokens[i];
+        batch.pos[batch.n_tokens] = static_cast<llama_pos>(i);
+        batch.n_seq_id[batch.n_tokens] = 1;
+        batch.seq_id[batch.n_tokens][0] = 0;
+        const bool want_logits = logits_on_last && (i + 1 == tokens.size());
+        batch.logits[batch.n_tokens] = want_logits ? 1 : 0;
+        batch.n_tokens++;
+    }
+    const int rc = llama_decode(ctx, batch);
+    llama_batch_free(batch);
+    return rc == 0;
+}
+
+static std::vector<float> next_log_probs_locked(llama_context *ctx) {
+    const int32_t n_vocab = llama_vocab_n_tokens(g_vocab);
+    float *logits = llama_get_logits_ith(ctx, -1);
+    return logits_to_log_probs(logits, n_vocab);
+}
+
+static std::string input_prediction_greedy_decoding(
+        const std::string &prompt,
+        int max_count,
+        int min_length,
+        float max_entropy,
+        const std::vector<std::string> &possible_nexts,
+        uint64_t request_seq
+) {
+    if (max_count <= 0) {
+        return "";
+    }
+    min_length = std::max(1, std::min(min_length, max_count));
+    const bool use_entropy = std::isfinite(max_entropy) && max_entropy >= 0.0f;
+
+    std::unique_lock<std::mutex> session_lock(g_session.mutex);
+    if (is_request_stale(request_seq) || !g_model || !g_vocab) {
+        return "";
+    }
+    llama_context *ctx = ensure_session_context_locked();
+    if (!ctx) {
+        return "";
+    }
+    llama_kv_cache_clear(ctx);
+
+    AbortRequestState abort_state{request_seq};
+    llama_set_abort_callback(ctx, abort_if_stale, &abort_state);
+
+    const std::string pre = preprocess_text(prompt);
+    auto prompt_tokens = tokenize_text(pre, /*add_bos=*/true, /*add_eos=*/false);
+    if (prompt_tokens.empty()) {
+        llama_set_abort_callback(ctx, never_abort, nullptr);
+        return "";
+    }
+
+    std::vector<std::string> predicted_chars;
+    predicted_chars.reserve(static_cast<size_t>(max_count));
+    std::string predicted_text;
+
+    auto is_allowed_prefix = [&](const std::string &candidate) -> bool {
+        if (possible_nexts.empty()) {
+            return true;
+        }
+        for (const auto &allowed : possible_nexts) {
+            if (!allowed.empty() && allowed.rfind(candidate, 0) == 0) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    for (int step = 0; step < max_count; ++step) {
+        if (!decode_all_tokens_locked(ctx, prompt_tokens, /*logits_on_last=*/true)) {
+            break;
+        }
+        float *logits = llama_get_logits_ith(ctx, -1);
+        if (!logits) {
+            break;
+        }
+        const int32_t n_vocab = llama_vocab_n_tokens(g_vocab);
+
+        std::unordered_map<llama_token, float> token_penalty;
+        for (size_t index = 0; index < prompt_tokens.size(); ++index) {
+            const float weight = 2.0f / static_cast<float>(prompt_tokens.size() - index);
+            token_penalty[prompt_tokens[index]] += weight;
+        }
+
+        float sumexp = 0.0f;
+        float sumexp_x = 0.0f;
+        float best_value = -std::numeric_limits<float>::infinity();
+        std::string best_char;
+        std::string best_next_text;
+
+        for (int32_t tid = 0; tid < n_vocab; ++tid) {
+            const float repeat_penalty = 1.0f + token_penalty[static_cast<llama_token>(tid)];
+            const float value = logits[tid] / repeat_penalty;
+            const float exp_value = expf(value);
+            sumexp += exp_value;
+            sumexp_x += exp_value * value;
+            if (value <= best_value) {
+                continue;
+            }
+            const std::string piece = token_to_piece_str(static_cast<llama_token>(tid));
+            const std::string ch = first_utf8_codepoint(piece);
+            if (ch.empty()) {
+                continue;
+            }
+            const std::string next_text = predicted_text + ch;
+            if (!is_allowed_prefix(next_text)) {
+                continue;
+            }
+            best_value = value;
+            best_char = ch;
+            best_next_text = next_text;
+        }
+
+        if (use_entropy &&
+            static_cast<int>(predicted_chars.size()) >= min_length &&
+            sumexp > 0.0f) {
+            const float entropy = logf(sumexp) - (sumexp_x / sumexp);
+            if (entropy >= max_entropy) {
+                break;
+            }
+        }
+
+        if (best_char.empty()) {
+            break;
+        }
+        if (static_cast<int>(predicted_chars.size()) >= min_length &&
+            is_input_prediction_stop_char(best_char)) {
+            break;
+        }
+        if (!is_allowed_prefix(best_next_text)) {
+            break;
+        }
+
+        predicted_chars.push_back(best_char);
+        predicted_text = best_next_text;
+        const auto appended = tokenize_text(best_char, /*add_bos=*/false, /*add_eos=*/false);
+        if (appended.empty()) {
+            break;
+        }
+        prompt_tokens.insert(prompt_tokens.end(), appended.begin(), appended.end());
+    }
+
+    llama_set_abort_callback(ctx, never_abort, nullptr);
+    std::string out;
+    for (const auto &ch : predicted_chars) {
+        out += ch;
+    }
+    return out;
+}
+
+static std::vector<float> typo_next_log_probs_internal(
+        const std::string &prompt_prefix,
+        const std::vector<int32_t> &emitted_token_ids,
+        uint64_t request_seq
+) {
+    std::unique_lock<std::mutex> session_lock(g_session.mutex);
+    if (is_request_stale(request_seq) || !g_model || !g_vocab) {
+        return {};
+    }
+    llama_context *ctx = ensure_session_context_locked();
+    if (!ctx) {
+        return {};
+    }
+    llama_kv_cache_clear(ctx);
+
+    AbortRequestState abort_state{request_seq};
+    llama_set_abort_callback(ctx, abort_if_stale, &abort_state);
+
+    auto prompt_tokens = tokenize_text(preprocess_text(prompt_prefix), /*add_bos=*/false, /*add_eos=*/false);
+    std::vector<llama_token> all_tokens = prompt_tokens;
+    all_tokens.reserve(prompt_tokens.size() + emitted_token_ids.size());
+    for (int32_t token_id : emitted_token_ids) {
+        all_tokens.push_back(static_cast<llama_token>(token_id));
+    }
+    if (all_tokens.empty()) {
+        llama_set_abort_callback(ctx, never_abort, nullptr);
+        return {};
+    }
+    if (!decode_all_tokens_locked(ctx, all_tokens, /*logits_on_last=*/true)) {
+        llama_set_abort_callback(ctx, never_abort, nullptr);
+        return {};
+    }
+    auto log_probs = next_log_probs_locked(ctx);
+    llama_set_abort_callback(ctx, never_abort, nullptr);
+    return log_probs;
 }
 
 // ------- JNI文字列変換（重要） -------
@@ -1187,4 +1505,162 @@ Java_com_kazumaproject_zenz_ZenzEngine_scoreCandidates(
 
     env->SetFloatArrayRegion(result_array, 0, candidate_count, scores.data());
     return result_array;
+}
+
+// ------- JNI: v3 input prediction (ZenzInputTextGenerator) -------
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_kazumaproject_zenz_ZenzEngine_predictNextInputText(
+        JNIEnv *env,
+        jobject /* thiz */,
+        jstring jProfile,
+        jstring jTopic,
+        jstring jStyle,
+        jstring jPreference,
+        jstring jLeftContext,
+        jstring jRightContext,
+        jstring jInput,
+        jint count,
+        jint minLength,
+        jfloat maxEntropy,
+        jobjectArray jPossibleNexts
+) {
+    const char *c_profile = jProfile ? env->GetStringUTFChars(jProfile, nullptr) : nullptr;
+    const char *c_topic = jTopic ? env->GetStringUTFChars(jTopic, nullptr) : nullptr;
+    const char *c_style = jStyle ? env->GetStringUTFChars(jStyle, nullptr) : nullptr;
+    const char *c_preference = jPreference ? env->GetStringUTFChars(jPreference, nullptr) : nullptr;
+    const char *c_left = jLeftContext ? env->GetStringUTFChars(jLeftContext, nullptr) : nullptr;
+    const char *c_right = jRightContext ? env->GetStringUTFChars(jRightContext, nullptr) : nullptr;
+    const char *c_input = jInput ? env->GetStringUTFChars(jInput, nullptr) : nullptr;
+
+    std::string profile = c_profile ? c_profile : "";
+    std::string topic = c_topic ? c_topic : "";
+    std::string style = c_style ? c_style : "";
+    std::string preference = c_preference ? c_preference : "";
+    std::string left = c_left ? c_left : "";
+    std::string right = c_right ? c_right : "";
+    std::string input = c_input ? c_input : "";
+
+    if (c_profile) env->ReleaseStringUTFChars(jProfile, c_profile);
+    if (c_topic) env->ReleaseStringUTFChars(jTopic, c_topic);
+    if (c_style) env->ReleaseStringUTFChars(jStyle, c_style);
+    if (c_preference) env->ReleaseStringUTFChars(jPreference, c_preference);
+    if (c_left) env->ReleaseStringUTFChars(jLeftContext, c_left);
+    if (c_right) env->ReleaseStringUTFChars(jRightContext, c_right);
+    if (c_input) env->ReleaseStringUTFChars(jInput, c_input);
+
+    std::vector<std::string> possible_nexts;
+    if (jPossibleNexts) {
+        const jsize n = env->GetArrayLength(jPossibleNexts);
+        possible_nexts.reserve(static_cast<size_t>(n));
+        for (jsize i = 0; i < n; ++i) {
+            auto *entry = (jstring) env->GetObjectArrayElement(jPossibleNexts, i);
+            if (!entry) continue;
+            const char *c_entry = env->GetStringUTFChars(entry, nullptr);
+            if (c_entry) {
+                possible_nexts.emplace_back(c_entry);
+                env->ReleaseStringUTFChars(entry, c_entry);
+            }
+            env->DeleteLocalRef(entry);
+        }
+    }
+
+    const std::string prompt = build_v3_input_prediction_prompt(
+            profile, topic, style, preference, left, right, input
+    );
+    const uint64_t request_seq = g_request_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+    const float entropy_limit = maxEntropy < 0.0f ? std::numeric_limits<float>::quiet_NaN() : maxEntropy;
+    const std::string result = input_prediction_greedy_decoding(
+            prompt,
+            static_cast<int>(count),
+            static_cast<int>(minLength),
+            entropy_limit,
+            possible_nexts,
+            request_seq
+    );
+    return toJString(env, result);
+}
+
+// ------- JNI: typo correction LM helpers -------
+
+extern "C"
+JNIEXPORT jint JNICALL
+Java_com_kazumaproject_zenz_ZenzEngine_vocabSize(
+        JNIEnv * /* env */,
+        jobject /* thiz */
+) {
+    return g_vocab ? llama_vocab_n_tokens(g_vocab) : 0;
+}
+
+extern "C"
+JNIEXPORT jintArray JNICALL
+Java_com_kazumaproject_zenz_ZenzEngine_typoEncodeRaw(
+        JNIEnv *env,
+        jobject /* thiz */,
+        jstring jText
+) {
+    const char *c_text = jText ? env->GetStringUTFChars(jText, nullptr) : nullptr;
+    std::string text = c_text ? c_text : "";
+    if (c_text) env->ReleaseStringUTFChars(jText, c_text);
+
+    const auto tokens = tokenize_text(text, /*add_bos=*/false, /*add_eos=*/false);
+    jintArray result = env->NewIntArray(static_cast<jsize>(tokens.size()));
+    if (!result) {
+        return nullptr;
+    }
+    std::vector<jint> values(tokens.size());
+    for (size_t i = 0; i < tokens.size(); ++i) {
+        values[i] = static_cast<jint>(tokens[i]);
+    }
+    env->SetIntArrayRegion(result, 0, static_cast<jsize>(values.size()), values.data());
+    return result;
+}
+
+extern "C"
+JNIEXPORT jstring JNICALL
+Java_com_kazumaproject_zenz_ZenzEngine_typoTokenToSingleCharacter(
+        JNIEnv *env,
+        jobject /* thiz */,
+        jint tokenId
+) {
+    const std::string piece = token_to_piece_str(static_cast<llama_token>(tokenId));
+    const std::string ch = first_utf8_codepoint(piece);
+    const auto cps = utf8_codepoints(piece);
+    if (cps.size() != 1) {
+        return env->NewString(reinterpret_cast<const jchar *>(u""), 0);
+    }
+    return toJString(env, ch);
+}
+
+extern "C"
+JNIEXPORT jfloatArray JNICALL
+Java_com_kazumaproject_zenz_ZenzEngine_typoNextLogProbs(
+        JNIEnv *env,
+        jobject /* thiz */,
+        jstring jPromptPrefix,
+        jintArray jEmittedTokenIds
+) {
+    const char *c_prompt = jPromptPrefix ? env->GetStringUTFChars(jPromptPrefix, nullptr) : nullptr;
+    std::string prompt_prefix = c_prompt ? c_prompt : "";
+    if (c_prompt) env->ReleaseStringUTFChars(jPromptPrefix, c_prompt);
+
+    std::vector<int32_t> emitted;
+    if (jEmittedTokenIds) {
+        const jsize n = env->GetArrayLength(jEmittedTokenIds);
+        emitted.resize(static_cast<size_t>(n));
+        env->GetIntArrayRegion(jEmittedTokenIds, 0, n, reinterpret_cast<jint *>(emitted.data()));
+    }
+
+    const uint64_t request_seq = g_request_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+    const auto log_probs = typo_next_log_probs_internal(prompt_prefix, emitted, request_seq);
+    const jsize vocab = static_cast<jsize>(log_probs.size());
+    jfloatArray result = env->NewFloatArray(vocab);
+    if (!result) {
+        return nullptr;
+    }
+    if (!log_probs.empty()) {
+        env->SetFloatArrayRegion(result, 0, vocab, log_probs.data());
+    }
+    return result;
 }

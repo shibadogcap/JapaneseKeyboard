@@ -154,6 +154,9 @@ class FlickKeyboardView @JvmOverloads constructor(
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
     private var customBorderColor: Int = Color.BLACK
+    private var keyBorderEnable: Boolean = false
+    private var keyCornerRadiusDp: Int = 8
+    private var keyPopupStyle: String = "default"
     private var customAngleAndRange: Map<CircularFlickDirection, Pair<Float, Float>> = emptyMap()
     private var circularViewScale: Float = 1.0f
     private var circularFlickDirectionCount: Int = 4
@@ -206,8 +209,22 @@ class FlickKeyboardView @JvmOverloads constructor(
 
     fun setCustomTypeface(typeface: Typeface?) {
         customTypeface = typeface
-        dynamicKeyMap.values.forEach { keyInfo ->
-            (keyInfo.view as? Button)?.typeface = typeface
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (child is Button) {
+                child.typeface = typeface
+            }
+            val bg = child.background
+            if (bg is LayerDrawable) {
+                for (j in 0 until bg.numberOfLayers) {
+                    val layer = bg.getDrawable(j)
+                    if (layer is SegmentedBackgroundDrawable) {
+                        layer.setCustomTypeface(typeface)
+                    }
+                }
+            } else if (bg is SegmentedBackgroundDrawable) {
+                bg.setCustomTypeface(typeface)
+            }
         }
         flickControllers.forEach { it.setCustomTypeface(typeface) }
         crossFlickControllers.forEach { it.setCustomTypeface(typeface) }
@@ -324,7 +341,10 @@ class FlickKeyboardView @JvmOverloads constructor(
         customBorderEnable: Boolean,
         customBorderColor: Int,
         liquidGlassKeyAlphaEnable: Int,
-        borderWidth: Int
+        borderWidth: Int,
+        keyBorderEnable: Boolean = false,
+        keyCornerRadiusDp: Int = 8,
+        keyPopupStyle: String = "default"
     ) {
         this.themeMode = themeMode
         this.isNightMode = (currentNightMode == Configuration.UI_MODE_NIGHT_YES)
@@ -343,9 +363,27 @@ class FlickKeyboardView @JvmOverloads constructor(
         this.customBorderColor = customBorderColor
         this.liquidGlassKeyAlphaEnable = liquidGlassKeyAlphaEnable
         this.borderWidth = borderWidth
+        this.keyBorderEnable = keyBorderEnable
+        this.keyCornerRadiusDp = keyCornerRadiusDp
+        this.keyPopupStyle = keyPopupStyle
 
         if (liquidGlassEnable) {
             this.setBackgroundColor(ColorUtils.setAlphaComponent(customBgColor, 0))
+        }
+        // Re-apply icon tints for all dynamic keys after theme change
+        refreshDynamicKeyTint()
+    }
+
+    /**
+     * Re-applies image button tint for all dynamic keys (e.g. enter key)
+     * after theme colors have been updated.
+     */
+    private fun refreshDynamicKeyTint() {
+        dynamicKeyMap.values.forEach { info ->
+            val view = info.view
+            if (view is AppCompatImageButton) {
+                applyImageButtonTint(view, info.keyData)
+            }
         }
     }
 
@@ -611,19 +649,23 @@ class FlickKeyboardView @JvmOverloads constructor(
     }
 
     private fun applyImageButtonTint(button: AppCompatImageButton, keyData: KeyData) {
-        if (
-            themeMode == "custom" &&
-            keyData.isSpecialKey &&
-            KeyIconResolver.shouldTintIcon(keyData)
-        ) {
-            val isEnterKey = keyData.action is KeyAction.Enter ||
-                    keyData.action is KeyAction.Confirm ||
-                    keyData.action is KeyAction.NewLine ||
-                    keyData.action is KeyAction.ForceNewLine
-            button.setColorFilter(if (isEnterKey) customEnterKeyTextColor else customSpecialKeyTextColor)
-        } else {
+        if (!keyData.isSpecialKey || !KeyIconResolver.shouldTintIcon(keyData)) {
             button.clearColorFilter()
+            return
         }
+        val tintColor = when (themeMode) {
+            "custom" -> {
+                val isEnterKey = keyData.action is KeyAction.Enter ||
+                        keyData.action is KeyAction.Confirm ||
+                        keyData.action is KeyAction.NewLine ||
+                        keyData.action is KeyAction.ForceNewLine
+                if (isEnterKey) customEnterKeyTextColor else customSpecialKeyTextColor
+            }
+            "dark" -> Color.WHITE
+            "light" -> Color.BLACK
+            else -> ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
+        }
+        button.setColorFilter(tintColor)
     }
 
     private fun updateImageButtonMatrix(button: AppCompatImageButton, keyData: KeyData) {
@@ -993,7 +1035,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 } else {
                                     customSpecialKeyTextColor
                                 },
-                                cornerRadius = keyCornerRadius
+                                cornerRadius = keyCornerRadius,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -1022,6 +1065,7 @@ class FlickKeyboardView @JvmOverloads constructor(
                 isFocusable = false
                 isAllCaps = false
                 elevation = 0f
+                typeface = customTypeface
 
                 applyButtonText(this, keyData)
 
@@ -1102,7 +1146,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 baseColor = Color.TRANSPARENT,
                                 highlightColor = targetHighlightColor,
                                 textColor = targetTextColor,
-                                cornerRadius = keyCornerRadius
+                                cornerRadius = keyCornerRadius,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -1516,7 +1561,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 textColor = customKeyTextColor,
                                 cornerRadius = baseCorner,
                                 primaryTextSizePx = primaryTextSizePx,
-                                secondaryTextSizePx = secondaryTextSizePx
+                                secondaryTextSizePx = secondaryTextSizePx,
+                                initialTypeface = customTypeface
                             )
 
                             val layer = LayerDrawable(arrayOf(baseWithBorder, segmentedDrawable))
@@ -1538,7 +1584,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                                 textColor = customKeyTextColor,
                                 cornerRadius = dpToPx(8).toFloat(),
                                 primaryTextSizePx = primaryTextSizePx,
-                                secondaryTextSizePx = secondaryTextSizePx
+                                secondaryTextSizePx = secondaryTextSizePx,
+                                initialTypeface = customTypeface
                             )
 
                             val layerDrawable =
@@ -1568,7 +1615,8 @@ class FlickKeyboardView @JvmOverloads constructor(
                             textColor = keyTextColor,
                             cornerRadius = 20f,
                             primaryTextSizePx = primaryTextSizePx,
-                            secondaryTextSizePx = secondaryTextSizePx
+                            secondaryTextSizePx = secondaryTextSizePx,
+                            initialTypeface = customTypeface
                         )
 
                         keyView.background = segmentedDrawable

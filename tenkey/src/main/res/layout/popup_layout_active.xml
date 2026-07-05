@@ -10,9 +10,8 @@
     app:bl_arrowPosition="16dp"
     app:bl_arrowWidth="0dp"
     app:bl_bubbleColor="#FFFFFF"
-    app:bl_cornersRadius="14dp"
-    app:bl_strokeColor="#DADCE0"
-    app:bl_strokeWidth="1dp">
+    app:bl_cornersRadius="32dp"
+    app:bl_strokeWidth="0dp">
 
     <com.google.android.material.textview.MaterialTextView
         android:id="@+id/popup_text_active"

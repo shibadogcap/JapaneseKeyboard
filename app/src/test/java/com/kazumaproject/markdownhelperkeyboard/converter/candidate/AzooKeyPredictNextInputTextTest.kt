@@ -29,8 +29,21 @@ class AzooKeyPredictNextInputTextTest {
             prompt: ZenzPromptContext,
             composingText: String,
             count: Int,
+            minLength: Int,
+            maxEntropy: Float?,
             possibleNexts: List<String>,
         ): String = predictions.getOrElse(callCount) { "" }.also { callCount++ }
+
+        override suspend fun typoEncodeRaw(text: String): IntArray = IntArray(0)
+
+        override suspend fun typoNextLogProbs(
+            promptPrefix: String,
+            emittedTokenIds: IntArray,
+        ): FloatArray? = null
+
+        override fun typoTokenToSingleCharacter(tokenId: Int): Char? = null
+
+        override fun vocabSize(): Int = 0
 
         override suspend fun candidateEvaluate(
             prompt: ZenzPromptContext,

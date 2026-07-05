@@ -3912,7 +3912,7 @@ object KeyboardDefaultLayouts {
                 action = enterKeyStates[0].action,
                 rowSpan = 1,
                 isSpecialKey = true,
-                drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
+                drawableResId = enterKeyStates[0].drawableResId,
                 keyId = "enter_key",
                 dynamicStates = enterKeyStates,
             )

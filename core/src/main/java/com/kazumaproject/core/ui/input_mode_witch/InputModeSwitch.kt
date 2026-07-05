@@ -19,9 +19,15 @@ class InputModeSwitch(context: Context, attrs: AttributeSet) :
     AppCompatButton(context, attrs) {
 
     private var currentInputMode: InputMode = InputMode.ModeJapanese
+    private var customTypeface: Typeface? = null
 
     init {
         isAllCaps = false
+    }
+
+    fun setCustomTypeface(typeface: Typeface?) {
+        this.customTypeface = typeface
+        typeface?.let { this.typeface = it }
     }
 
     private fun scaleDrawable(drawable: Drawable?): Drawable? {
@@ -87,6 +93,28 @@ class InputModeSwitch(context: Context, attrs: AttributeSet) :
         text = spanText
     }
 
+    private class CustomTypefaceSpan(
+        private val typeface: Typeface?,
+        private val isBold: Boolean
+    ) : android.text.style.MetricAffectingSpan() {
+        override fun updateDrawState(ds: android.text.TextPaint) {
+            apply(ds)
+        }
+
+        override fun updateMeasureState(paint: android.text.TextPaint) {
+            apply(paint)
+        }
+
+        private fun apply(paint: android.text.TextPaint) {
+            if (typeface != null) {
+                paint.typeface = typeface
+            }
+            if (isBold) {
+                paint.isFakeBoldText = true
+            }
+        }
+    }
+
     @Suppress("UNUSED_PARAMETER")
     fun setInputMode(inputMode: InputMode, isTablet: Boolean) {
         currentInputMode = inputMode
@@ -95,18 +123,21 @@ class InputModeSwitch(context: Context, attrs: AttributeSet) :
         setPadding(0, 0, 0, 0)
         setCompoundDrawables(null, null, null, null)
         val label = SpannableString("あa1")
-        val boldRange = when (inputMode) {
-            InputMode.ModeJapanese -> 0 to 1
-            InputMode.ModeEnglish -> 1 to 2
-            InputMode.ModeNumber -> 2 to 3
+        val boldIndex = when (inputMode) {
+            InputMode.ModeJapanese -> 0
+            InputMode.ModeEnglish -> 1
+            InputMode.ModeNumber -> 2
         }
-        label.setSpan(
-            StyleSpan(Typeface.BOLD),
-            boldRange.first,
-            boldRange.second,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
+        for (i in 0 until label.length) {
+            label.setSpan(
+                CustomTypefaceSpan(customTypeface, i == boldIndex),
+                i,
+                i + 1,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
         text = label
         textSize = 13f
+        customTypeface?.let { typeface = it }
     }
 }

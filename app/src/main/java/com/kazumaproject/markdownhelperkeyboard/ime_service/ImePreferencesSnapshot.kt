@@ -1,6 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service
 
 import com.kazumaproject.core.data.clicked_symbol.SymbolMode
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults
 import com.kazumaproject.markdownhelperkeyboard.ime_service.state.CandidateTab
 import com.kazumaproject.markdownhelperkeyboard.ime_service.state.KeyboardType
 import com.kazumaproject.markdownhelperkeyboard.dictionary_override.DictionaryCategory
@@ -21,6 +22,7 @@ data class ImePreferencesSnapshot(
     val isOmissionSearchEnable: Boolean,
     val delayTime: Int,
     val isLearnDictionaryMode: Boolean,
+    val learningTypePreference: String,
     val isUserDictionaryEnable: Boolean,
     val isUserTemplateEnable: Boolean,
     val hankakuPreference: Boolean,
@@ -28,6 +30,7 @@ data class ImePreferencesSnapshot(
     val isLiveConversionEnable: Boolean,
     val liveConversionStartLength: Int,
     val showLiveConversionCandidateYomi: Boolean,
+    val liveConversionAutomaticCompletionStrength: String,
     val nBest: Int,
     val flickSensitivityPreferenceValue: Int,
     val longPressTimeoutPreferenceValue: Int,
@@ -132,6 +135,7 @@ data class ImePreferencesSnapshot(
     val qwertyLandscapeBottomMarginPreferenceValue: Int,
     val zenzEnableStatePreference: Boolean,
     val zenzaiEnableStatePreference: Boolean,
+    val experimentalZenzaiPredictiveInputPreference: Boolean,
     val zenzProfilePreference: String,
     val zenzEnableLongPressConversionPreference: Boolean,
     val zenzRerankPreference: Boolean,
@@ -220,6 +224,9 @@ data class ImePreferencesSnapshot(
     val customTextEnterSearch: String,
     val customTextEnterSend: String,
     val customTextConvert: String,
+    val keyBorderEnable: Boolean,
+    val keyCornerRadiusDp: Int,
+    val keyPopupStyle: String,
 ) {
     companion object {
         fun from(
@@ -279,16 +286,20 @@ data class ImePreferencesSnapshot(
                 isOmissionSearchEnable = appPreference.omission_search_preference ?: false,
                 delayTime = appPreference.time_same_pronounce_typing_preference ?: 1000,
                 isLearnDictionaryMode = appPreference.learn_dictionary_preference ?: true,
+                learningTypePreference = appPreference.learning_type_preference ?: "input_and_output",
                 isUserDictionaryEnable = appPreference.user_dictionary_preference ?: true,
                 isUserTemplateEnable = appPreference.user_template_preference ?: true,
                 hankakuPreference = appPreference.space_hankaku_preference ?: false,
                 customDirectModeSpaceHankakuPreference =
                     appPreference.custom_direct_mode_space_hankaku_preference ?: true,
-                isLiveConversionEnable = appPreference.live_conversion_preference ?: false,
+                isLiveConversionEnable = appPreference.live_conversion_preference
+                    ?: AzooKeyConversionDefaults.LIVE_CONVERSION_ENABLED,
                 liveConversionStartLength =
                     appPreference.live_conversion_start_length_preference ?: 1,
                 showLiveConversionCandidateYomi =
                     appPreference.live_conversion_candidate_yomi_preference ?: false,
+                liveConversionAutomaticCompletionStrength =
+                    appPreference.live_conversion_automatic_completion_strength_preference ?: "weak",
                 nBest = appPreference.n_best_preference ?: 4,
                 flickSensitivityPreferenceValue = appPreference.flick_sensitivity_preference ?: 100,
                 longPressTimeoutPreferenceValue =
@@ -318,9 +329,9 @@ data class ImePreferencesSnapshot(
                 qwertyEnableZenkakuSpacePreference =
                     appPreference.qwerty_enable_zenkaku_space_preference ?: false,
                 qwertyRomajiHankakuNumberPreference =
-                    appPreference.qwerty_romaji_hankaku_number_preference ?: false,
+                    appPreference.qwerty_romaji_hankaku_number_preference ?: true,
                 qwertyRomajiHankakuSymbolPreference =
-                    appPreference.qwerty_romaji_hankaku_symbol_preference ?: false,
+                    appPreference.qwerty_romaji_hankaku_symbol_preference ?: true,
                 qwertyShowKutoutenButtonsPreference =
                     appPreference.qwerty_show_kutouten_buttons ?: false,
                 showCandidateInPasswordPreference = appPreference.show_candidates_password ?: true,
@@ -447,6 +458,9 @@ data class ImePreferencesSnapshot(
                     AppVariantConfig.hasZenz && appPreference.enable_zenz_preference,
                 zenzaiEnableStatePreference =
                     AppVariantConfig.hasZenz && appPreference.enable_zenzai_preference,
+                experimentalZenzaiPredictiveInputPreference =
+                    AppVariantConfig.hasZenz &&
+                        appPreference.experimental_zenzai_predictive_input_preference,
                 zenzProfilePreference = appPreference.zenz_profile_preference,
                 zenzEnableLongPressConversionPreference =
                     AppVariantConfig.hasZenz && appPreference.enable_zenz_long_press_preference,
@@ -558,6 +572,9 @@ data class ImePreferencesSnapshot(
                 customTextEnterSearch = appPreference.custom_text_enter_search,
                 customTextEnterSend = appPreference.custom_text_enter_send,
                 customTextConvert = appPreference.custom_text_convert,
+                keyBorderEnable = appPreference.key_border_enable ?: false,
+                keyCornerRadiusDp = appPreference.key_corner_radius_dp ?: 8,
+                keyPopupStyle = appPreference.key_popup_style ?: "default",
             )
         }
     }

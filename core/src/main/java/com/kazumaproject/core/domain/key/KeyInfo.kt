@@ -118,11 +118,11 @@ sealed class KeyInfo {
         override val tap: Char
             get() = 'や'
         override val flickLeft: Char
-            get() = '（'
+            get() = '「'
         override val flickTop: Char
             get() = 'ゆ'
         override val flickRight: Char
-            get() = '）'
+            get() = '」'
         override val flickBottom: Char
             get() = 'よ'
     }

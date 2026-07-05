@@ -17,6 +17,10 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -31,7 +35,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
-import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.imageview.ShapeableImageView
@@ -74,7 +77,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private val gridLM = GridLayoutManager(context, 3, RecyclerView.HORIZONTAL, false)
 
     // View References for functional keys
-    private val returnButton: ShapeableImageView
+    private val returnButton: TextView
     private val deleteButton: ShapeableImageView
 
     // Theme Colors (Default values)
@@ -146,6 +149,28 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         modeTab = findViewById(R.id.mode_tab_layout)
         recycler = findViewById(R.id.symbol_candidate_recycler_view)
         returnButton = findViewById(R.id.return_jp_keyboard_button)
+        val returnText = SpannableString("あa")
+        returnText.setSpan(
+            StyleSpan(android.graphics.Typeface.BOLD),
+            0,
+            1,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnText.setSpan(
+            StyleSpan(android.graphics.Typeface.NORMAL),
+            1,
+            2,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnText.setSpan(
+            RelativeSizeSpan(1.4f),
+            1,
+            2,
+            Spannable.SPAN_INCLUSIVE_INCLUSIVE
+        )
+        returnButton.text = returnText
+        returnButton.gravity = android.view.Gravity.CENTER
+
         deleteButton = findViewById(R.id.symbol_keyboard_delete_key)
 
         emojiKitchenRecyclerView = findViewById(R.id.emoji_kitchen_recycler_view)
@@ -308,7 +333,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 currentMode = SymbolMode.entries[tab?.position ?: 0]
                 buildCategoryTabs()
                 categoryTab.getTabAt(0)?.select()
-                updateSymbolsForCategory(0)
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
             }
 
@@ -408,7 +432,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         returnButton.setPadding(p, p, p, p)
         deleteButton.setPadding(p, p, p, p)
 
-        returnButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        returnButton.setTextColor(iconColor)
         deleteButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
         if (currentMode == SymbolMode.CLIPBOARD) {
@@ -949,10 +973,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         pagingJob?.cancel()
         lifecycleOwner?.let { owner ->
             pagingJob = owner.lifecycleScope.launch {
-                symbolAdapter.submitData(PagingData.empty())
-                clipboardAdapter.submitData(PagingData.empty())
-                recycler.scrollToPosition(0)
-
                 when (currentMode) {
                     SymbolMode.CLIPBOARD -> {
                         recycler.adapter = clipboardAdapter
@@ -965,6 +985,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                             }
                         }
                         val clipboardListItems = buildClipboardListItems(clipBoardItems)
+                        recycler.scrollToPosition(0)
                         Pager(
                             config = PagingConfig(pageSize = 20, enablePlaceholders = false),
                             pagingSourceFactory = { ClipboardPagingSource(clipboardListItems) }
@@ -1061,6 +1082,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                             else -> adaptiveGridSpan(targetCellDp = 64, min = 5, max = 9)
                         }
                         gridLM.orientation = RecyclerView.VERTICAL
+                        recycler.scrollToPosition(0)
 
                         Pager(
                             config = PagingConfig(pageSize = 100, enablePlaceholders = false),
@@ -1272,9 +1294,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // CLIPBOARDのカテゴリは基本1つなので 0 を選択
         categoryTab.getTabAt(selectCategoryIndex.coerceIn(0, categoryTab.tabCount - 1))?.select()
-
-        // Recycler表示更新
-        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     fun switchToSymbolMode(mode: SymbolMode, selectCategoryIndex: Int = 0) {
@@ -1283,7 +1302,6 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         buildCategoryTabs()
         modeTab.getTabAt(mode.ordinal)?.select()
         categoryTab.getTabAt(selectCategoryIndex.coerceIn(0, categoryTab.tabCount - 1))?.select()
-        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     inner class EmojiKitchenStickerAdapter : RecyclerView.Adapter<EmojiKitchenStickerAdapter.StickerViewHolder>() {
@@ -1337,6 +1355,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     fun setCustomTypeface(typeface: android.graphics.Typeface?) {
         this.customTypeface = typeface
         
+        returnButton.typeface = typeface
         symbolAdapter.setCustomTypeface(typeface)
         clipboardAdapter.setCustomTypeface(typeface)
         applyTypefaceToSearchView(typeface)

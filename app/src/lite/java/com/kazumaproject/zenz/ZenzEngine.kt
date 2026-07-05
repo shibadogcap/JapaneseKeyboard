@@ -52,4 +52,26 @@ object ZenzEngine {
         input: String,
         candidates: Array<String>
     ): FloatArray = FloatArray(candidates.size)
+
+    fun predictNextInputText(
+        profile: String,
+        topic: String,
+        style: String,
+        preference: String,
+        leftContext: String,
+        rightContext: String,
+        input: String,
+        count: Int,
+        minLength: Int,
+        maxEntropy: Float,
+        possibleNexts: Array<String>,
+    ): String = ""
+
+    fun vocabSize(): Int = 0
+
+    fun typoEncodeRaw(text: String): IntArray = IntArray(0)
+
+    fun typoTokenToSingleCharacter(tokenId: Int): String = ""
+
+    fun typoNextLogProbs(promptPrefix: String, emittedTokenIds: IntArray): FloatArray = FloatArray(0)
 }

@@ -50,3 +50,8 @@ fun Context.isDarkThemeOn(): Boolean {
     }
 }
 
+fun Int.isLightColor(): Boolean {
+    return androidx.core.graphics.ColorUtils.calculateLuminance(this) > 0.5
+}
+
+

@@ -12,6 +12,7 @@ import android.os.Bundle
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import androidx.preference.CheckBoxPreference
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceCategory
 import androidx.preference.PreferenceFragmentCompat
@@ -214,6 +215,55 @@ class KeyboardThemeFragment : PreferenceFragmentCompat() {
             liquidGlassKeyAlphaPref.isEnabled = isEnabled
             true
         }
+
+        // -------------------------------------------------------
+        // Keyboard UI Appearance Category
+        // -------------------------------------------------------
+        val keyboardUIAppearanceCategory = PreferenceCategory(context).apply {
+            title = "Keyboard UI Appearance"
+            summary = "キーの形状・枠線・ポップアップの設定"
+        }
+        screen.addPreference(keyboardUIAppearanceCategory)
+
+        // Key Border Enable Preference
+        val keyBorderEnablePref = SwitchPreferenceCompat(context).apply {
+            key = "key_border_enable_preference"
+            title = "キーの枠線を表示"
+            summary = "ON: 枠線あり・角立ちキー / OFF: 枠線なし・ピル型キー"
+            setDefaultValue(false)
+        }
+        keyboardUIAppearanceCategory.addPreference(keyBorderEnablePref)
+
+        // Key Corner Radius Preference
+        val keyCornerRadiusPref = SeekBarWithEditTextPreference(context).apply {
+            key = "key_corner_radius_dp_preference"
+            title = "キーの角丸半径 (dp)"
+            min = 0
+            max = 32
+            setDefaultValue(8)
+            showSeekBarValue = true
+        }
+        keyboardUIAppearanceCategory.addPreference(keyCornerRadiusPref)
+
+        // Key Popup Style Preference
+        val keyPopupStylePref = ListPreference(context).apply {
+            key = "key_popup_style_preference"
+            title = "ポップアップスタイル"
+            entries = arrayOf("デフォルト", "ピル型", "円形")
+            entryValues = arrayOf("default", "pill", "circle")
+            setDefaultValue("default")
+            summaryProvider = Preference.SummaryProvider<ListPreference> {
+                it.value?.let { v ->
+                    when (v) {
+                        "default" -> "デフォルト"
+                        "pill" -> "ピル型"
+                        "circle" -> "円形"
+                        else -> v
+                    }
+                }
+            }
+        }
+        keyboardUIAppearanceCategory.addPreference(keyPopupStylePref)
 
         // Default Theme Checkbox
         val defaultPref = CheckBoxPreference(context).apply {

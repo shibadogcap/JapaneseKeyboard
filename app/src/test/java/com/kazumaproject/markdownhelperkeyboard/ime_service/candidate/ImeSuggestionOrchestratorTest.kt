@@ -253,8 +253,21 @@ class ImeSuggestionOrchestratorTest {
                     prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,
                     composingText: String,
                     count: Int,
+                    minLength: Int,
+                    maxEntropy: Float?,
                     possibleNexts: List<String>,
                 ): String = ""
+
+                override suspend fun typoEncodeRaw(text: String): IntArray = IntArray(0)
+
+                override suspend fun typoNextLogProbs(
+                    promptPrefix: String,
+                    emittedTokenIds: IntArray,
+                ): FloatArray? = null
+
+                override fun typoTokenToSingleCharacter(tokenId: Int): Char? = null
+
+                override fun vocabSize(): Int = 0
 
                 override suspend fun scoreCandidates(
                     prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,

@@ -46,6 +46,7 @@ data class ImeCandidatePreferences(
     val isDirectInputMode: Boolean = false,
     val englishCandidateInRoman2KanaInput: Boolean = false,
     val zenzaiInferenceLimit: Int = 1,
+    val experimentalZenzaiPredictiveInput: Boolean = false,
     val maxMemoryCount: Int = 65536,
     val keyboardLanguage: com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions.KeyboardLanguage =
         com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions.KeyboardLanguage.JaJp,

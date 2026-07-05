@@ -20,6 +20,7 @@ class PhysicalKeyboardUiEffectHandler {
         val resizeMainForPhysicalKeyboard: Boolean,
         val resetCandidateHighlight: Boolean,
         val resetHenkanState: Boolean,
+        val windowAnimations: Int,
     )
 
     fun buildUiEffect(
@@ -38,6 +39,7 @@ class PhysicalKeyboardUiEffectHandler {
                 resizeMainForPhysicalKeyboard = false,
                 resetCandidateHighlight = true,
                 resetHenkanState = true,
+                windowAnimations = 0,
             )
         } else {
             PhysicalKeyboardUiEffect(
@@ -51,6 +53,7 @@ class PhysicalKeyboardUiEffectHandler {
                 resizeMainForPhysicalKeyboard = true,
                 resetCandidateHighlight = false,
                 resetHenkanState = false,
+                windowAnimations = android.R.style.Animation_InputMethod,
             )
         }
     }
@@ -66,6 +69,7 @@ class PhysicalKeyboardUiEffectHandler {
      * Legacy collect ブロックと同じ適用順序（async 副作用の前に状態リセット、表示は host 順序通り）。
      */
     fun applyUiEffect(effect: PhysicalKeyboardUiEffect, host: PhysicalKeyboardUiHost) {
+        host.setWindowAnimations(effect.windowAnimations)
         if (effect.physicalKeyboardEnabled) {
             host.clearWindowBackgroundBlur()
             host.setDockInputModeLabel(effect.dockInputModeLabel)
@@ -99,6 +103,7 @@ class PhysicalKeyboardUiEffectHandler {
     }
 
     interface PhysicalKeyboardUiHost {
+        fun setWindowAnimations(animations: Int)
         fun clearWindowBackgroundBlur()
         fun setDockInputModeLabel(label: String)
         fun dismissFloatingKeyboard()

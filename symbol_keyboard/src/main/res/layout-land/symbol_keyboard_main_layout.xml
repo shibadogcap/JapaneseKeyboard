@@ -148,15 +148,14 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <com.google.android.material.imageview.ShapeableImageView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/return_jp_keyboard_button"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@drawable/symbol_keyboard_buttons_bg"
-            android:scaleType="center"
-            android:src="@drawable/language_japanese_kana_24px"
-            android:tint="@color/tab_unselected" />
+            android:gravity="center"
+            android:textColor="@color/tab_unselected" />
 
         <com.google.android.material.tabs.TabLayout
             android:id="@+id/mode_tab_layout"

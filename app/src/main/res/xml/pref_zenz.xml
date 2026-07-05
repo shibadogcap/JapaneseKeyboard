@@ -17,6 +17,13 @@
             app:defaultValue="false" />
 
         <SwitchPreferenceCompat
+            android:dependency="enable_ai_conversion_zenzai_preference"
+            android:key="experimental_zenzai_predictive_input_preference"
+            android:summary="@string/experimental_zenzai_predictive_input_preference_summary"
+            android:title="@string/experimental_zenzai_predictive_input_preference_title"
+            app:defaultValue="false" />
+
+        <SwitchPreferenceCompat
             android:dependency="enable_ai_conversion_zenz_preference"
             android:key="enable_zenz_rerank_preference"
             android:title="@string/enable_zenz_rerank_preference_title"

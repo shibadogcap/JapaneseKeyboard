@@ -48,6 +48,71 @@ class AzooKeyInputTable private constructor(
         return buffer.joinToString("")
     }
 
+    /** typo correction 向け: 生入力列を InputTable 適用しカタカナ化。 */
+    fun convertRawToKatakana(raw: String): String {
+        val buffer = mutableListOf<Char>()
+        raw.lowercase().forEach { apply(buffer, it) }
+        return buffer.joinToString("").hiraganaToKatakana()
+    }
+
+    fun hasContinuation(pending: String): Boolean {
+        if (pending.isEmpty()) return false
+        if (possibleNexts(pending).isNotEmpty()) return true
+        return hasTrieContinuation(pending.lowercase())
+    }
+
+    fun possibleNextDisplays(pending: String): List<String> {
+        if (pending.isEmpty()) return emptyList()
+        val result = linkedSetOf<String>()
+        possibleNexts(pending).forEach { result.add(it.hiraganaToKatakana()) }
+        collectAny1NextDisplays(pending.lowercase(), result)
+        return result.sorted()
+    }
+
+    private fun hasTrieContinuation(pending: String): Boolean {
+        var node = trieRoot
+        for (ch in pending) {
+            node = node.charChildren[ch] ?: return false
+        }
+        return node.charChildren.isNotEmpty() ||
+            node.any1Child != null ||
+            node.separatorChild != null ||
+            node.output != null
+    }
+
+    private fun collectAny1NextDisplays(pending: String, out: MutableSet<String>) {
+        val pendingChars = pending.toList()
+        walkTrieForAny1Suffix(trieRoot, emptyList(), pendingChars, out)
+    }
+
+    private fun walkTrieForAny1Suffix(
+        node: TrieNode,
+        path: List<InputTableKeyElement>,
+        pendingChars: List<Char>,
+        out: MutableSet<String>,
+    ) {
+        if (path.size == pendingChars.size &&
+            path.zip(pendingChars).all { (element, ch) ->
+                element is InputTableKeyElement.Character && element.char == ch
+            }
+        ) {
+            node.any1Child?.output?.let { raw ->
+                val prefix = raw.filter { it != ANY1_PLACEHOLDER }
+                if (prefix.isNotEmpty()) {
+                    out.add(prefix.joinToString("").hiraganaToKatakana())
+                }
+            }
+        }
+        node.charChildren.forEach { (char, child) ->
+            walkTrieForAny1Suffix(
+                child,
+                path + InputTableKeyElement.Character(char),
+                pendingChars,
+                out,
+            )
+        }
+    }
+
     /** カスタムローマ字表（ユーザー編集）から InputTable を構築。 */
     fun toRomajiMap(): Map<String, Pair<String, Int>> {
         return buildRomajiMapFromTrie()

@@ -62,6 +62,7 @@ object ImeCandidatePreferencesBuilder {
             ngWordPattern = ngWordPattern,
             isOrderOverrideEnabled = appPreference.candidate_order_override_enable_preference == true,
             zenzProfile = zenzProfile,
+            experimentalZenzaiPredictiveInput = snapshot.experimentalZenzaiPredictiveInputPreference,
             isCandidateSelectionActive = runtime.isCandidateSelectionActive,
             isConverting = runtime.isConverting,
             isDirectInputMode = runtime.isDirectInputMode,

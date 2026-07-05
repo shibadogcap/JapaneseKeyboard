@@ -33,6 +33,10 @@ import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyMutable
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.CandidateData
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.applyAppropriateActions
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.getClauses
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyExperimentalTypoCorrectionConfig
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidateGenerator
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoGenerationCache
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.toZenzPromptContext
 import javax.inject.Inject
@@ -70,6 +74,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var zenzaiCache: AzooKeyZenzaiCache? = null,
         var stablePredictionCache: StablePredictionCandidateCacheEntry? = null,
         var predictiveInputCache: PredictiveInputCacheEntry? = null,
+        var zenzaiTypoCache: AzooKeyZenzaiTypoGenerationCache = AzooKeyZenzaiTypoGenerationCache(),
     )
 
     private val sessions = mutableMapOf<String, SessionState>()
@@ -90,11 +95,20 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
 
         val facade = dicdataFacadeSource.create(searchMemory)
         val kana2Kanji = AzooKeyKana2Kanji(facade)
-        val needTypo = AzooKeyTypoCorrectionPolicy.isClassicTypoCorrectionEnabled(options.typoCorrectionMode)
+        val inputStyle = inputData.input.lastOrNull()?.inputStyle ?: InputStyle.Direct
+        val typoCorrectedInput = applyZenzaiTypoCorrectionIfEnabled(
+            inputData = inputData,
+            options = options,
+            session = session,
+            sessionState = sessionState,
+            inputStyle = inputStyle,
+        )
+        val needTypo = !options.zenzaiMode.isEnabled &&
+            AzooKeyTypoCorrectionPolicy.isClassicTypoCorrectionEnabled(options.typoCorrectionMode)
         val useMemory = options.learningType != AzooKeyStyleLearningType.Nothing
 
         val convertResult = convertToLattice(
-            inputData = inputData,
+            inputData = typoCorrectedInput,
             options = options,
             session = session,
             sessionState = sessionState,
@@ -104,7 +118,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         ) ?: return emptyResult()
 
         val conversionResult = processResult(
-            inputData = inputData,
+            inputData = typoCorrectedInput,
             latticeResult = convertResult.latticeResult,
             options = options,
             kana2Kanji = kana2Kanji,
@@ -148,6 +162,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         options: ConvertRequestOptions,
         session: ConversionSession,
         inputStyle: InputStyle = composingText.input.lastOrNull()?.inputStyle ?: InputStyle.Direct,
+        minLength: Int = 1,
+        maxEntropy: Float? = null,
     ): PredictNextInputTextResult {
         if (!options.zenzaiMode.isEnabled) {
             invalidatePredictiveInputCache(session.sessionId)
@@ -176,6 +192,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             prompt = options.toZenzPromptContext(leftSideContext),
             composingText = source.baseConvertTarget,
             count = count,
+            minLength = minLength,
+            maxEntropy = maxEntropy,
             possibleNexts = source.possibleNexts,
         )
         val sessionState = sessions.getOrPut(session.sessionId) { SessionState() }
@@ -218,6 +236,78 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         sessions[sessionId]?.predictiveInputCache = null
     }
 
+    /** Swift [KanaKanjiConverter.experimentalRequestTypoCorrection](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
+    suspend fun experimentalRequestTypoCorrection(
+        leftSideContext: String,
+        composingText: ComposingText,
+        options: ConvertRequestOptions,
+        inputStyle: InputStyle,
+        config: AzooKeyExperimentalTypoCorrectionConfig = AzooKeyExperimentalTypoCorrectionConfig(),
+        session: ConversionSession,
+    ): List<AzooKeyZenzaiTypoCandidate> {
+        if (!options.zenzaiMode.isEnabled) return emptyList()
+        val engine = zenzEngine ?: return emptyList()
+        val sessionState = sessions.getOrPut(session.sessionId) { SessionState() }
+        return AzooKeyZenzaiTypoCandidateGenerator.generate(
+            engine = engine,
+            leftSideContext = leftSideContext,
+            composingText = composingText,
+            inputStyle = inputStyle,
+            config = config,
+            cache = sessionState.zenzaiTypoCache,
+            customInputTable = options.roman2KanaTransducer.table,
+        )
+    }
+
+    private suspend fun applyZenzaiTypoCorrectionIfEnabled(
+        inputData: ComposingText,
+        options: ConvertRequestOptions,
+        session: ConversionSession,
+        sessionState: SessionState,
+        inputStyle: InputStyle,
+    ): ComposingText {
+        if (!options.zenzaiMode.isEnabled || zenzEngine == null) {
+            return inputData
+        }
+        val leftSideContext = session.leftSideContext.takeLast(AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX)
+        val candidates = experimentalRequestTypoCorrection(
+            leftSideContext = leftSideContext,
+            composingText = inputData,
+            options = options,
+            inputStyle = inputStyle,
+            session = session,
+        )
+        val best = candidates.firstOrNull() ?: return inputData
+        return rebuildComposingAfterTypoCorrection(
+            original = inputData,
+            candidate = best,
+            inputStyle = inputStyle,
+            roman2Kana = options.roman2KanaTransducer,
+        )
+    }
+
+    private fun rebuildComposingAfterTypoCorrection(
+        original: ComposingText,
+        candidate: AzooKeyZenzaiTypoCandidate,
+        inputStyle: InputStyle,
+        roman2Kana: com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer,
+    ): ComposingText {
+        return when (inputStyle) {
+            InputStyle.Roman2Kana -> {
+                var text = ComposingText.fromConvertTarget("")
+                candidate.correctedInput.forEach { ch ->
+                    text = text.insertRoman2KanaAtCursor(ch.toString(), roman2Kana)
+                }
+                text
+            }
+            else -> {
+                val surface = candidate.convertedText.katakanaToHiragana()
+                if (surface == original.convertTarget) original
+                else ComposingText.fromConvertTarget(surface)
+            }
+        }
+    }
+
     private suspend fun experimentalZenzaiPredictionCandidates(
         composingText: ComposingText,
         options: ConvertRequestOptions,
@@ -234,6 +324,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             leftSideContext = leftSideContext,
             composingText = composingText,
             count = 10,
+            minLength = 1,
+            maxEntropy = 3.0f,
             options = options,
             session = session,
             inputStyle = inputStyle,

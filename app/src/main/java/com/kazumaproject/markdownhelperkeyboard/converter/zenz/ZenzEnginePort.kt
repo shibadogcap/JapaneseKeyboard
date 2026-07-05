@@ -17,8 +17,19 @@ interface ZenzEnginePort {
         prompt: ZenzPromptContext,
         composingText: String,
         count: Int,
+        minLength: Int = 1,
+        maxEntropy: Float? = null,
         possibleNexts: List<String> = emptyList(),
     ): String
+
+    /** typo correction LM（ZenzCompatibleInputLanguageModelContext 相当）。 */
+    suspend fun typoEncodeRaw(text: String): IntArray
+
+    suspend fun typoNextLogProbs(promptPrefix: String, emittedTokenIds: IntArray): FloatArray?
+
+    fun typoTokenToSingleCharacter(tokenId: Int): Char?
+
+    fun vocabSize(): Int
 
     suspend fun candidateEvaluate(
         prompt: ZenzPromptContext,

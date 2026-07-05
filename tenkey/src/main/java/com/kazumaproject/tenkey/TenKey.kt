@@ -11,6 +11,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
+import com.kazumaproject.core.domain.extensions.KeyboardDrawableFactory
 import android.os.Build
 import android.text.SpannableString
 import android.text.Spanned
@@ -25,6 +26,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.widget.PopupWindow
+import androidx.annotation.ColorInt
 import androidx.appcompat.widget.AppCompatButton
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -35,6 +37,7 @@ import androidx.core.view.setPadding
 import androidx.core.widget.ImageViewCompat
 import com.google.android.material.textview.MaterialTextView
 import com.kazumaproject.core.domain.extensions.hide
+import com.kazumaproject.core.domain.extensions.isLightColor
 import com.kazumaproject.core.domain.extensions.layoutXPosition
 import com.kazumaproject.core.domain.extensions.layoutYPosition
 import com.kazumaproject.core.domain.extensions.setBorder
@@ -315,12 +318,16 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private var customSpecialKeyColor: Int = Color.GRAY
     private var customKeyTextColor: Int = Color.BLACK
     private var customSpecialKeyTextColor: Int = Color.BLACK
+    private var customEnterKeyTextColor: Int = Color.WHITE
     private var customPopupBgColor: Int = Color.WHITE
     private var customPopupTextColor: Int = Color.BLACK
     private var liquidGlassEnable: Boolean = false
     private var liquidGlassKeyAlphaEnable: Int = 255
     private var customBorderEnable: Boolean = false
     private var customBorderColor: Int = Color.BLACK
+    private var keyBorderEnable: Boolean = false
+    private var keyCornerRadiusDp: Int = 8
+    private var keyPopupStyle: String = "default"
 
     /** ← NEW: scope tied to this view; cancel it on detach **/
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -820,7 +827,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
         // 文字色を背景の明るさに応じて自動決定（白 または 黒）
         val textColor =
-            if (androidx.core.graphics.ColorUtils.calculateLuminance(targetColor) > 0.5) {
+            if (targetColor.isLightColor()) {
                 ContextCompat.getColor(context, com.kazumaproject.core.R.color.black)
             } else {
                 ContextCompat.getColor(context, com.kazumaproject.core.R.color.white)
@@ -984,7 +991,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         customBorderEnable: Boolean,
         customBorderColor: Int,
         liquidGlassKeyAlphaEnable: Int,
-        borderWidth: Int
+        borderWidth: Int,
+        keyBorderEnable: Boolean = false,
+        keyCornerRadiusDp: Int = 8,
+        keyPopupStyle: String = "default"
     ) {
         // メンバ変数に代入
         this.themeMode = themeMode
@@ -998,6 +1008,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         this.customSpecialKeyColor = customSpecialKeyColor
         this.customKeyTextColor = customKeyTextColor
         this.customSpecialKeyTextColor = customSpecialKeyTextColor
+        this.customEnterKeyTextColor = customEnterKeyTextColor
         this.customPopupBgColor = customPopupBgColor
         this.customPopupTextColor = customPopupTextColor
 
@@ -1006,6 +1017,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         this.customBorderEnable = customBorderEnable
         this.customBorderColor = customBorderColor
         this.liquidGlassKeyAlphaEnable = liquidGlassKeyAlphaEnable
+        this.keyBorderEnable = keyBorderEnable
+        this.keyCornerRadiusDp = keyCornerRadiusDp
+        this.keyPopupStyle = keyPopupStyle
 
         val inflater = LayoutInflater.from(context)
 
@@ -1115,8 +1129,31 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 setMaterialYouTheme(this.isNightMode, true)
             }
         }
+        applyKeyAppearance()
         applyScreenshotPopupAppearance()
+        // Re-apply enter key icon with updated theme colors
+        refreshEnterKeyTint()
         disablePopupAnimations()
+    }
+
+    /**
+     * Re-applies the enter key drawable with the current theme's tint color.
+     * Called after theme changes to refresh the icon color.
+     */
+    private fun refreshEnterKeyTint() {
+        val drawable = lastEnterKeyDrawable
+        if (drawable != null && !hasCustomEnterIcon && customTextEnterStr.isEmpty()) {
+            lastEnterKeyDrawable = null // bypass cache
+            setSideKeyEnterDrawable(drawable)
+        }
+    }
+
+    /**
+     * Applies key appearance based on current theme.
+     * Stub — visual styling is handled by setMaterialYouTheme.
+     */
+    private fun applyKeyAppearance() {
+        // No-op
     }
 
     private fun applyScreenshotPopupAppearance() {
@@ -1463,6 +1500,7 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
                 if (view is AppCompatImageButton) {
                     ImageViewCompat.setImageTintList(view, specialColorStateList)
                 }
+                view.setDrawableAlpha(liquidGlassKeyAlphaEnable)
             }
         }
     }
@@ -2546,51 +2584,32 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
 
                 when (currentInputMode.value) {
                     InputMode.ModeJapanese -> {
-                        popTextTop.setTextFlickTopJapanese(it.id)
-                        popTextLeft.setTextFlickLeftJapanese(it.id)
-                        popTextBottom.setTextFlickBottomJapanese(it.id)
-                        popTextRight.setTextFlickRightJapanese(it.id)
-                        popTextActive.setTextTapJapanese(it.id)
+                        it.setTenKeyTextWhenTapJapanese(it.id)
+                        if (isLongPressed) popTextActive.setTextTapJapanese(it.id)
                     }
 
                     InputMode.ModeEnglish -> {
-                        popTextTop.setTextFlickTopEnglish(it.id)
-                        popTextLeft.setTextFlickLeftEnglish(it.id)
-                        popTextBottom.setTextFlickBottomEnglish(it.id)
-                        popTextRight.setTextFlickRightEnglish(it.id)
-                        popTextActive.setTextTapEnglish(it.id)
+                        it.setTenKeyTextWhenTapEnglish(it.id)
+                        if (isLongPressed) popTextActive.setTextTapEnglish(it.id)
                     }
 
                     InputMode.ModeNumber -> {
-                        popTextTop.setTextFlickTopNumber(it.id)
-                        popTextLeft.setTextFlickLeftNumber(it.id)
-                        popTextBottom.setTextFlickBottomNumber(it.id)
-                        popTextRight.setTextFlickRightNumber(it.id)
-                        popTextActive.setTextTapNumber(it.id)
+                        it.setTenKeyTextWhenTapNumber(it.id)
+                        if (isLongPressed) popTextActive.setTextTapNumber(it.id)
                     }
                 }
-                popupWindowTop.setPopUpWindowTop(context, bubbleViewTop, it, popupViewStyle.sizeScalePercent)
-                popupWindowLeft.setPopUpWindowLeft(context, bubbleViewLeft, it, popupViewStyle.sizeScalePercent)
-                if (popTextBottom.text.isNotEmpty()) {
-                    popupWindowBottom.setPopUpWindowBottom(context, bubbleViewBottom, it, popupViewStyle.sizeScalePercent)
+
+                if (isLongPressed || useScreenshotStyleFlickPopup()) {
+                    showActiveFlickPopup(it, GestureType.Tap)
                 }
-                if (popTextRight.text.isNotEmpty()) {
-                    popupWindowRight.setPopUpWindowRight(context, bubbleViewRight, it, popupViewStyle.sizeScalePercent)
-                }
-                popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
             }
 
-            if (it is AppCompatButton) {
-                if (currentInputMode.value == InputMode.ModeNumber && it == binding.keySmallLetter) {
-                    popTextTop.setTextFlickTopNumber(it.id)
-                    popTextLeft.setTextFlickLeftNumber(it.id)
-                    popTextBottom.setTextFlickBottomNumber(it.id)
-                    popTextRight.setTextFlickRightNumber(it.id)
-                    popupWindowTop.setPopUpWindowTop(context, bubbleViewTop, it, popupViewStyle.sizeScalePercent)
-                    popupWindowLeft.setPopUpWindowLeft(context, bubbleViewLeft, it, popupViewStyle.sizeScalePercent)
-                    popupWindowBottom.setPopUpWindowBottom(context, bubbleViewBottom, it, popupViewStyle.sizeScalePercent)
-                    popupWindowRight.setPopUpWindowRight(context, bubbleViewRight, it, popupViewStyle.sizeScalePercent)
-                    popupWindowActive.setPopUpWindowCenter(context, bubbleViewActive, it, popupViewStyle.sizeScalePercent)
+            if (it is AppCompatButton && currentInputMode.value == InputMode.ModeNumber && it == binding.keySmallLetter) {
+                it.isPressed = true
+                it.text = "("
+                if (isLongPressed) popTextActive.setTextTapNumber(it.id)
+                if (isLongPressed || useScreenshotStyleFlickPopup()) {
+                    showActiveFlickPopup(it, GestureType.Tap)
                 }
             }
         }
@@ -2910,7 +2929,11 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         if (lastEnterKeyDrawable == drawable) return
         lastEnterKeyDrawable = drawable
         prepareSpecialKeyButton(binding.keyEnter)
-        setCenteredIcon(binding.keyEnter, drawable)
+        setCenteredIcon(
+            binding.keyEnter, drawable,
+            tintAsDefaultIcon = true,
+            tintColorOverride = customEnterKeyTextColor,
+        )
     }
 
     /** Retrieve current Enter key drawable **/
@@ -3436,10 +3459,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         return drawable
     }
 
-    private fun tintDefaultSpecialKeyDrawable(drawable: Drawable?): Drawable? {
+    private fun tintDefaultSpecialKeyDrawable(drawable: Drawable?, @ColorInt tintOverride: Int? = null): Drawable? {
         if (drawable == null) return null
         val wrapped = DrawableCompat.wrap(drawable.mutate())
-        val tintColor = if (themeMode == "custom") {
+        val tintColor = tintOverride ?: if (themeMode == "custom") {
             customSpecialKeyTextColor
         } else {
             ContextCompat.getColor(context, com.kazumaproject.core.R.color.keyboard_icon_color)
@@ -3495,9 +3518,10 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
     private fun setCenteredIcon(
         button: AppCompatButton,
         drawable: Drawable?,
-        tintAsDefaultIcon: Boolean = false
+        tintAsDefaultIcon: Boolean = false,
+        @ColorInt tintColorOverride: Int? = null
     ) {
-        val iconDrawable = if (tintAsDefaultIcon) tintDefaultSpecialKeyDrawable(drawable) else drawable
+        val iconDrawable = if (tintAsDefaultIcon) tintDefaultSpecialKeyDrawable(drawable, tintColorOverride) else drawable
         val fittedDrawable = fitDrawable(iconDrawable, specialKeyIconSizeDp)
         button.setCompoundDrawables(null, null, null, null)
         if (fittedDrawable == null) {
@@ -3682,7 +3706,13 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
             } else {
                 if (defaultDrawable != null) {
                     button.text = ""
-                    setCenteredIcon(button, defaultDrawable, tintAsDefaultIcon = true)
+                    val enterTint = if (button == binding.keyEnter) customEnterKeyTextColor else null
+                    setCenteredIcon(
+                        button,
+                        defaultDrawable,
+                        tintAsDefaultIcon = true,
+                        tintColorOverride = enterTint,
+                    )
                 } else {
                     button.text = if (button == binding.keyReturn) "↶" else ""
                     button.setCompoundDrawables(null, null, null, null)
@@ -3746,6 +3776,9 @@ class TenKey(context: Context, attributeSet: AttributeSet) :
         )
         views.forEach { view ->
             when (view) {
+                is com.kazumaproject.core.ui.input_mode_witch.InputModeSwitch -> {
+                    view.setCustomTypeface(typeface)
+                }
                 is androidx.appcompat.widget.AppCompatButton -> {
                     view.setTypeface(typeface)
                 }
