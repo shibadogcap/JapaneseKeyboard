@@ -32,9 +32,10 @@ class SettingMainFragment : Fragment() {
     private val binding get() = _binding!!
 
     private var tabLayoutMediator: TabLayoutMediator? = null
-    private lateinit var searchAdapter: SettingsSearchResultAdapter
+    private var searchAdapter: SettingsSearchResultAdapter? = null
     private var allSearchEntries: List<SettingsPreferenceIndex.Entry> = emptyList()
-    private var pendingScrollPreferenceKey: String? = null
+    private var suppressSearchCallback = false
+    private var searchIndexJobActive = false
 
     @Inject
     lateinit var appPreference: AppPreference
@@ -104,42 +105,72 @@ class SettingMainFragment : Fragment() {
             viewLifecycleOwner,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (binding.settingsSearchResults.isVisible) {
+                    val currentBinding = _binding ?: return
+                    if (currentBinding.settingsSearchResults.isVisible) {
                         clearSettingsSearch()
                         return
                     }
-                    requireActivity().finish()
+                    isEnabled = false
+                    requireActivity().onBackPressedDispatcher.onBackPressed()
                 }
             },
         )
     }
 
     private fun setupSettingsSearch() {
-        allSearchEntries = SettingsPreferenceIndex.load(requireContext())
-        searchAdapter = SettingsSearchResultAdapter { entry ->
+        val adapter = SettingsSearchResultAdapter { entry ->
             handleSearchSelection(entry)
         }
+        searchAdapter = adapter
         binding.settingsSearchResults.layoutManager = LinearLayoutManager(requireContext())
-        binding.settingsSearchResults.adapter = searchAdapter
+        binding.settingsSearchResults.adapter = adapter
 
         binding.settingsSearchInput.doAfterTextChanged { editable ->
+            if (suppressSearchCallback) return@doAfterTextChanged
             val query = editable?.toString().orEmpty()
-            if (query.isBlank()) {
-                clearSettingsSearch()
-                return@doAfterTextChanged
+            updateSearchResults(query)
+        }
+
+        if (searchIndexJobActive) return
+        searchIndexJobActive = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val entries = withContext(Dispatchers.Default) {
+                runCatching { SettingsPreferenceIndex.load(requireContext()) }
+                    .getOrElse { emptyList() }
             }
-            val results = allSearchEntries.filter { it.matches(query) }.take(40)
-            searchAdapter.submitList(results)
-            binding.settingsSearchResults.isVisible = results.isNotEmpty()
-            binding.settingTabLayout.isVisible = false
+            if (_binding == null) return@launch
+            allSearchEntries = entries
+            searchIndexJobActive = false
+            val query = binding.settingsSearchInput.text?.toString().orEmpty()
+            if (query.isNotBlank()) {
+                updateSearchResults(query)
+            }
         }
     }
 
+    private fun updateSearchResults(query: String) {
+        val currentBinding = _binding ?: return
+        if (query.isBlank()) {
+            currentBinding.settingsSearchResults.isVisible = false
+            currentBinding.settingTabLayout.isVisible = true
+            searchAdapter?.submitList(emptyList())
+            return
+        }
+        val results = allSearchEntries.filter { it.matches(query) }.take(40)
+        searchAdapter?.submitList(results)
+        currentBinding.settingsSearchResults.isVisible = results.isNotEmpty()
+        currentBinding.settingTabLayout.isVisible = false
+    }
+
     private fun clearSettingsSearch() {
-        binding.settingsSearchInput.setText("")
-        binding.settingsSearchResults.isVisible = false
-        binding.settingTabLayout.isVisible = true
-        binding.settingsSearchInput.clearFocus()
+        val currentBinding = _binding ?: return
+        suppressSearchCallback = true
+        currentBinding.settingsSearchInput.setText("")
+        suppressSearchCallback = false
+        currentBinding.settingsSearchResults.isVisible = false
+        currentBinding.settingTabLayout.isVisible = true
+        searchAdapter?.submitList(emptyList())
+        currentBinding.settingsSearchInput.clearFocus()
     }
 
     private fun handleSearchSelection(entry: SettingsPreferenceIndex.Entry) {
@@ -148,11 +179,9 @@ class SettingMainFragment : Fragment() {
             navigateSafely(actionId)
             return
         }
-        pendingScrollPreferenceKey = entry.preferenceKey
         binding.settingViewPager.setCurrentItem(entry.tabIndex, true)
         binding.settingViewPager.post {
             scrollToPreferenceInTab(entry.tabIndex, entry.preferenceKey)
-            pendingScrollPreferenceKey = null
         }
     }
 
@@ -165,11 +194,13 @@ class SettingMainFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewLifecycleOwner.lifecycleScope.launch {
-            binding.settingProgressBar.isVisible = true
+            val currentBinding = _binding ?: return@launch
+            currentBinding.settingProgressBar.isVisible = true
             val enabled = withContext(Dispatchers.IO) {
                 isKeyboardBoardEnabled()
             }
-            binding.settingProgressBar.isVisible = false
+            val resumedBinding = _binding ?: return@launch
+            resumedBinding.settingProgressBar.isVisible = false
             if (enabled == false) {
                 navigateSafely(
                     R.id.action_navigation_setting_to_enableKeyboardFragment,
@@ -182,6 +213,8 @@ class SettingMainFragment : Fragment() {
         tabLayoutMediator?.detach()
         tabLayoutMediator = null
         binding.settingViewPager.adapter = null
+        searchAdapter = null
+        searchIndexJobActive = false
         super.onDestroyView()
         _binding = null
     }

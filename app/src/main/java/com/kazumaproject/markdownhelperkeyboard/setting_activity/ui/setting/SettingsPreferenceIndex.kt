@@ -191,6 +191,7 @@ object SettingsPreferenceIndex {
 
                     "Preference", "SwitchPreferenceCompat", "ListPreference", "SeekBarPreference",
                     "EditTextPreference", "MultiSelectListPreference",
+                    "com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting.SeekBarWithEditTextPreference",
                     -> {
                         val key = parser.getAttributeValue(ANDROID_NS, "key")
                             ?: parser.getAttributeValue(APP_NS, "key")
