@@ -6,6 +6,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
 import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyKanaKanjiConverterEngine
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,30 +20,27 @@ class AzooKeyPredictNextInputTextTest {
             private set
 
         override suspend fun generateWithContext(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             maxTokens: Int,
         ): String = predictions.getOrElse(callCount) { "" }.also { callCount++ }
 
         override suspend fun predictNextInputText(
-            profile: String,
-            leftSideContext: String,
+            prompt: ZenzPromptContext,
             composingText: String,
             count: Int,
             possibleNexts: List<String>,
         ): String = predictions.getOrElse(callCount) { "" }.also { callCount++ }
 
         override suspend fun candidateEvaluate(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             candidate: String,
+            requestRichCandidates: Boolean,
         ): String = ""
 
         override suspend fun scoreCandidates(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             candidates: List<String>,
         ): FloatArray = FloatArray(candidates.size)

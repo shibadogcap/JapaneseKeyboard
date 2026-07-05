@@ -105,6 +105,22 @@ class AzooKeyKana2Kanji(
         return result to lattice
     }
 
+    suspend fun buildLatticeWithIncrementalCache(
+        inputData: ComposingText,
+        incrementalCacheInfo: Pair<ComposingText, AzooKeyLattice>,
+        useMemory: Boolean,
+        needTypoCorrection: Boolean = false,
+    ): AzooKeyLattice {
+        return dicdataStore.buildLatticeWithIncrementalCache(
+            inputData = inputData,
+            inputCount = inputData.input.size,
+            surfaceCount = inputData.convertTarget.length,
+            incrementalCacheInfo = incrementalCacheInfo,
+            needTypoCorrection = needTypoCorrection,
+            useMemory = useMemory,
+        )
+    }
+
     fun kana2latticeNoChange(
         previousResult: Pair<ComposingText, AzooKeyLattice>,
     ): Pair<AzooKeyMutableLatticeNode, AzooKeyLattice> {

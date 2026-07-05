@@ -27,6 +27,10 @@ data class ConvertRequestOptions(
     val zenzaiInferenceLimit: Int = 1,
     val requestRichCandidates: Boolean = false,
     val zenzProfile: String = "",
+    val zenzTopic: String = "",
+    val zenzStyle: String = "",
+    val zenzPreference: String = "",
+    val zenzRightSideContext: String = "",
     val specialCandidateProviders: List<SpecialCandidateProvider> =
         com.kazumaproject.markdownhelperkeyboard.converter.candidate.DefaultSpecialCandidateProviders.providers,
     val metadata: Metadata? = null,

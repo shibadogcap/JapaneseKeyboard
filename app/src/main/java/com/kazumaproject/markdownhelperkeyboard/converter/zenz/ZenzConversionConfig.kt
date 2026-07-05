@@ -2,6 +2,9 @@ package com.kazumaproject.markdownhelperkeyboard.converter.zenz
 
 data class ZenzConversionConfig(
     val profile: String = "",
+    val topic: String = "",
+    val style: String = "",
+    val preference: String = "",
     val maxTokens: Int = 32,
     val rerankEnabled: Boolean = false,
     val rerankTopK: Int = 4,

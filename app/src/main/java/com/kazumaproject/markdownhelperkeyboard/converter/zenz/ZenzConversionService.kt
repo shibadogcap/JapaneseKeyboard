@@ -64,11 +64,9 @@ class ZenzConversionService @Inject constructor(
             return null
         }
         val reading = request.insertReading
-        // maxTokens を読み長に比例制限（長文ゴミ抑制）
         val cappedTokens = minOf(request.config.maxTokens, reading.length * MAX_TOKEN_RATIO)
         val generated = zenzEngine.generateWithContext(
-            profile = request.config.profile,
-            leftContext = request.leftContext,
+            prompt = request.config.toZenzPromptContext(request.leftContext),
             inputKatakana = reading.hiraganaToKatakana(),
             maxTokens = cappedTokens,
         )
@@ -96,10 +94,10 @@ class ZenzConversionService @Inject constructor(
         }
 
         val raw = zenzEngine.candidateEvaluate(
-            profile = request.config.profile,
-            leftContext = request.leftContext,
+            prompt = request.config.toZenzPromptContext(request.leftContext),
             inputKatakana = inputKatakanaForEval,
             candidate = candidateForEval,
+            requestRichCandidates = false,
         )
         val parsed = ZenzaiCandidateEvaluationResult.parse(raw)
         return when (parsed) {
@@ -159,8 +157,7 @@ class ZenzConversionService @Inject constructor(
         if (targets.size < 2) return null
 
         val rawScores = zenzEngine.scoreCandidates(
-            profile = request.config.profile,
-            leftContext = request.leftContext,
+            prompt = request.config.toZenzPromptContext(request.leftContext),
             inputKatakana = request.insertReading.hiraganaToKatakana(),
             candidates = targets.map { it.value.string },
         )

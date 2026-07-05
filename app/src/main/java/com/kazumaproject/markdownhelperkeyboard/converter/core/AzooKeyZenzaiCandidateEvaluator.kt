@@ -2,23 +2,25 @@ package com.kazumaproject.markdownhelperkeyboard.converter.core
 
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ZenzaiCandidateEvaluationResult
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.toZenzPromptContext
 
 internal object AzooKeyZenzaiCandidateEvaluator {
     private const val ALIGNMENT_SEPARATOR = "\uEE08"
 
     suspend fun evaluate(
         zenzEngine: ZenzEnginePort,
-        profile: String,
-        leftContext: String,
+        prompt: ZenzPromptContext,
         inputData: ComposingText,
         candidate: Candidate,
         prefixConstraint: AzooKeyPrefixConstraint,
         requestRichCandidates: Boolean,
     ): ZenzaiCandidateEvaluationResult {
-        if (profile.isBlank()) return ZenzaiCandidateEvaluationResult.Error
+        if (prompt.profile.isBlank()) return ZenzaiCandidateEvaluationResult.Error
         val cursorPosition = if (inputData.isAtEndIndex) null else inputData.convertTargetCursorPosition
         val inputKatakana = inputWithAlignmentSeparator(
             inputData.convertTarget.hiraganaToKatakana(),
@@ -32,16 +34,33 @@ internal object AzooKeyZenzaiCandidateEvaluator {
             candidate.string
         }
         @Suppress("UNUSED_PARAMETER")
-        val unusedRich = requestRichCandidates
-        @Suppress("UNUSED_PARAMETER")
         val unusedConstraint = prefixConstraint
         val raw = zenzEngine.candidateEvaluate(
-            profile = profile,
-            leftContext = leftContext,
+            prompt = prompt,
             inputKatakana = inputKatakana,
             candidate = candidateForEval,
+            requestRichCandidates = requestRichCandidates,
         )
         return ZenzaiCandidateEvaluationResult.parse(raw)
+    }
+
+    suspend fun evaluate(
+        zenzEngine: ZenzEnginePort,
+        options: ConvertRequestOptions,
+        leftContext: String,
+        inputData: ComposingText,
+        candidate: Candidate,
+        prefixConstraint: AzooKeyPrefixConstraint,
+        requestRichCandidates: Boolean,
+    ): ZenzaiCandidateEvaluationResult {
+        return evaluate(
+            zenzEngine = zenzEngine,
+            prompt = options.toZenzPromptContext(leftContext),
+            inputData = inputData,
+            candidate = candidate,
+            prefixConstraint = prefixConstraint,
+            requestRichCandidates = requestRichCandidates,
+        )
     }
 
     private fun inputWithAlignmentSeparator(input: String, cursorPosition: Int?): String {

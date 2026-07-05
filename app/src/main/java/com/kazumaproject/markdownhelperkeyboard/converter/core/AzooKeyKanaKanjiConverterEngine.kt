@@ -34,6 +34,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.lattice.CandidateData
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.applyAppropriateActions
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.getClauses
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.toZenzPromptContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -172,8 +173,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
         val source = AzooKeyPredictiveInputResolver.resolve(composingText, options.roman2KanaTransducer)
         val predictedText = engine.predictNextInputText(
-            profile = options.zenzProfile,
-            leftSideContext = leftSideContext,
+            prompt = options.toZenzPromptContext(leftSideContext),
             composingText = source.baseConvertTarget,
             count = count,
             possibleNexts = source.possibleNexts,
@@ -297,7 +297,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             val zenzai = AzooKeyZenzaiConverter(
                 kana2Kanji = kana2Kanji,
                 zenzEngine = zenzEngine,
-                zenzProfile = options.zenzProfile,
+                options = options,
             )
             val result = zenzai.allZenzai(
                 inputData = inputData,

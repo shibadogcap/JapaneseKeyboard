@@ -36,7 +36,7 @@ class ImeCandidateCoordinatorZenzTest {
         )
         val coordinator = ImeCandidateCoordinator(
             kanaKanjiConverter = fakeConverter(dictionary),
-            zenzConversionService = ZenzConversionService(zenzEngine = FakeZenzEnginePort()),
+            zenzConversionService = ZenzConversionService(zenzEngine = FakeZenzEnginePort(generateResult = "生成")),
         )
         val zenz = ImeCandidateZenzContext(
             config = ZenzConversionConfig(rerankEnabled = true),
@@ -61,7 +61,7 @@ class ImeCandidateCoordinatorZenzTest {
     fun rerankCacheRoundTrip() = runTest {
         val coordinator = ImeCandidateCoordinator(
             kanaKanjiConverter = fakeConverter(emptyList()),
-            zenzConversionService = ZenzConversionService(zenzEngine = FakeZenzEnginePort()),
+            zenzConversionService = ZenzConversionService(zenzEngine = FakeZenzEnginePort(generateResult = "生成")),
         )
         val plan = ImeCandidateZenzContext(
             config = ZenzConversionConfig(rerankEnabled = true),
@@ -141,38 +141,6 @@ class ImeCandidateCoordinatorZenzTest {
             override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
         }
     }
-
-    private class FakeZenzEnginePort : com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort {
-        override suspend fun generateWithContext(
-            profile: String,
-            leftContext: String,
-            inputKatakana: String,
-            maxTokens: Int,
-        ): String = "生成"
-
-        override suspend fun predictNextInputText(
-            profile: String,
-            leftSideContext: String,
-            composingText: String,
-            count: Int,
-            possibleNexts: List<String>,
-        ): String = ""
-
-        override suspend fun scoreCandidates(
-            profile: String,
-            leftContext: String,
-            inputKatakana: String,
-            candidates: List<String>,
-        ): FloatArray = FloatArray(candidates.size) { 0.5f }
-
-        override suspend fun candidateEvaluate(
-            profile: String,
-            leftContext: String,
-            inputKatakana: String,
-            candidate: String,
-        ): String = ""
-    }
-
     private fun testPreferences(): ImeCandidatePreferences {
         return ImeCandidatePreferences(
             nBest = 4,

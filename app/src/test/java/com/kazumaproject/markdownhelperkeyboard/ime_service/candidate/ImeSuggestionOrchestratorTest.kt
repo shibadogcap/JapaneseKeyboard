@@ -244,32 +244,29 @@ class ImeSuggestionOrchestratorTest {
         return ZenzConversionService(
             zenzEngine = object : com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort {
                 override suspend fun generateWithContext(
-                    profile: String,
-                    leftContext: String,
+                    prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,
                     inputKatakana: String,
                     maxTokens: Int,
                 ): String = ""
 
                 override suspend fun predictNextInputText(
-                    profile: String,
-                    leftSideContext: String,
+                    prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,
                     composingText: String,
                     count: Int,
                     possibleNexts: List<String>,
                 ): String = ""
 
                 override suspend fun scoreCandidates(
-                    profile: String,
-                    leftContext: String,
+                    prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,
                     inputKatakana: String,
                     candidates: List<String>,
                 ): FloatArray = FloatArray(candidates.size)
 
                 override suspend fun candidateEvaluate(
-                    profile: String,
-                    leftContext: String,
+                    prompt: com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPromptContext,
                     inputKatakana: String,
                     candidate: String,
+                    requestRichCandidates: Boolean,
                 ): String = ""
             },
         )

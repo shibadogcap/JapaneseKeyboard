@@ -81,8 +81,13 @@ object ImeCandidateRequestFactory {
             maxMemoryCount = preferences.maxMemoryCount,
             keyboardLanguage = preferences.keyboardLanguage,
             zenzaiInferenceLimit = preferences.zenzaiInferenceLimit,
-            requestRichCandidates = false,
+            requestRichCandidates = preferences.zenzaiMode.isEnabled &&
+                mode == CandidateRequestMode.Original,
             zenzProfile = preferences.zenzProfile,
+            zenzTopic = preferences.zenzTopic,
+            zenzStyle = preferences.zenzStyle,
+            zenzPreference = preferences.zenzPreference,
+            zenzRightSideContext = preferences.zenzRightSideContext,
         )
     }
 

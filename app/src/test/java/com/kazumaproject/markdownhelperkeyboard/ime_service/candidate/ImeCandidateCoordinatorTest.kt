@@ -82,38 +82,7 @@ class ImeCandidateCoordinatorTest {
         }
         val coordinator = ImeCandidateCoordinator(
             kanaKanjiConverter = fakeConverter,
-            zenzConversionService = ZenzConversionService(
-                zenzEngine = object : com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort {
-                    override suspend fun generateWithContext(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        maxTokens: Int,
-                    ): String = ""
-
-                    override suspend fun predictNextInputText(
-                        profile: String,
-                        leftSideContext: String,
-                        composingText: String,
-                        count: Int,
-                        possibleNexts: List<String>,
-                    ): String = ""
-
-                    override suspend fun scoreCandidates(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        candidates: List<String>,
-                    ): FloatArray = FloatArray(candidates.size)
-
-                    override suspend fun candidateEvaluate(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        candidate: String,
-                    ): String = ""
-                },
-            ),
+            zenzConversionService = ZenzConversionService(FakeZenzEnginePort()),
         )
 
         val result = coordinator.suggest(
@@ -186,38 +155,7 @@ class ImeCandidateCoordinatorTest {
         }
         val coordinator = ImeCandidateCoordinator(
             kanaKanjiConverter = fakeConverter,
-            zenzConversionService = ZenzConversionService(
-                zenzEngine = object : com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort {
-                    override suspend fun generateWithContext(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        maxTokens: Int,
-                    ): String = ""
-
-                    override suspend fun predictNextInputText(
-                        profile: String,
-                        leftSideContext: String,
-                        composingText: String,
-                        count: Int,
-                        possibleNexts: List<String>,
-                    ): String = ""
-
-                    override suspend fun scoreCandidates(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        candidates: List<String>,
-                    ): FloatArray = FloatArray(candidates.size)
-
-                    override suspend fun candidateEvaluate(
-                        profile: String,
-                        leftContext: String,
-                        inputKatakana: String,
-                        candidate: String,
-                    ): String = ""
-                },
-            ),
+            zenzConversionService = ZenzConversionService(FakeZenzEnginePort()),
         )
 
         val result = coordinator.predictPostCommitCandidates(

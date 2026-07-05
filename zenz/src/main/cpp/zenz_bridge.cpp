@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <string>
 #include <vector>
+#include <array>
 #include <mutex>
 #include <atomic>
 #include <cstdint>
@@ -54,7 +55,47 @@ struct CandidateEvaluationResult {
     float score;                // PASS の場合のスコア
     std::string prefix;         // FIX_REQUIRED の場合の接頭辞
     std::string whole_result;   // WHOLE_RESULT の場合の結果
+    std::vector<std::pair<float, std::string>> alternatives; // requestRich 時の ALT 候補
 };
+
+static std::string build_v3_prompt(
+        const std::string &profile,
+        const std::string &topic,
+        const std::string &style,
+        const std::string &preference,
+        const std::string &left,
+        const std::string &right,
+        const std::string &input,
+        bool include_output_tag
+) {
+    const std::string inputTag = u8"\uEE00";
+    const std::string contextTag = u8"\uEE02";
+    const std::string profileTag = u8"\uEE03";
+    const std::string topicTag = u8"\uEE04";
+    const std::string styleTag = u8"\uEE05";
+    const std::string preferenceTag = u8"\uEE06";
+    const std::string rightContextTag = u8"\uEE07";
+    const std::string outputTag = u8"\uEE01";
+
+    std::string conditions;
+    if (!profile.empty()) conditions += profileTag + profile;
+    if (!topic.empty()) conditions += topicTag + topic;
+    if (!style.empty()) conditions += styleTag + style;
+    if (!preference.empty()) conditions += preferenceTag + preference;
+
+    std::string prompt = conditions;
+    if (!left.empty()) {
+        prompt += contextTag + left;
+    }
+    if (!right.empty()) {
+        prompt += rightContextTag + right;
+    }
+    prompt += inputTag + input;
+    if (include_output_tag) {
+        prompt += outputTag;
+    }
+    return prompt;
+}
 
 // ------- JNI文字列変換（重要） -------
 // llama_token_to_piece() が返すバイト列は不正UTF-8になり得るため、NewStringUTFは禁止。
@@ -429,7 +470,8 @@ static std::string pure_greedy_decoding(
 static CandidateEvaluationResult candidate_evaluate(
         const std::string &prompt,
         const std::string &candidate_text,
-        uint64_t request_seq
+        uint64_t request_seq,
+        bool request_rich = false
 ) {
     CandidateEvaluationResult result;
     result.type = CandidateEvaluationResultType::ERROR;
@@ -542,6 +584,50 @@ static CandidateEvaluationResult candidate_evaluate(
         }
         float log_prob = logits[expected_token] - max_logit - logf(sum_exp);
         total_score += log_prob;
+
+        if (request_rich && max_token == expected_token) {
+            struct TokenScore {
+                int32_t tid;
+                float logit;
+            };
+            std::array<TokenScore, 3> top{};
+            for (int32_t tid = 0; tid < n_vocab; ++tid) {
+                const float value = logits[tid];
+                for (auto &slot : top) {
+                    if (slot.tid == 0 || value > slot.logit) {
+                        TokenScore incoming{tid, value};
+                        std::swap(incoming, slot);
+                        if (incoming.tid != 0) {
+                            for (auto &next : top) {
+                                if (&next != &slot && next.tid != 0 && next.logit < incoming.logit) {
+                                    std::swap(incoming, next);
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            std::string accepted_prefix;
+            for (size_t j = prompt_tokens.size(); j < i; ++j) {
+                llama_token t = all_tokens[j];
+                if (!llama_vocab_is_control(g_vocab, t)) {
+                    accepted_prefix += token_to_piece_str(t);
+                }
+            }
+            for (const auto &slot : top) {
+                if (slot.tid <= 0 || slot.tid == expected_token) continue;
+                const float ratio = expf(logits[slot.tid] - max_logit) / sum_exp;
+                if (ratio < 0.1f) continue;
+                std::string alt_prefix = accepted_prefix;
+                if (!llama_vocab_is_control(g_vocab, (llama_token) slot.tid)) {
+                    alt_prefix += token_to_piece_str((llama_token) slot.tid);
+                }
+                if (!alt_prefix.empty()) {
+                    result.alternatives.emplace_back(ratio, alt_prefix);
+                }
+            }
+        }
 
         if (max_token != expected_token) {
             if (max_token == eos) {
@@ -852,6 +938,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_generateWithContextAndConditions(
         jstring jStyle,
         jstring jPreference,
         jstring jLeftContext,
+        jstring jRightContext,
         jstring jInput,
         jint maxTokens
 ) {
@@ -860,6 +947,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_generateWithContextAndConditions(
     const char *c_style = jStyle ? env->GetStringUTFChars(jStyle, nullptr) : nullptr;
     const char *c_preference = jPreference ? env->GetStringUTFChars(jPreference, nullptr) : nullptr;
     const char *c_left = jLeftContext ? env->GetStringUTFChars(jLeftContext, nullptr) : nullptr;
+    const char *c_right = jRightContext ? env->GetStringUTFChars(jRightContext, nullptr) : nullptr;
     const char *c_input = jInput ? env->GetStringUTFChars(jInput, nullptr) : nullptr;
 
     std::string profile = c_profile ? c_profile : "";
@@ -867,6 +955,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_generateWithContextAndConditions(
     std::string style = c_style ? c_style : "";
     std::string preference = c_preference ? c_preference : "";
     std::string left = c_left ? c_left : "";
+    std::string right = c_right ? c_right : "";
     std::string input = c_input ? c_input : "";
 
     if (c_profile) env->ReleaseStringUTFChars(jProfile, c_profile);
@@ -874,28 +963,10 @@ Java_com_kazumaproject_zenz_ZenzEngine_generateWithContextAndConditions(
     if (c_style) env->ReleaseStringUTFChars(jStyle, c_style);
     if (c_preference) env->ReleaseStringUTFChars(jPreference, c_preference);
     if (c_left) env->ReleaseStringUTFChars(jLeftContext, c_left);
+    if (c_right) env->ReleaseStringUTFChars(jRightContext, c_right);
     if (c_input) env->ReleaseStringUTFChars(jInput, c_input);
 
-    const std::string inputTag = u8"\uEE00";
-    const std::string contextTag = u8"\uEE02";
-    const std::string profileTag = u8"\uEE03";
-    const std::string topicTag = u8"\uEE04";
-    const std::string styleTag = u8"\uEE05";
-    const std::string preferenceTag = u8"\uEE06";
-    const std::string outputTag = u8"\uEE01";
-
-    std::string conditions;
-    if (!profile.empty()) conditions += profileTag + profile;
-    if (!topic.empty()) conditions += topicTag + topic;
-    if (!style.empty()) conditions += styleTag + style;
-    if (!preference.empty()) conditions += preferenceTag + preference;
-
-    std::string prompt;
-    if (!left.empty()) {
-        prompt = conditions + contextTag + left + inputTag + input + outputTag;
-    } else {
-        prompt = conditions + inputTag + input + outputTag;
-    }
+    std::string prompt = build_v3_prompt(profile, topic, style, preference, left, right, input, /*include_output_tag=*/true);
 
     uint64_t request_seq = g_request_seq.fetch_add(1, std::memory_order_relaxed) + 1;
     std::string result = pure_greedy_decoding(prompt, /*maxCount=*/maxTokens, request_seq);
@@ -914,14 +985,17 @@ Java_com_kazumaproject_zenz_ZenzEngine_candidateEvaluate(
         jstring jStyle,
         jstring jPreference,
         jstring jLeftContext,
+        jstring jRightContext,
         jstring jInput,
-        jstring jCandidate
+        jstring jCandidate,
+        jboolean jRequestRich
 ) {
     const char *c_profile = jProfile ? env->GetStringUTFChars(jProfile, nullptr) : nullptr;
     const char *c_topic = jTopic ? env->GetStringUTFChars(jTopic, nullptr) : nullptr;
     const char *c_style = jStyle ? env->GetStringUTFChars(jStyle, nullptr) : nullptr;
     const char *c_preference = jPreference ? env->GetStringUTFChars(jPreference, nullptr) : nullptr;
     const char *c_left = jLeftContext ? env->GetStringUTFChars(jLeftContext, nullptr) : nullptr;
+    const char *c_right = jRightContext ? env->GetStringUTFChars(jRightContext, nullptr) : nullptr;
     const char *c_input = jInput ? env->GetStringUTFChars(jInput, nullptr) : nullptr;
     const char *c_candidate = jCandidate ? env->GetStringUTFChars(jCandidate, nullptr) : nullptr;
 
@@ -930,6 +1004,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_candidateEvaluate(
     std::string style = c_style ? c_style : "";
     std::string preference = c_preference ? c_preference : "";
     std::string left = c_left ? c_left : "";
+    std::string right = c_right ? c_right : "";
     std::string input = c_input ? c_input : "";
     std::string candidate = c_candidate ? c_candidate : "";
 
@@ -938,6 +1013,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_candidateEvaluate(
     if (c_style) env->ReleaseStringUTFChars(jStyle, c_style);
     if (c_preference) env->ReleaseStringUTFChars(jPreference, c_preference);
     if (c_left) env->ReleaseStringUTFChars(jLeftContext, c_left);
+    if (c_right) env->ReleaseStringUTFChars(jRightContext, c_right);
     if (c_input) env->ReleaseStringUTFChars(jInput, c_input);
     if (c_candidate) env->ReleaseStringUTFChars(jCandidate, c_candidate);
 
@@ -945,34 +1021,23 @@ Java_com_kazumaproject_zenz_ZenzEngine_candidateEvaluate(
         return toJString(env, "ERROR");
     }
 
-    const std::string inputTag = u8"\uEE00";
-    const std::string contextTag = u8"\uEE02";
-    const std::string profileTag = u8"\uEE03";
-    const std::string topicTag = u8"\uEE04";
-    const std::string styleTag = u8"\uEE05";
-    const std::string preferenceTag = u8"\uEE06";
-    const std::string outputTag = u8"\uEE01";
-
-    std::string conditions;
-    if (!profile.empty()) conditions += profileTag + profile;
-    if (!topic.empty()) conditions += topicTag + topic;
-    if (!style.empty()) conditions += styleTag + style;
-    if (!preference.empty()) conditions += preferenceTag + preference;
-
-    std::string prompt;
-    if (!left.empty()) {
-        prompt = conditions + contextTag + left + inputTag + input + outputTag;
-    } else {
-        prompt = conditions + inputTag + input + outputTag;
-    }
+    std::string prompt = build_v3_prompt(profile, topic, style, preference, left, right, input, /*include_output_tag=*/true);
 
     uint64_t request_seq = g_request_seq.fetch_add(1, std::memory_order_relaxed) + 1;
-    CandidateEvaluationResult eval_result = candidate_evaluate(prompt, candidate, request_seq);
+    CandidateEvaluationResult eval_result = candidate_evaluate(
+            prompt,
+            candidate,
+            request_seq,
+            jRequestRich == JNI_TRUE
+    );
 
     std::string result_str;
     switch (eval_result.type) {
         case CandidateEvaluationResultType::PASS:
             result_str = "PASS:" + std::to_string(eval_result.score);
+            for (const auto &alt : eval_result.alternatives) {
+                result_str += "|ALT:" + std::to_string(alt.first) + ":" + alt.second;
+            }
             break;
         case CandidateEvaluationResultType::FIX_REQUIRED:
             result_str = "FIX:" + eval_result.prefix;          // ここも不正UTF-8が混ざり得るので toJString 必須
@@ -999,6 +1064,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_scoreCandidates(
         jstring jStyle,
         jstring jPreference,
         jstring jLeftContext,
+        jstring jRightContext,
         jstring jInput,
         jobjectArray jCandidates
 ) {
@@ -1018,6 +1084,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_scoreCandidates(
     const char *c_style = jStyle ? env->GetStringUTFChars(jStyle, nullptr) : nullptr;
     const char *c_preference = jPreference ? env->GetStringUTFChars(jPreference, nullptr) : nullptr;
     const char *c_left = jLeftContext ? env->GetStringUTFChars(jLeftContext, nullptr) : nullptr;
+    const char *c_right = jRightContext ? env->GetStringUTFChars(jRightContext, nullptr) : nullptr;
     const char *c_input = jInput ? env->GetStringUTFChars(jInput, nullptr) : nullptr;
 
     std::string profile = c_profile ? c_profile : "";
@@ -1025,6 +1092,7 @@ Java_com_kazumaproject_zenz_ZenzEngine_scoreCandidates(
     std::string style = c_style ? c_style : "";
     std::string preference = c_preference ? c_preference : "";
     std::string left = c_left ? c_left : "";
+    std::string right = c_right ? c_right : "";
     std::string input = c_input ? c_input : "";
 
     if (c_profile) env->ReleaseStringUTFChars(jProfile, c_profile);
@@ -1032,28 +1100,10 @@ Java_com_kazumaproject_zenz_ZenzEngine_scoreCandidates(
     if (c_style) env->ReleaseStringUTFChars(jStyle, c_style);
     if (c_preference) env->ReleaseStringUTFChars(jPreference, c_preference);
     if (c_left) env->ReleaseStringUTFChars(jLeftContext, c_left);
+    if (c_right) env->ReleaseStringUTFChars(jRightContext, c_right);
     if (c_input) env->ReleaseStringUTFChars(jInput, c_input);
 
-    const std::string inputTag = u8"\uEE00";
-    const std::string contextTag = u8"\uEE02";
-    const std::string profileTag = u8"\uEE03";
-    const std::string topicTag = u8"\uEE04";
-    const std::string styleTag = u8"\uEE05";
-    const std::string preferenceTag = u8"\uEE06";
-    const std::string outputTag = u8"\uEE01";
-
-    std::string conditions;
-    if (!profile.empty()) conditions += profileTag + profile;
-    if (!topic.empty()) conditions += topicTag + topic;
-    if (!style.empty()) conditions += styleTag + style;
-    if (!preference.empty()) conditions += preferenceTag + preference;
-
-    std::string prompt;
-    if (!left.empty()) {
-        prompt = conditions + contextTag + left + inputTag + input + outputTag;
-    } else {
-        prompt = conditions + inputTag + input + outputTag;
-    }
+    std::string prompt = build_v3_prompt(profile, topic, style, preference, left, right, input, /*include_output_tag=*/true);
 
     const std::string pre_prompt = preprocess_text(prompt);
     uint64_t request_seq = g_request_seq.fetch_add(1, std::memory_order_relaxed) + 1;

@@ -30,6 +30,7 @@ object ZenzEngine {
         style: String,
         preference: String,
         leftContext: String,
+        rightContext: String,
         input: String,
         maxTokens: Int
     ): String
@@ -40,8 +41,10 @@ object ZenzEngine {
         style: String?,
         preference: String?,
         leftContext: String?,
+        rightContext: String?,
         input: String,
-        candidate: String
+        candidate: String,
+        requestRichCandidates: Boolean,
     ): String
 
     external fun scoreCandidates(
@@ -50,6 +53,7 @@ object ZenzEngine {
         style: String?,
         preference: String?,
         leftContext: String?,
+        rightContext: String?,
         input: String,
         candidates: Array<String>
     ): FloatArray

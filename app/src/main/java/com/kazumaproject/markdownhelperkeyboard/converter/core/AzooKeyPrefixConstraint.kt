@@ -73,4 +73,23 @@ data class AzooKeyZenzaiCache(
             AzooKeyPrefixConstraint()
         }
     }
+
+    suspend fun getPreprocessedLattice(
+        newInputData: ComposingText,
+        kana2Kanji: AzooKeyKana2Kanji,
+        useMemory: Boolean,
+    ): AzooKeyLattice? {
+        val cached = lattice ?: return null
+        if (newInputData.input == inputData.input &&
+            newInputData.convertTarget == inputData.convertTarget
+        ) {
+            cached.resetNodeStates()
+            return cached
+        }
+        return kana2Kanji.buildLatticeWithIncrementalCache(
+            inputData = newInputData,
+            incrementalCacheInfo = inputData to cached,
+            useMemory = useMemory,
+        )
+    }
 }

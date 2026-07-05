@@ -291,6 +291,80 @@ class AzooKeyDicdataFacade(
         return latticeNodes
     }
 
+    suspend fun buildLatticeWithIncrementalCache(
+        inputData: ComposingText,
+        inputCount: Int,
+        surfaceCount: Int,
+        incrementalCacheInfo: Pair<ComposingText, AzooKeyLattice>?,
+        needTypoCorrection: Boolean,
+        useMemory: Boolean,
+    ): AzooKeyLattice {
+        val indexMap = AzooKeyLatticeDualIndexMap(inputData)
+        val latticeIndices = indexMap.indices(inputCount = inputCount, surfaceCount = surfaceCount)
+        if (incrementalCacheInfo == null) {
+            return buildLattice(
+                composingText = inputData,
+                needTypoCorrection = needTypoCorrection,
+                useMemory = useMemory,
+            )
+        }
+
+        val (oldInputData, cachedLattice) = incrementalCacheInfo
+        val commonInputCount = oldInputData.input.zip(inputData.input).takeWhile { (a, b) -> a == b }.count()
+        val commonSurfaceCount = oldInputData.convertTarget.zip(inputData.convertTarget)
+            .takeWhile { (a, b) -> a == b }.count()
+
+        if (commonInputCount != minOf(oldInputData.input.size, inputData.input.size) ||
+            commonSurfaceCount != minOf(oldInputData.convertTarget.length, inputData.convertTarget.length)
+        ) {
+            return buildLattice(
+                composingText = inputData,
+                needTypoCorrection = needTypoCorrection,
+                useMemory = useMemory,
+            )
+        }
+
+        val newLattice = cachedLattice.prefix(commonInputCount, commonSurfaceCount)
+        newLattice.resetNodeStates()
+
+        val additionalRawNodes = latticeIndices.map { index ->
+            val inputRange = index.inputIndex?.let { iIndex ->
+                val start = maxOf(commonInputCount, iIndex)
+                if (start < inputCount) {
+                    InputRange(startIndex = iIndex, endIndexRange = start until inputCount)
+                } else {
+                    null
+                }
+            }
+            val surfaceRange = index.surfaceIndex?.let { sIndex ->
+                val start = maxOf(commonSurfaceCount, sIndex)
+                if (start < surfaceCount) {
+                    SurfaceRange(startIndex = sIndex, endIndexRange = start until surfaceCount)
+                } else {
+                    null
+                }
+            }
+            if (inputRange != null || surfaceRange != null) {
+                lookupDicdata(
+                    composingText = inputData,
+                    inputRange = inputRange,
+                    surfaceRange = surfaceRange,
+                    needTypoCorrection = needTypoCorrection,
+                    useMemory = useMemory,
+                )
+            } else {
+                emptyList()
+            }
+        }
+        val additionalLattice = AzooKeyLattice(
+            inputCount = inputCount,
+            surfaceCount = surfaceCount,
+            rawNodes = additionalRawNodes,
+        )
+        newLattice.merge(additionalLattice)
+        return newLattice
+    }
+
     data class InputRange(val startIndex: Int, val endIndexRange: IntRange?)
     data class SurfaceRange(val startIndex: Int, val endIndexRange: IntRange?)
 

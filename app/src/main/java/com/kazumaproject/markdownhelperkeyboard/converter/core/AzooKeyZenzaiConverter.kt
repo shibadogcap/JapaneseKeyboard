@@ -18,7 +18,7 @@ data class AzooKeyZenzaiResult(
 class AzooKeyZenzaiConverter(
     private val kana2Kanji: AzooKeyKana2Kanji,
     private val zenzEngine: ZenzEnginePort?,
-    private val zenzProfile: String,
+    private val options: ConvertRequestOptions,
 ) {
     suspend fun allZenzai(
         inputData: ComposingText,
@@ -42,10 +42,11 @@ class AzooKeyZenzaiConverter(
                     lattice.resetNodeStates()
                     lattice
                 }
-                else -> cache?.lattice?.takeIf {
-                    latticeInputData.convertTarget.startsWith(cache.inputData.convertTarget) ||
-                        cache.inputData.convertTarget == latticeInputData.convertTarget
-                }?.also { it.resetNodeStates() }
+                else -> cache?.getPreprocessedLattice(
+                    newInputData = latticeInputData,
+                    kana2Kanji = kana2Kanji,
+                    useMemory = useMemory,
+                )
             }
 
             val draftResult = if (constraint.isEmpty) {
@@ -112,10 +113,10 @@ class AzooKeyZenzaiConverter(
                     )
                 }
 
-                val reviewResult = if (zenzEngine != null && zenzProfile.isNotBlank()) {
+                val reviewResult = if (zenzEngine != null && options.zenzProfile.isNotBlank()) {
                     AzooKeyZenzaiCandidateEvaluator.evaluate(
                         zenzEngine = zenzEngine,
-                        profile = zenzProfile,
+                        options = options,
                         leftContext = leftSideContext,
                         inputData = inputData,
                         candidate = candidate,

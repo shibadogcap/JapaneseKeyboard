@@ -11,39 +11,39 @@ import javax.inject.Singleton
 @Singleton
 class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
     override suspend fun generateWithContext(
-        profile: String,
-        leftContext: String,
+        prompt: ZenzPromptContext,
         inputKatakana: String,
         maxTokens: Int,
     ): String = withContext(Dispatchers.Default) {
         ZenzEngine.generateWithContextAndConditions(
-            profile = profile,
-            topic = "",
-            style = "",
-            preference = "",
-            leftContext = leftContext,
+            profile = prompt.profile,
+            topic = prompt.topic,
+            style = prompt.style,
+            preference = prompt.preference,
+            leftContext = prompt.leftContext,
+            rightContext = prompt.rightContext,
             input = inputKatakana,
             maxTokens = maxTokens,
-        ) ?: ""
+        )
     }
 
     override suspend fun predictNextInputText(
-        profile: String,
-        leftSideContext: String,
+        prompt: ZenzPromptContext,
         composingText: String,
         count: Int,
         possibleNexts: List<String>,
     ): String = withContext(Dispatchers.Default) {
         if (count <= 0 || composingText.isEmpty()) return@withContext ""
         val generated = ZenzEngine.generateWithContextAndConditions(
-            profile = profile,
-            topic = "",
-            style = "",
-            preference = "",
-            leftContext = leftSideContext,
+            profile = prompt.profile,
+            topic = prompt.topic,
+            style = prompt.style,
+            preference = prompt.preference,
+            leftContext = prompt.leftContext,
+            rightContext = prompt.rightContext,
             input = composingText.hiraganaToKatakana(),
             maxTokens = count,
-        )?.trim().orEmpty()
+        ).trim()
         if (generated.isEmpty()) return@withContext ""
         if (possibleNexts.isEmpty()) {
             return@withContext generated.take(count)
@@ -61,35 +61,37 @@ class AndroidZenzEngineAdapter @Inject constructor() : ZenzEnginePort {
     }
 
     override suspend fun candidateEvaluate(
-        profile: String,
-        leftContext: String,
+        prompt: ZenzPromptContext,
         inputKatakana: String,
         candidate: String,
+        requestRichCandidates: Boolean,
     ): String = withContext(Dispatchers.Default) {
         ZenzEngine.candidateEvaluate(
-            profile = profile,
-            topic = "",
-            style = "",
-            preference = "",
-            leftContext = leftContext,
+            profile = prompt.profile,
+            topic = prompt.topic,
+            style = prompt.style,
+            preference = prompt.preference,
+            leftContext = prompt.leftContext,
+            rightContext = prompt.rightContext,
             input = inputKatakana,
             candidate = candidate,
-        ) ?: ""
+            requestRichCandidates = requestRichCandidates,
+        )
     }
 
     override suspend fun scoreCandidates(
-        profile: String,
-        leftContext: String,
+        prompt: ZenzPromptContext,
         inputKatakana: String,
         candidates: List<String>,
     ): FloatArray = withContext(Dispatchers.Default) {
         if (candidates.isEmpty()) return@withContext FloatArray(0)
         ZenzEngine.scoreCandidates(
-            profile = profile,
-            topic = "",
-            style = "",
-            preference = "",
-            leftContext = leftContext,
+            profile = prompt.profile,
+            topic = prompt.topic,
+            style = prompt.style,
+            preference = prompt.preference,
+            leftContext = prompt.leftContext,
+            rightContext = prompt.rightContext,
             input = inputKatakana,
             candidates = candidates.toTypedArray(),
         )

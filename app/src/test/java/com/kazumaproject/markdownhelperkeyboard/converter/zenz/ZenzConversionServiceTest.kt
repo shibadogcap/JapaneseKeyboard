@@ -18,34 +18,46 @@ class ZenzConversionServiceTest {
         var evaluateResult: String = "PASS",
         var scoreResult: FloatArray = floatArrayOf(1f, 0.5f),
     ) : ZenzEnginePort {
+        var lastPrompt: ZenzPromptContext? = null
+            private set
+        var lastRequestRich: Boolean = false
+            private set
+
         override suspend fun generateWithContext(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             maxTokens: Int,
-        ): String = generateResult
+        ): String {
+            lastPrompt = prompt
+            return generateResult
+        }
 
         override suspend fun predictNextInputText(
-            profile: String,
-            leftSideContext: String,
+            prompt: ZenzPromptContext,
             composingText: String,
             count: Int,
             possibleNexts: List<String>,
         ): String = generateResult.take(count)
 
         override suspend fun candidateEvaluate(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             candidate: String,
-        ): String = evaluateResult
+            requestRichCandidates: Boolean,
+        ): String {
+            lastPrompt = prompt
+            lastRequestRich = requestRichCandidates
+            return evaluateResult
+        }
 
         override suspend fun scoreCandidates(
-            profile: String,
-            leftContext: String,
+            prompt: ZenzPromptContext,
             inputKatakana: String,
             candidates: List<String>,
-        ): FloatArray = scoreResult
+        ): FloatArray {
+            lastPrompt = prompt
+            return scoreResult
+        }
     }
 
     private fun policy(allows: Boolean = true) = AzooKeyRuntimeConversionPolicy(
@@ -57,74 +69,77 @@ class ZenzConversionServiceTest {
     )
 
     @Test
-    fun shouldGenerateRequiresValidReading() {
-        val service = ZenzConversionService(FakeZenzEngine())
-        val config = ZenzConversionConfig(profile = "test")
-        val request = ZenzGenerationRequest(
-            insertReading = "とう",
-            leftContext = "",
-            config = config,
+    fun forwardsV3PromptMetadata() = runTest {
+        val fake = FakeZenzEngine(generateResult = "候補")
+        val service = ZenzConversionService(fake)
+        val config = ZenzConversionConfig(
+            profile = "profile-a",
+            topic = "topic-b",
+            style = "style-c",
+            preference = "pref-d",
         )
-        assertTrue(service.shouldGenerate(request, policy()))
-        assertFalse(service.shouldGenerate(request.copy(insertReading = "a"), policy()))
-        assertFalse(service.shouldGenerate(request, policy(allows = false)))
+        val result = service.getPredictiveReading(
+            request = ZenzGenerationRequest(
+                insertReading = "てすと",
+                leftContext = "左文脈",
+                config = config,
+            ),
+            policy = policy(),
+        )
+        assertEquals("候補", result)
+        assertEquals("profile-a", fake.lastPrompt?.profile)
+        assertEquals("topic-b", fake.lastPrompt?.topic)
+        assertEquals("style-c", fake.lastPrompt?.style)
+        assertEquals("pref-d", fake.lastPrompt?.preference)
+        assertEquals("左文脈", fake.lastPrompt?.leftContext)
     }
 
     @Test
-    fun evaluateZenzaiWholeResultReturnsGeneratedSurface() = runTest {
-        val service = ZenzConversionService(FakeZenzEngine(evaluateResult = "WHOLE:修正結果"))
-        val results = service.evaluateZenzai(
+    fun shouldGenerateRejectsShortInput() {
+        val service = ZenzConversionService(FakeZenzEngine())
+        assertFalse(
+            service.shouldGenerate(
+                ZenzGenerationRequest("a", leftContext = "", config = ZenzConversionConfig()),
+                policy(),
+            ),
+        )
+    }
+
+    @Test
+    fun evaluateZenzaiReturnsFallbackOnError() = runTest {
+        val service = ZenzConversionService(FakeZenzEngine(evaluateResult = "ERROR"))
+        val candidates = service.evaluateZenzai(
             ZenzPredictiveRequest(
                 insertReading = "てすと",
-                leftContext = "",
                 dictionaryCandidates = listOf(
                     Candidate(
                         string = "テスト",
                         type = CandidateType.NBEST,
                         length = 3u,
                         score = 0,
-                        yomi = "テスト",
+                        value = 0f,
                     ),
                 ),
-                nBest = 4,
-                config = ZenzConversionConfig(profile = "test"),
-            ),
-        )
-        assertEquals("修正結果", results.single().string)
-    }
-
-    @Test
-    fun evaluateZenzaiFixRequiredUsesDictionaryPrefix() = runTest {
-        val service = ZenzConversionService(FakeZenzEngine(evaluateResult = "FIX:東京都"))
-        val results = service.evaluateZenzai(
-            ZenzPredictiveRequest(
-                insertReading = "とうきょう",
                 leftContext = "",
-                dictionaryCandidates = listOf(
-                    Candidate(string = "東京駅", type = CandidateType.NBEST, length = 3u, score = 0, yomi = "トウキョウエキ"),
-                    Candidate(string = "東京都庁", type = CandidateType.NBEST, length = 4u, score = 0, yomi = "トウキョウトチョウ"),
-                ),
-                nBest = 4,
-                config = ZenzConversionConfig(profile = "test"),
+                nBest = 3,
+                config = ZenzConversionConfig(),
             ),
         )
-        assertEquals("東京都庁", results.single().string)
+        assertEquals(1, candidates.size)
+        assertEquals("テスト", candidates.first().string)
     }
 
     @Test
-    fun rerankReturnsNullWhenZenzaiModeEnabled() = runTest {
+    fun rerankReturnsNullWhenDisabled() = runTest {
         val service = ZenzConversionService(FakeZenzEngine())
         val result = service.rerank(
-            ZenzRerankRequest(
+            request = ZenzRerankRequest(
                 insertReading = "てすと",
+                candidates = emptyList(),
                 leftContext = "",
-                candidates = listOf(
-                    Candidate(string = "テスト", type = CandidateType.NBEST, length = 3u, score = 10, yomi = "テスト"),
-                    Candidate(string = "テスト2", type = CandidateType.NBEST, length = 3u, score = 9, yomi = "テスト"),
-                ),
-                config = ZenzConversionConfig(profile = "test", rerankEnabled = true),
+                config = ZenzConversionConfig(rerankEnabled = false),
             ),
-            policy().copy(zenzaiMode = AzooKeyStyleZenzaiMode.On),
+            policy = policy(),
         )
         assertNull(result)
     }
