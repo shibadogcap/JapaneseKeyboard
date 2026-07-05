@@ -813,7 +813,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         when (this.themeMode) {
             "default" -> {
                 setBackgroundColor(Color.TRANSPARENT)
-                setMaterialYouTheme(this.isNightMode, true)
+                setMaterialYouTheme(this.isNightMode, this.isDynamicColorEnabled)
             }
 
             "custom" -> {
@@ -831,7 +831,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
 
             else -> {
                 setBackgroundColor(Color.TRANSPARENT)
-                setMaterialYouTheme(this.isNightMode, true)
+                setMaterialYouTheme(this.isNightMode, this.isDynamicColorEnabled)
             }
         }
         applyCursorArrowDrawables()
@@ -884,7 +884,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             val normalKeys = listOf(
                 key1, key2, key3, key4, key5, key6, key7, key8, key9, key0,
                 keyKuten, keyTouten, keyQ, keyW, keyE, keyR, keyT, keyY, keyU, keyI, keyO, keyP,
-                keyA, keyS, keyD, keyF, keyG, keyH, keyJ, keyK, keyAtMark, keyL,
+                keyA, keyS, keyD, keyF, keyG, keyH, keyJ, keyK, keyL, keyAtMark,
                 keyZ, keyX, keyC, keyV, keyB, keyN, keyM, keySpace
             )
 
@@ -1570,23 +1570,26 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     }
 
     private fun setMaterialYouTheme(
-        isDarkMode: Boolean, isDynamicColorEnable: Boolean
+        isDarkMode: Boolean, @Suppress("UNUSED_PARAMETER") isDynamicColorEnable: Boolean
     ) {
-        if (!isDynamicColorEnable) return
         val bgRes = if (isDarkMode) com.kazumaproject.core.R.drawable.ten_keys_center_bg_material
         else com.kazumaproject.core.R.drawable.ten_keys_center_bg_material_light
 
         val bgSideRes = if (isDarkMode) com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
         else com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
 
+        val keyTextColor = if (isDarkMode) Color.WHITE else Color.BLACK
+        val specialTextColor = if (isDarkMode) Color.WHITE else Color.BLACK
+
         binding.apply {
             listOf(
                 key1, key2, key3, key4, key5, key6, key7, key8, key9, key0,
                 keyKuten, keyTouten, keyQ, keyW, keyE, keyR, keyT, keyY, keyU, keyI, keyO, keyP,
-                keyA, keyS, keyD, keyF, keyG, keyH, keyJ, keyK, keyAtMark, keyL,
+                keyA, keyS, keyD, keyF, keyG, keyH, keyJ, keyK, keyL, keyAtMark,
                 keyZ, keyX, keyC, keyV, keyB, keyN, keyM, keySpace
             ).forEach {
                 it.setBackgroundDrawable(ContextCompat.getDrawable(context, bgRes))
+                it.setTextColor(keyTextColor)
                 if (liquidGlassEnable) {
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
@@ -1597,11 +1600,13 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                 switchNumberLayout, cursorLeft, cursorRight, switchRomajiEnglish
             ).forEach {
                 it.setBackgroundDrawable(ContextCompat.getDrawable(context, bgSideRes))
+                (it as? android.widget.TextView)?.setTextColor(specialTextColor)
                 if (liquidGlassEnable) {
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
             }
             keyReturn.setBackgroundResource(com.kazumaproject.core.R.drawable.enter_key_bg)
+            keyReturn.setTextColor(specialTextColor)
         }
     }
 
@@ -1764,7 +1769,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             binding.keyY, binding.keyU, binding.keyI, binding.keyO, binding.keyP,
             // Middle row
             binding.keyA, binding.keyS, binding.keyD, binding.keyF, binding.keyG,
-            binding.keyH, binding.keyJ, binding.keyK, binding.keyAtMark, binding.keyL,
+            binding.keyH, binding.keyJ, binding.keyK, binding.keyL, binding.keyAtMark,
             // Bottom row
             binding.keyZ, binding.keyX, binding.keyC, binding.keyV, binding.keyB,
             binding.keyN, binding.keyM
@@ -1799,7 +1804,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             binding.keyY, binding.keyU, binding.keyI, binding.keyO, binding.keyP,
             // Middle row
             binding.keyA, binding.keyS, binding.keyD, binding.keyF, binding.keyG,
-            binding.keyH, binding.keyJ, binding.keyK, binding.keyAtMark, binding.keyL,
+            binding.keyH, binding.keyJ, binding.keyK, binding.keyL, binding.keyAtMark,
             // Bottom row
             binding.keyZ, binding.keyX, binding.keyC, binding.keyN, binding.keyM
         )
@@ -1812,7 +1817,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             binding.keyY, binding.keyU, binding.keyI, binding.keyO, binding.keyP,
             // Middle row
             binding.keyA, binding.keyS, binding.keyD, binding.keyF, binding.keyG,
-            binding.keyH, binding.keyJ, binding.keyK, binding.keyAtMark, binding.keyL,
+            binding.keyH, binding.keyJ, binding.keyK, binding.keyL, binding.keyAtMark,
             // Bottom row
             binding.keyZ, binding.keyX, binding.keyC, binding.keyN, binding.keyM
         )

@@ -17139,16 +17139,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainView: MainLayoutBinding,
     ) {
         val requestToken = beginZenzRerankRequest()
-        val original = requestSuggestionResult(insertString, CandidateRequestMode.Original).candidates
         val englishKana = getSuggestionListEnglishKana(insertString)
-        // AzooKey 準拠: 予測変換候補を文字装飾より先に表示する。
-        // original には文字装飾（TypographySpecial）が混じるため分離し、末尾に移動する。
-        val typographySpecialType = com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType.TYPOGRAPHY_SPECIAL
-        val originalNonTypography = original.filter { it.type != typographySpecialType }
-        val originalTypography = original.filter { it.type == typographySpecialType }
-        val merged = (originalNonTypography + englishKana + originalTypography).distinctBy { candidate ->
-            candidate.string to candidate.type
-        }
+        // 英字入力では Zenz / リッチ候補の変換パイプラインを走らせず、英語候補のみ表示する。
+        val merged = englishKana.distinctBy { candidate -> candidate.string to candidate.type }
         applySuggestionResultToView(
             insertString = insertString,
             mainView = mainView,

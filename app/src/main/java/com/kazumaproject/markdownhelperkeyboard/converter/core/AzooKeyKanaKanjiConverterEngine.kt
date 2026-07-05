@@ -565,20 +565,26 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             },
         )
 
+        val richCandidateList = options.requestRichCandidates
+        val firstClauseLimit = if (richCandidateList) 10 else 5
+
         var firstClauseResults = uniqueFirstClauseCandidates
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
-            .take(5)
+            .take(firstClauseLimit)
 
         val seenCandidate = fullCandidates.map { it.string }.toMutableSet()
         val firstClauseCandidates = getUniqueCandidate(uniqueFirstClauseCandidates, seenCandidate)
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
-            .take(5)
+            .take(firstClauseLimit)
         firstClauseCandidates.forEach { seenCandidate.add(it.string) }
 
         val dicCandidates = latticeResult.second[
             AzooKeyLatticeDualIndexMap.DualIndex.BothIndex(inputIdx = 0, surfaceIdx = 0),
         ].let { array ->
             (array.inputIndexedNodes + array.surfaceIndexedNodes).mapNotNull { node ->
+                if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(node.entry.surface)) {
+                    return@mapNotNull null
+                }
                 val length = when (val range = node.range) {
                     is AzooKeyLatticeRange.Surface -> (range.to - range.from).toUByte()
                     is AzooKeyLatticeRange.Input -> node.entry.reading.length.toUByte()
@@ -601,6 +607,12 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             dicCandidates + getAdditionalCandidate(inputData, options),
             seenCandidate,
         ).sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
+
+        if (richCandidateList && inputData.convertTarget.length > 1) {
+            val multiChar = wordCandidates.filter { it.rubyCount > 1 }
+            val singleChar = wordCandidates.filter { it.rubyCount <= 1 }.take(8)
+            wordCandidates = multiChar + singleChar
+        }
         wordCandidates.forEach { seenCandidate.add(it.string) }
 
         val specialCandidates = getUniqueCandidate(
@@ -621,6 +633,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
 
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
+        result = result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         result = result + firstClauseCandidates + wordList
 
         result = result.map { it.applyAppropriateActions().parseTemplate() }

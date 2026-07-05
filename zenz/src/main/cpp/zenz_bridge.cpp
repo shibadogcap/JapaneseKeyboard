@@ -819,6 +819,55 @@ static std::vector<float> typo_next_log_probs_internal(
     return log_probs;
 }
 
+static bool is_japanese_conversion_codepoint(char32_t code) {
+    if (code >= 0x3041 && code <= 0x3096) return true; // hiragana
+    if (code >= 0x30A1 && code <= 0x30F6) return true; // katakana
+    if (code >= 0xFF66 && code <= 0xFF9F) return true; // half-width kana
+    if (code >= 0x4E00 && code <= 0x9FFF) return true; // CJK unified
+    if (code >= 0x3400 && code <= 0x4DBF) return true; // CJK ext A
+    if (code >= 0xAC00 && code <= 0xD7A3) return false; // hangul syllables
+    if (code >= 0x1100 && code <= 0x11FF) return false; // hangul jamo
+    if (code >= 0x3130 && code <= 0x318F) return false; // hangul compat jamo
+    if ((code >= 'a' && code <= 'z') || (code >= 'A' && code <= 'Z')) return true;
+    if ((code >= '0' && code <= '9')) return true;
+    if (code == 0x30FC || code == 0x301C) return true; // prolonged sound marks
+    return code <= 0x7F; // ASCII symbols / space
+}
+
+static bool is_valid_japanese_conversion_text(const std::string &text) {
+    if (text.empty()) return false;
+    size_t index = 0;
+    while (index < text.size()) {
+        unsigned char lead = static_cast<unsigned char>(text[index]);
+        char32_t code = 0;
+        if ((lead & 0x80) == 0) {
+            code = lead;
+            index += 1;
+        } else if ((lead & 0xE0) == 0xC0 && index + 1 < text.size()) {
+            code = ((lead & 0x1F) << 6) |
+                   (static_cast<unsigned char>(text[index + 1]) & 0x3F);
+            index += 2;
+        } else if ((lead & 0xF0) == 0xE0 && index + 2 < text.size()) {
+            code = ((lead & 0x0F) << 12) |
+                   ((static_cast<unsigned char>(text[index + 1]) & 0x3F) << 6) |
+                   (static_cast<unsigned char>(text[index + 2]) & 0x3F);
+            index += 3;
+        } else if ((lead & 0xF8) == 0xF0 && index + 3 < text.size()) {
+            code = ((lead & 0x07) << 18) |
+                   ((static_cast<unsigned char>(text[index + 1]) & 0x3F) << 12) |
+                   ((static_cast<unsigned char>(text[index + 2]) & 0x3F) << 6) |
+                   (static_cast<unsigned char>(text[index + 3]) & 0x3F);
+            index += 4;
+        } else {
+            return false;
+        }
+        if (!is_japanese_conversion_codepoint(code)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // Swift の evaluate_candidate 相当
 static CandidateEvaluationResult candidate_evaluate(
         const std::string &prompt,
@@ -976,7 +1025,7 @@ static CandidateEvaluationResult candidate_evaluate(
                 if (!llama_vocab_is_control(g_vocab, (llama_token) slot.tid)) {
                     alt_prefix += token_to_piece_str((llama_token) slot.tid);
                 }
-                if (!alt_prefix.empty()) {
+                if (!alt_prefix.empty() && is_valid_japanese_conversion_text(alt_prefix)) {
                     result.alternatives.emplace_back(ratio, alt_prefix);
                 }
             }

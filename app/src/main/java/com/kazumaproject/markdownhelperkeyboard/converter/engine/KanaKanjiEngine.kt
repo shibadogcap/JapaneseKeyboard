@@ -324,9 +324,17 @@ class KanaKanjiEngine {
         }
 
         val englishDeferred = if (input.isAllEnglishLetters()) {
-            englishEngine.getCandidates(input)
+            if (::englishEngine.isInitialized) {
+                englishEngine.getCandidates(input)
+            } else {
+                emptyList()
+            }
         } else if (input.isAllFullWidthAscii()) {
-            englishEngine.getCandidates(input.toHankakuAlphabet())
+            if (::englishEngine.isInitialized) {
+                englishEngine.getCandidates(input.toHankakuAlphabet())
+            } else {
+                emptyList()
+            }
         } else {
             emptyList()
         }

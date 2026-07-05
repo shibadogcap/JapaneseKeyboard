@@ -182,6 +182,7 @@ class AzooKeyZenzaiConverter(
     ) {
         for (alternativeConstraint in alternativeConstraints.asReversed()) {
             if (alternativeConstraint.probabilityRatio <= 0.25f) continue
+            if (!AzooKeyJapaneseConversionText.isValidPrefix(alternativeConstraint.prefix)) continue
             val normalized = AzooKeyPrefixConstraint.normalized(
                 constraintBytes = alternativeConstraint.prefix.toByteArray(Charsets.UTF_8),
                 defaultHasEos = false,
@@ -190,7 +191,9 @@ class AzooKeyZenzaiConverter(
             val mostLikely = constructedCandidates
                 .filter { ( _, cand) -> kana2Kanji.candidateSatisfies(cand, normalized) }
                 .maxByOrNull { it.second.value }
-            if (mostLikely != null) {
+            if (mostLikely != null &&
+                AzooKeyJapaneseConversionText.isValidCandidateSurface(mostLikely.second.string)
+            ) {
                 insertedCandidates.add(1, mostLikely)
                 continue
             }
@@ -206,6 +209,7 @@ class AzooKeyZenzaiConverter(
             val candidates = kana2Kanji.getCandidateDataFromResult(draftResult.first)
                 .map { kana2Kanji.processClauseCandidate(it) }
             val best = candidates.withIndex().maxByOrNull { it.value.value } ?: continue
+            if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(best.value.string)) continue
             insertedCandidates.add(1, draftResult.first.prevs[best.index] to best.value)
         }
     }

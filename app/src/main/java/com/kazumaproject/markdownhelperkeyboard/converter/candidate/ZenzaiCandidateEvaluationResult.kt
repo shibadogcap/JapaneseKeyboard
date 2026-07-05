@@ -1,5 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+
 sealed class ZenzaiCandidateEvaluationResult {
     data object Error : ZenzaiCandidateEvaluationResult()
 
@@ -39,9 +41,11 @@ sealed class ZenzaiCandidateEvaluationResult {
                 if (!segment.startsWith("ALT:")) return@mapNotNull null
                 val fields = segment.removePrefix("ALT:").split(':', limit = 2)
                 if (fields.size < 2) return@mapNotNull null
+                val prefix = fields[1]
+                if (!AzooKeyJapaneseConversionText.isValidPrefix(prefix)) return@mapNotNull null
                 AlternativeConstraint(
                     probabilityRatio = fields[0].toFloatOrNull() ?: 0f,
-                    prefix = fields[1],
+                    prefix = prefix,
                 )
             }
             return Pass(score = score, alternativeConstraints = constraints)
