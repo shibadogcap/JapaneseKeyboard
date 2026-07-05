@@ -7,6 +7,8 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateReq
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.ImeCandidateEnvironment
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyKanaKanjiConverterEngine
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzConversionService
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.PostCommitPredictionFacade
@@ -93,6 +95,22 @@ class DefaultKanaKanjiConverter @Inject constructor(
 
     override fun stopComposition(sessionId: String, keepCompletedData: Boolean) {
         converterEngine.stopComposition(sessionId, keepCompletedData)
+    }
+
+    override suspend fun experimentalRequestTypoCorrection(
+        leftSideContext: String,
+        composingText: ComposingText,
+        options: ConvertRequestOptions,
+        inputStyle: InputStyle,
+        session: ConversionSession,
+    ): List<AzooKeyZenzaiTypoCandidate> = withContext(Dispatchers.Default) {
+        converterEngine.experimentalRequestTypoCorrection(
+            leftSideContext = leftSideContext,
+            composingText = composingText,
+            options = options,
+            inputStyle = inputStyle,
+            session = session,
+        )
     }
 
     private fun splitConversionResult(

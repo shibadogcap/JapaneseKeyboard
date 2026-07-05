@@ -87,7 +87,11 @@ object ImeCandidateRequestFactory {
             zenzTopic = preferences.zenzTopic,
             zenzStyle = preferences.zenzStyle,
             zenzPreference = preferences.zenzPreference,
+            zenzLeftSideContext = preferences.zenzLeftSideContext,
             zenzRightSideContext = preferences.zenzRightSideContext,
+            zenzModelIdentity = preferences.zenzModelIdentity,
+            maxLeftSideContextLength = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX,
+            maxRightSideContextLength = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_RIGHT_CONTEXT_MAX,
         )
     }
 

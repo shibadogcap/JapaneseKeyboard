@@ -108,6 +108,7 @@ data class PredictiveInputCacheContext(
     val zenzStyle: String = "",
     val zenzPreference: String = "",
     val zenzRightSideContext: String = "",
+    val zenzModelIdentity: String = "",
 )
 
 data class PredictiveInputCacheEntry(

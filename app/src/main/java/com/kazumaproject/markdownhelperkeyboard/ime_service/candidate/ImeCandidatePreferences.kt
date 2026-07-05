@@ -41,6 +41,8 @@ data class ImeCandidatePreferences(
     val zenzStyle: String = "",
     val zenzPreference: String = "",
     val zenzRightSideContext: String = "",
+    val zenzLeftSideContext: String = "",
+    val zenzModelIdentity: String = "",
     val isCandidateSelectionActive: Boolean = false,
     val isConverting: Boolean = false,
     val isDirectInputMode: Boolean = false,

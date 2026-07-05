@@ -5,6 +5,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.api.KanaKanjiConverter
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyLiveZenzMerge
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
@@ -17,6 +18,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLan
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzConversionService
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzGenerationRequest
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzPredictiveRequest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -302,6 +304,31 @@ class ImeCandidateCoordinator @Inject constructor(
     fun suggestEnglishKana(input: String): List<Candidate> {
         return kanaKanjiConverter.requestEnglishKanaCandidates(
             ImeCandidateRequestFactory.composingText(input),
+        )
+    }
+
+    /**
+     * Swift [KanaKanjiConverter.experimentalRequestTypoCorrection](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。
+     * convertToLattice とは分離した experimental API。
+     */
+    suspend fun requestExperimentalTypoCorrection(
+        composingText: ComposingText,
+        preferences: ImeCandidatePreferences,
+        inputStyle: InputStyle,
+        roman2Kana: AzooKeyRoman2KanaTransducer = AzooKeyRoman2KanaTransducer.Identity,
+    ): List<AzooKeyZenzaiTypoCandidate> {
+        if (!preferences.zenzaiMode.isEnabled) return emptyList()
+        val options = ImeCandidateRequestFactory.buildConvertRequestOptions(
+            preferences = preferences,
+            mode = CandidateRequestMode.Normal,
+            inputStyle = inputStyle,
+        ).copy(roman2KanaTransducer = roman2Kana)
+        return kanaKanjiConverter.experimentalRequestTypoCorrection(
+            leftSideContext = preferences.zenzLeftSideContext,
+            composingText = composingText,
+            options = options,
+            inputStyle = inputStyle,
+            session = conversionSession,
         )
     }
 

@@ -31,6 +31,12 @@ data class ConvertRequestOptions(
     val zenzStyle: String = "",
     val zenzPreference: String = "",
     val zenzRightSideContext: String = "",
+    /** IME が毎リクエスト供給する live left context（Swift versionDependentMode.leftSideContext 相当） */
+    val zenzLeftSideContext: String = "",
+    val maxLeftSideContextLength: Int = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX,
+    val maxRightSideContextLength: Int = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_RIGHT_CONTEXT_MAX,
+    /** Swift PredictiveInputCacheContext.weightURL 相当 */
+    val zenzModelIdentity: String = "",
     val specialCandidateProviders: List<SpecialCandidateProvider> =
         com.kazumaproject.markdownhelperkeyboard.converter.candidate.DefaultSpecialCandidateProviders.providers,
     val metadata: Metadata? = null,

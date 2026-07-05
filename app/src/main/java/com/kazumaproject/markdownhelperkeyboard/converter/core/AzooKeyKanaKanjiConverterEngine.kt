@@ -38,6 +38,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypo
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidateGenerator
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoGenerationCache
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzEnginePort
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzModelIdentity
 import com.kazumaproject.markdownhelperkeyboard.converter.zenz.toZenzPromptContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -157,6 +158,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         minLength: Int = 1,
         maxEntropy: Float? = null,
     ): PredictNextInputTextResult {
+        // Android では zenzaiMode.On を v3 相当として扱う（Swift versionDependentMode.v3 ガード）。
         if (!options.zenzaiMode.isEnabled) {
             invalidatePredictiveInputCache(session.sessionId)
             return PredictNextInputTextResult(predictedText = "", suffixCount = 0)
@@ -165,8 +167,10 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             invalidatePredictiveInputCache(session.sessionId)
             return PredictNextInputTextResult(predictedText = "", suffixCount = 0)
         }
+        val modelIdentity = options.zenzModelIdentity.ifBlank { ZenzModelIdentity.currentModelPath }
+        val trimmedLeft = leftSideContext.takeLast(options.maxLeftSideContextLength)
         val cacheContext = PredictiveInputCacheContext(
-            leftSideContext = leftSideContext,
+            leftSideContext = trimmedLeft,
             inputStyle = inputStyle,
             zenzaiMode = options.zenzaiMode,
             zenzProfile = options.zenzProfile,
@@ -174,6 +178,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             zenzStyle = options.zenzStyle,
             zenzPreference = options.zenzPreference,
             zenzRightSideContext = options.zenzRightSideContext,
+            zenzModelIdentity = modelIdentity,
         )
         cachedPredictiveInputText(
             sessionId = session.sessionId,
@@ -185,7 +190,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
         val source = AzooKeyPredictiveInputResolver.resolve(composingText, options.roman2KanaTransducer)
         val predictedText = engine.predictNextInputText(
-            prompt = options.toZenzPromptContext(leftSideContext),
+            prompt = options.toZenzPromptContext(trimmedLeft),
             composingText = source.baseConvertTarget,
             count = count,
             minLength = minLength,
@@ -244,6 +249,10 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         if (!options.zenzaiMode.isEnabled) return emptyList()
         val engine = zenzEngine ?: return emptyList()
         val sessionState = sessions.getOrPut(session.sessionId) { SessionState() }
+        val modelIdentity = options.zenzModelIdentity.ifBlank { ZenzModelIdentity.currentModelPath }
+        if (sessionState.zenzaiTypoCache.modelIdentity != modelIdentity) {
+            sessionState.zenzaiTypoCache.invalidateForModelChange(modelIdentity)
+        }
         return AzooKeyZenzaiTypoCandidateGenerator.generate(
             engine = engine,
             leftSideContext = leftSideContext,
@@ -266,7 +275,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             return emptyList()
         }
         val inputStyle = composingText.input.lastOrNull()?.inputStyle ?: InputStyle.Direct
-        val leftSideContext = session.leftSideContext.takeLast(AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX)
+        val leftSideContext = options.zenzLeftSideContext.ifBlank {
+            session.leftSideContext
+        }.takeLast(options.maxLeftSideContextLength)
         val prediction = predictNextInputText(
             leftSideContext = leftSideContext,
             composingText = composingText,
@@ -343,9 +354,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
                 options = options,
                 cache = sessionState.zenzaiCache,
                 useMemory = useMemory,
-                leftSideContext = session.leftSideContext.takeLast(
-                    com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX,
-                ),
+                leftSideContext = options.zenzLeftSideContext.ifBlank {
+                    session.leftSideContext
+                }.takeLast(options.maxLeftSideContextLength),
             )
             sessionState.previousInputData = inputData
             sessionState.zenzaiCache = result.cache

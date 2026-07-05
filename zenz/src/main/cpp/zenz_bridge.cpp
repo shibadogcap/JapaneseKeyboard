@@ -520,6 +520,45 @@ static std::string first_utf8_codepoint(const std::string &text) {
     return cps.empty() ? "" : cps.front();
 }
 
+static std::string utf16_codepoint_to_utf8(char16_t c) {
+    std::string out;
+    if (c <= 0x7F) {
+        out.push_back(static_cast<char>(c));
+    } else if (c <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | (c >> 6)));
+        out.push_back(static_cast<char>(0x80 | (c & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xE0 | (c >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((c >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (c & 0x3F)));
+    }
+    return out;
+}
+
+/** Swift ZenzInputTextGenerator.toKatakana() 相当（prefix 判定用）。 */
+static std::string normalize_katakana_utf8(const std::string &text) {
+    const auto cps = utf8_codepoints(text);
+    std::string out;
+    for (const auto &cp : cps) {
+        const auto *p = reinterpret_cast<const uint8_t *>(cp.data());
+        std::u16string u16 = utf8_to_utf16_lossy(p, cp.size());
+        if (u16.size() == 1) {
+            char16_t c = u16[0];
+            if (c >= 0x3041 && c <= 0x3096) {
+                c = static_cast<char16_t>(c + 0x60);
+            } else if (c == 0x309D) {
+                c = 0x30FD;
+            } else if (c == 0x309E) {
+                c = 0x30FE;
+            }
+            out += utf16_codepoint_to_utf8(c);
+        } else {
+            out += cp;
+        }
+    }
+    return out;
+}
+
 static bool is_input_prediction_stop_char(const std::string &ch) {
     static const char *stops[] = {
             u8"、", u8"。", u8"！", u8"？"
@@ -546,7 +585,7 @@ static std::string build_v3_input_prediction_prompt(
             utf8_suffix_chars(topic, 25),
             utf8_suffix_chars(style, 25),
             utf8_suffix_chars(preference, 25),
-            utf8_suffix_chars(left, 40),
+            utf8_suffix_chars(left, 20),
             utf8_prefix_chars(right, 40),
             input,
             /*include_output_tag=*/false
@@ -650,8 +689,11 @@ static std::string input_prediction_greedy_decoding(
         if (possible_nexts.empty()) {
             return true;
         }
+        const std::string normalized = normalize_katakana_utf8(candidate);
         for (const auto &allowed : possible_nexts) {
-            if (!allowed.empty() && allowed.rfind(candidate, 0) == 0) {
+            if (allowed.empty()) continue;
+            const std::string normalized_allowed = normalize_katakana_utf8(allowed);
+            if (normalized_allowed.rfind(normalized, 0) == 0) {
                 return true;
             }
         }

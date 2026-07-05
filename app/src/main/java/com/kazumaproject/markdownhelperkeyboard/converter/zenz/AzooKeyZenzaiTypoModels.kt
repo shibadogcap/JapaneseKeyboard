@@ -31,6 +31,7 @@ class AzooKeyZenzaiTypoGenerationCache {
     var prompt: String = ""
     var promptTokenIds: IntArray = IntArray(0)
     var vocabSize: Int = 0
+    var modelIdentity: String = ""
     val nextLogProbCache: MutableMap<List<Int>, FloatArray> = mutableMapOf()
     val encodeCache: MutableMap<String, IntArray> = mutableMapOf()
     val tokenCharCache: MutableMap<Int, Char?> = mutableMapOf()
@@ -42,6 +43,12 @@ class AzooKeyZenzaiTypoGenerationCache {
         nextLogProbCache.clear()
         encodeCache.clear()
         tokenCharCache.clear()
+    }
+
+    /** Swift getModel 相当: weight URL 変更時に LM キャッシュを破棄する。 */
+    fun invalidateForModelChange(newModelIdentity: String) {
+        invalidateAll()
+        modelIdentity = newModelIdentity
     }
 }
 

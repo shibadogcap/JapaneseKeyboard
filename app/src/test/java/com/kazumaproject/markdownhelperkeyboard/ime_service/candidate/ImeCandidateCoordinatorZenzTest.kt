@@ -1,6 +1,8 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ConversionSession
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertCandidatesResponse
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOptions
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
@@ -139,6 +141,14 @@ class ImeCandidateCoordinatorZenzTest {
             override fun requestEnglishKanaCandidates(input: ComposingText): List<Candidate> = emptyList()
 
             override fun stopComposition(sessionId: String, keepCompletedData: Boolean) = Unit
+
+            override suspend fun experimentalRequestTypoCorrection(
+                leftSideContext: String,
+                composingText: ComposingText,
+                options: ConvertRequestOptions,
+                inputStyle: InputStyle,
+                session: ConversionSession,
+            ): List<com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate> = emptyList()
         }
     }
     private fun testPreferences(): ImeCandidatePreferences {

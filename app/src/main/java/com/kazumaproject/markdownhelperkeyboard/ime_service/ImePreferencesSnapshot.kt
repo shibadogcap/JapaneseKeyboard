@@ -460,6 +460,7 @@ data class ImePreferencesSnapshot(
                     AppVariantConfig.hasZenz && appPreference.enable_zenzai_preference,
                 experimentalZenzaiPredictiveInputPreference =
                     AppVariantConfig.hasZenz &&
+                        appPreference.enable_zenzai_preference &&
                         appPreference.experimental_zenzai_predictive_input_preference,
                 zenzProfilePreference = appPreference.zenz_profile_preference,
                 zenzEnableLongPressConversionPreference =

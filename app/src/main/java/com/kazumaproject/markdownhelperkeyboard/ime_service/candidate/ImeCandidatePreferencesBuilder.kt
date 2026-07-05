@@ -25,6 +25,9 @@ object ImeCandidatePreferencesBuilder {
         toHankakuAlphabet: (String) -> String,
         zenzaiEnabled: Boolean,
         zenzProfile: String = "",
+        zenzLeftSideContext: String = "",
+        zenzRightSideContext: String = "",
+        zenzModelIdentity: String = "",
     ): ImeCandidatePreferences {
         return ImeCandidatePreferences(
             nBest = AzooKeyConversionDefaults.N_BEST,
@@ -62,7 +65,11 @@ object ImeCandidatePreferencesBuilder {
             ngWordPattern = ngWordPattern,
             isOrderOverrideEnabled = appPreference.candidate_order_override_enable_preference == true,
             zenzProfile = zenzProfile,
-            experimentalZenzaiPredictiveInput = snapshot.experimentalZenzaiPredictiveInputPreference,
+            zenzLeftSideContext = zenzLeftSideContext,
+            zenzRightSideContext = zenzRightSideContext,
+            zenzModelIdentity = zenzModelIdentity,
+            experimentalZenzaiPredictiveInput = zenzaiEnabled &&
+                snapshot.experimentalZenzaiPredictiveInputPreference,
             isCandidateSelectionActive = runtime.isCandidateSelectionActive,
             isConverting = runtime.isConverting,
             isDirectInputMode = runtime.isDirectInputMode,

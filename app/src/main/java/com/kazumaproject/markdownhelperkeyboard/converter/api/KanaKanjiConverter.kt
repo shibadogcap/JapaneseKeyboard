@@ -55,6 +55,15 @@ interface KanaKanjiConverter {
         sessionId: String = ConversionSession.DEFAULT_SESSION_ID,
         keepCompletedData: Boolean = false,
     )
+
+    /** Swift [KanaKanjiConverter.experimentalRequestTypoCorrection](https://github.com/azooKey/AzooKeyKanaKanjiConverter) 相当。 */
+    suspend fun experimentalRequestTypoCorrection(
+        leftSideContext: String,
+        composingText: ComposingText,
+        options: ConvertRequestOptions,
+        inputStyle: InputStyle,
+        session: ConversionSession = ConversionSession(sessionId = ConversionSession.DEFAULT_SESSION_ID),
+    ): List<com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate>
 }
 
 data class ConvertCandidatesResponse(

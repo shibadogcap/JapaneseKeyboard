@@ -2,6 +2,8 @@ package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
+import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
+import com.kazumaproject.markdownhelperkeyboard.converter.zenz.AzooKeyZenzaiTypoCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.BunsetsuCandidateResult
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateRequestMode
@@ -189,5 +191,19 @@ class ImeSuggestionOrchestrator(
         )
         onBunsetsuMerged(insertString, result.candidates, result.bunsetsuResult)
         return result
+    }
+
+    suspend fun requestExperimentalTypoCorrection(
+        composingText: ComposingText,
+        preferences: ImeCandidatePreferences,
+        inputStyle: InputStyle,
+        roman2Kana: AzooKeyRoman2KanaTransducer,
+    ): List<AzooKeyZenzaiTypoCandidate> {
+        return coordinator.requestExperimentalTypoCorrection(
+            composingText = composingText,
+            preferences = preferences,
+            inputStyle = inputStyle,
+            roman2Kana = roman2Kana,
+        )
     }
 }

@@ -4460,7 +4460,39 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         event?.let { e ->
             romajiConverter?.handleDelete(e)
         }
+        if (cachedPreferences?.zenzaiEnableStatePreference == true &&
+            shouldUseQwertyRoman2KanaComposing()
+        ) {
+            scope.launch {
+                val remaining = inputString.value
+                if (remaining.isNotEmpty()) {
+                    requestExperimentalTypoCorrectionAfterBackspace(remaining)
+                }
+            }
+        }
         return true
+    }
+
+    private suspend fun requestExperimentalTypoCorrectionAfterBackspace(insertString: String) {
+        val composingText = composingTextForCandidateRequest(insertString)
+        val inputStyle = composingText.input.lastOrNull()?.inputStyle
+            ?: com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle.Direct
+        if (inputStyle != com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle.Roman2Kana) {
+            return
+        }
+        val preferences = buildImeCandidatePreferences()
+        val typoCandidates = suggestionOrchestrator.requestExperimentalTypoCorrection(
+            composingText = composingText,
+            preferences = preferences,
+            inputStyle = inputStyle,
+            roman2Kana = azooKeyRoman2KanaTransducer,
+        )
+        val best = typoCandidates.firstOrNull() ?: return
+        if (best.correctedInput.isBlank() || best.correctedInput == insertString) return
+        _inputString.update { best.correctedInput }
+        syncComposingTextSession(best.correctedInput)
+        val mainView = mainLayoutBinding ?: return
+        setSuggestionOnView(best.correctedInput, mainView)
     }
 
     private fun cancelFloatingCandidateConversion(insertString: String) {
@@ -11402,7 +11434,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun syncZenzLeftContextFromEditor() {
-        val left = getLeftContext(inputLength = 0)
+        val left = truncateZenzLeftContext(getLeftContext(inputLength = 0))
         candidateCoordinator.updateLeftSideContext(left)
         Timber.d("syncZenzLeftContextFromEditor: synced memory leftSideContext to [$left]")
     }
@@ -17137,6 +17169,15 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
         val ngWords =
             if (snapshot.isNgWordEnable) cachedNgWordsStringList else emptyList()
+        val insertLength = inputString.value.length
+        val leftContext = truncateZenzLeftContext(getLeftContext(inputLength = 0))
+        val rightContext = if (snapshot.enableZenzRightContextPreference) {
+            getRightContext(inputLength = insertLength).take(
+                com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_RIGHT_CONTEXT_MAX,
+            )
+        } else {
+            ""
+        }
         return ImeCandidatePreferencesBuilder.build(
             snapshot = snapshot,
             runtime = currentImeCandidateRuntimeSession(ngWords),
@@ -17147,6 +17188,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             toHankakuAlphabet = { input -> input.toHankakuAlphabet() },
             zenzaiEnabled = snapshot.zenzaiEnableStatePreference,
             zenzProfile = snapshot.zenzProfilePreference ?: (zenzProfilePreference ?: ""),
+            zenzLeftSideContext = leftContext,
+            zenzRightSideContext = rightContext,
+            zenzModelIdentity = com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzModelIdentity.currentModelPath,
         )
     }
 
@@ -17205,6 +17249,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             isCandidateSelectionActive = selectMode.value || suggestionClickNum > 0,
             isConverting = isHenkan.get(),
             isDirectInputMode = false,
+            experimentalZenzaiPredictiveInput = zenzaiEnableStatePreference == true &&
+                appPreference.experimental_zenzai_predictive_input_preference,
+            zenzLeftSideContext = truncateZenzLeftContext(getLeftContext(inputLength = 0)),
+            zenzModelIdentity = com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzModelIdentity.currentModelPath,
         )
     }
 
@@ -17271,6 +17319,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mode: CandidateRequestMode,
     ): com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateSuggestResult {
         val startedAt = SystemClock.elapsedRealtime()
+        syncZenzLeftContextFromEditor()
         val composingText = composingTextForCandidateRequest(insertString)
         val result = suggestionOrchestrator.requestSuggestionResult(
             insertString = insertString,
@@ -19822,6 +19871,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             try {
                 val customFile = copyUriToInternalFile(customUri)
                 ZenzEngine.initModel(customFile.absolutePath)
+                com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzModelIdentity.update(customFile.absolutePath)
                 Timber.d("Zenz model initialized with custom file: ${customFile.absolutePath}")
                 return ZenzEngine
             } catch (e: Exception) {
@@ -19834,6 +19884,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         try {
             val defaultFile = ensureDefaultModelCopied()
             ZenzEngine.initModel(defaultFile.absolutePath)
+            com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzModelIdentity.update(defaultFile.absolutePath)
             Timber.d("Zenz model initialized with default asset file: ${defaultFile.absolutePath}")
         } catch (e: Exception) {
             Timber.e(e, "Zenz Failed to init Zenz with default model as well.")

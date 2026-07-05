@@ -153,4 +153,17 @@ class AzooKeyPredictiveInputCacheTest {
         assertEquals(listOf("おはようございます"), candidates.map { it.string })
         assertEquals(ComposingCount.SurfaceCount(4), candidates.first().composingCount)
     }
+
+    @Test
+    fun cacheContextIncludesModelIdentity() {
+        val contextA = PredictiveInputCacheContext(
+            leftSideContext = "左",
+            inputStyle = InputStyle.Direct,
+            zenzaiMode = AzooKeyStyleZenzaiMode.On,
+            zenzModelIdentity = "model-a",
+        )
+        val contextB = contextA.copy(zenzModelIdentity = "model-b")
+        assertEquals("model-a", contextA.zenzModelIdentity)
+        assertEquals(false, contextA == contextB)
+    }
 }
