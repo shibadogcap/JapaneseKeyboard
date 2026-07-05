@@ -13167,6 +13167,94 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
     }
 
+    private val directInsertPunctuation = setOf(
+        '(', ')', '（', '）', '[', ']', '{', '}', '「', '」', '『', '』',
+        '【', '】', '《', '》', '〈', '〉', '［', '］', '＜', '＞', '＝',
+        '＋', '－', '＊', '／', '＼', '｜', '＿', '．', '，', '：', '；',
+        '！', '？', '…', '‥', '・', '、', '。', '"', '\'', '￥', '¥',
+        '@', '#', '$', '%', '&', '*', '+', '=', '-', '_', '/', '\\', '|',
+        '<', '>', '^', '~', '`',
+    )
+
+    private fun candidateReadingLength(candidate: Candidate): Int {
+        val fromData = candidate.data.sumOf { it.reading.length }
+        return if (fromData > 0) fromData else candidate.rubyCount
+    }
+
+    private fun candidateMatchesInsertString(candidate: Candidate, insertString: String): Boolean {
+        return candidateReadingLength(candidate) == insertString.length
+    }
+
+    private fun shouldDirectInsertCharacter(char: Char): Boolean {
+        if (char == '\n' || char == ' ' || char == '　' || char == '\t') return true
+        return char in directInsertPunctuation
+    }
+
+    private fun invalidateLiveConversionAfterInternalCursorMove() {
+        if (isLiveConversionEnable != true) return
+        liveConversionManager.setLastUsedCandidate(null)
+        lastCandidate = null
+    }
+
+    /**
+     * AzooKey [InputManager.input] / [KeyboardActionManager] 相当。
+     * ライブ変換中に記号・括弧などを直接入力する前に、変換中テキストを確定する。
+     */
+    private fun commitLiveConversionBeforeDirectInsert(insertString: String) {
+        if (isLiveConversionEnable != true || insertString.isEmpty()) return
+        val tail = stringInTail.get()
+        val candidate = liveConversionManager.lastUsedCandidate
+        val commitString = when {
+            candidate != null && candidateMatchesInsertString(candidate, insertString) -> {
+                applyCandidateCompleteActions(candidate)
+                getCandidateCommitString(candidate)
+            }
+            !lastCandidate.isNullOrEmpty() && lastCandidate != insertString -> lastCandidate!!
+            else -> insertString
+        }
+        beginBatchEdit()
+        try {
+            setComposingText("", 0)
+            finishComposingText()
+            commitText(commitString + tail, 1)
+        } finally {
+            endBatchEdit()
+        }
+        _inputString.update { "" }
+        stringInTail.set("")
+        lastQwertyRomajiRawInput = null
+        liveConversionManager.stopComposition()
+        candidateCoordinator.resetConversionSession()
+    }
+
+    private fun insertDirectText(text: String) {
+        if (text.isEmpty()) return
+        val insertString = inputString.value
+        if (!isHenkan.get() && insertString.isNotEmpty()) {
+            commitLiveConversionBeforeDirectInsert(insertString)
+        } else {
+            beginBatchEdit()
+            try {
+                setComposingText("", 0)
+                finishComposingText()
+            } finally {
+                endBatchEdit()
+            }
+            _inputString.update { "" }
+            stringInTail.set("")
+            lastQwertyRomajiRawInput = null
+            liveConversionManager.stopComposition()
+            candidateCoordinator.resetConversionSession()
+        }
+        commitText(text, 1)
+        clearSuggestionStateAfterCommit()
+        resetFlagsEnterKeyNotHenkan()
+    }
+
+    private fun insertDirectCharacterFromKeyboard(charToSend: Char) {
+        insertDirectText(charToSend.toString())
+    }
+
     private fun shouldStartLiveConversion(input: String): Boolean {
         if (input.length < liveConversionStartLength) return false
         if (stringInTail.get().isNotEmpty()) return false
@@ -14722,7 +14810,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             setOnSymbolRecyclerViewItemClickListener(object : SymbolRecyclerViewItemClickListener {
                 override fun onClick(symbol: ClickedSymbol) {
                     vibrate()
-                    commitText(symbol.symbol, 1)
+                    insertDirectText(symbol.symbol)
                     CoroutineScope(Dispatchers.IO).launch {
                         clickedSymbolRepository.insert(
                             mode = symbol.mode, symbol = symbol.symbol
@@ -14809,7 +14897,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             setOnSymbolRecyclerViewItemClickListener(object : SymbolRecyclerViewItemClickListener {
                 override fun onClick(symbol: ClickedSymbol) {
                     vibrate()
-                    commitText(symbol.symbol, 1)
+                    insertDirectText(symbol.symbol)
                     CoroutineScope(Dispatchers.IO).launch {
                         clickedSymbolRepository.insert(
                             mode = symbol.mode, symbol = symbol.symbol
@@ -17410,7 +17498,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             val threshold = getAutomaticCompletionStrengthThreshold(liveConversionAutomaticCompletionStrength)
             val autoCompletedClause = liveConversionManager.candidateForCompleteFirstClause(threshold)
             val mainView = mainLayoutBinding
-            if (autoCompletedClause != null && mainView != null) {
+            if (autoCompletedClause != null && mainView != null && stringInTail.get().isEmpty()) {
                 val firstClauseReadingLength = autoCompletedClause.data.sumOf { it.reading.length }
                     .coerceAtMost(insertString.length)
                 val remainingKana = insertString.drop(firstClauseReadingLength)
@@ -18283,10 +18371,31 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      * ライブ変換 ON 時は [LiveConversionManager.lastUsedCandidate] で確定する。
      */
     private fun commitEnterKeyForJapaneseInput(insertString: String) {
-        if (shouldStartLiveConversion(insertString)) {
+        val tail = stringInTail.get()
+        if (isLiveConversionEnable == true && insertString.isNotEmpty()) {
             val candidate = liveConversionManager.lastUsedCandidate
-            if (candidate != null) {
-                val commitString = getCandidateCommitString(candidate)
+            val canUseCandidate = candidate != null && candidateMatchesInsertString(candidate, insertString)
+            val commitString = when {
+                canUseCandidate -> getCandidateCommitString(candidate!!)
+                !lastCandidate.isNullOrEmpty() && lastCandidate != insertString -> lastCandidate!!
+                else -> insertString
+            }
+            if (canUseCandidate) {
+                applyCandidateCompleteActions(candidate!!)
+            }
+            if (tail.isNotEmpty()) {
+                commitPartialCandidateAndPromoteTail(commitString, tail)
+                if (canUseCandidate) {
+                    liveConversionManager.updateAfterFirstClauseCompletion()
+                } else {
+                    liveConversionManager.stopComposition()
+                }
+                candidateCoordinator.resetConversionSession()
+                clearSuggestionStateAfterCommit()
+                resetFlagsEnterKeyNotHenkan()
+                return
+            }
+            if (canUseCandidate || commitString != insertString) {
                 beginBatchEdit()
                 try {
                     setComposingText("", 0)
@@ -18295,7 +18404,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 } finally {
                     endBatchEdit()
                 }
-                applyCandidateCompleteActions(candidate)
                 _inputString.update { "" }
                 lastQwertyRomajiRawInput = null
                 candidateCoordinator.resetConversionSession()
@@ -18306,7 +18414,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
         }
         finishInputEnterKey()
-        setCursorLeftAfterCommitPair(insertString)
+        setCursorLeftAfterCommitPair(insertString + tail)
     }
 
     private fun handleNonEmptyInputEnterKeyFloating(
@@ -18610,6 +18718,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     stringInTail.set(stringBuilder.insert(0, insertString.last()).toString())
                     _inputString.update { it.dropLast(1) }
                 }
+                invalidateLiveConversionAfterInternalCursorMove()
             }
         }
     }
@@ -18721,6 +18830,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 stringInTail.set(insertString.last() + stringInTail.get())
                 _inputString.update { it.dropLast(1) }
             }
+            invalidateLiveConversionAfterInternalCursorMove()
         }
     }
 
@@ -18908,6 +19018,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun setCurrentInputCharacterContinuous(
         char: Char, insertString: String, sb: StringBuilder
     ) {
+        if (shouldDirectInsertCharacter(char)) {
+            insertDirectText(char.toString())
+            return
+        }
         suggestionClickNum = 0
         _dakutenPressed.value = false
         englishSpaceKeyPressed.set(false)
@@ -18927,7 +19041,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun setCurrentInputCharacter(
         char: Char, inputForInsert: String, sb: StringBuilder,
     ) {
-
+        if (shouldDirectInsertCharacter(char)) {
+            insertDirectText(char.toString())
+            return
+        }
         if (inputForInsert.isNotEmpty()) {
             val hiraganaAtInsertPosition = inputForInsert.last()
             val nextChar = hiraganaAtInsertPosition.getNextInputChar(char)
@@ -18959,12 +19076,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             InputTypeForIME.Datetime,
             InputTypeForIME.Time,
                 -> {
-                sendKeyChar(charToSend)
+                insertDirectCharacterFromKeyboard(charToSend)
             }
 
             in passwordTypes -> {
                 if (showCandidateInPasswordPreference == true) {
-                    sendKeyChar(charToSend)
+                    insertDirectCharacterFromKeyboard(charToSend)
                 } else {
                     setCurrentInputCharacterContinuous(
                         charToSend, insertString, sb
@@ -19007,12 +19124,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             InputTypeForIME.Datetime,
             InputTypeForIME.Time,
                 -> {
-                sendKeyChar(charToSend)
+                insertDirectCharacterFromKeyboard(charToSend)
             }
 
             in passwordTypes -> {
                 if (showCandidateInPasswordPreference == true) {
-                    sendKeyChar(charToSend)
+                    insertDirectCharacterFromKeyboard(charToSend)
                 } else {
                     setCurrentInputCharacterContinuous(
                         charToSend, insertString, sb
@@ -19407,6 +19524,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             suggestionAdapter?.updateHighlightPosition(RecyclerView.NO_POSITION)
             isFirstClickHasStringTail = false
         } else {
+            if (shouldDirectInsertCharacter(key)) {
+                insertDirectText(key.toString())
+                return
+            }
             setCurrentInputCharacter(
                 key, insertString, sb
             )
