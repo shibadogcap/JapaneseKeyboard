@@ -1,5 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
+import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+
 interface SpecialCandidateProvider {
     fun provide(request: CandidateRequest): List<Candidate>
 }
@@ -115,7 +117,8 @@ object CommaSeparatedNumberSpecialCandidateProvider : SpecialCandidateProvider {
 
 object TypographySpecialCandidateProvider : SpecialCandidateProvider {
     override fun provide(request: CandidateRequest): List<Candidate> {
-        val input = request.input
+        // AzooKey typographicalCandidates: convertTarget.toKatakana() 後に ASCII 英数字のみ対象
+        val input = request.input.hiraganaToKatakana()
         if (input.isEmpty() || input.any { !it.isAsciiLetterOrDigit() }) {
             return emptyList()
         }

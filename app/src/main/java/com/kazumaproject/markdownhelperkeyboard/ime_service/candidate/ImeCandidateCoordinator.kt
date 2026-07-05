@@ -155,7 +155,7 @@ class ImeCandidateCoordinator @Inject constructor(
             policy = request.runtimeConversionPolicy,
         ) ?: return null
         putCachedZenzRerank(plan.cacheKey, reranked)
-        return reranked
+        return AzooKeyJapaneseConversionText.filterDisplayedCandidates(reranked)
     }
 
     fun prioritizeReranked(

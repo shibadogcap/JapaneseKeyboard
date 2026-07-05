@@ -18,6 +18,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRunti
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessor
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeySupplementaryCandidateAugmenter
 import com.kazumaproject.markdownhelperkeyboard.repository.CandidateOrderOverrideRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +33,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
     private val candidateOrderOverrideRepository: CandidateOrderOverrideRepository,
     private val postCommitPredictionFacade: PostCommitPredictionFacade,
     private val kanaKanjiEngine: KanaKanjiEngine,
+    private val dictionaryAssetProvider: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider,
     private val zenzConversionService: ZenzConversionService,
 ) : KanaKanjiConverter {
 
@@ -86,8 +88,15 @@ class DefaultKanaKanjiConverter @Inject constructor(
             },
         )
         val split = splitConversionResult(engineResult.conversionResult)
-        ConvertCandidatesResponse(
+        val withSupplementary = AzooKeySupplementaryCandidateAugmenter.appendDicdataEmojiInputCandidates(
+            input = input,
             result = split,
+            emojiDictionarySearch = dictionaryAssetProvider.emojiDictionarySearch,
+            kanaKanjiEngine = kanaKanjiEngine,
+            limit = environment.auxiliaryConfig.emojiDictionaryLimit,
+        )
+        ConvertCandidatesResponse(
+            result = withSupplementary,
             bunsetsuResult = engineResult.bunsetsuResult,
             usedAfterComplete = engineResult.usedAfterComplete,
         )

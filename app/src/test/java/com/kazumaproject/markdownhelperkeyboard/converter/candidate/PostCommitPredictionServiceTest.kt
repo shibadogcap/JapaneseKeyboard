@@ -48,7 +48,7 @@ class PostCommitPredictionServiceTest {
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emptyList() },
+                fallbackSearch = { _, _, _ -> emptyList() },
             ),
         )
 
@@ -68,7 +68,7 @@ class PostCommitPredictionServiceTest {
             searchLoudsTransitions = { _, _ -> emptyList() },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emptyList() },
+                fallbackSearch = { _, _, _ -> emptyList() },
             ),
         )
 
@@ -91,7 +91,7 @@ class PostCommitPredictionServiceTest {
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emptyList() },
+                fallbackSearch = { _, _, _ -> emptyList() },
             ),
         )
 
@@ -120,7 +120,7 @@ class PostCommitPredictionServiceTest {
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emptyList() },
+                fallbackSearch = { _, _, _ -> emptyList() },
             ),
         )
 
@@ -148,7 +148,7 @@ class PostCommitPredictionServiceTest {
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emptyList() },
+                fallbackSearch = { _, _, _ -> emptyList() },
             ),
         )
 
@@ -177,7 +177,7 @@ class PostCommitPredictionServiceTest {
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ ->
+                fallbackSearch = { _, _, _ ->
                     emojiSearchCount += 1
                     emptyList()
                 }
@@ -200,7 +200,7 @@ class PostCommitPredictionServiceTest {
             searchLearnedTransitions = { _, _ -> learned },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
-                search = { _, _, _ -> emojiEntries },
+                fallbackSearch = { _, _, _ -> emojiEntries },
             ),
         )
     }

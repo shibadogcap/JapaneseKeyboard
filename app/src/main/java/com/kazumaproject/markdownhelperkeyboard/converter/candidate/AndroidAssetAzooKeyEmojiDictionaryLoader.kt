@@ -18,6 +18,14 @@ object AndroidAssetAzooKeyEmojiDictionaryLoader {
         )
     }
 
+    fun createTextReplacer(
+        assets: AssetManager,
+        textReplacerFilePath: String = DefaultTextReplacerEmojiDictionaryPath,
+    ): AzooKeyTextReplacer {
+        val textReplacerText = readAssetText(assets, textReplacerFilePath) ?: return AzooKeyTextReplacer.empty
+        return AzooKeyTextReplacer.fromEmojiTextReplacerText(textReplacerText)
+    }
+
     private fun readAssetText(
         assets: AssetManager,
         filePath: String,
