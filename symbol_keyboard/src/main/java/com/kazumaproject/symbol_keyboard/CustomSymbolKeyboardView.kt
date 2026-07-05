@@ -142,6 +142,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private var clipboardClearAllListener: (() -> Unit)? = null
     private var clipboardSearchListener: ((String) -> Unit)? = null
 
+    private var emojiControlLayout: LinearLayout? = null
+    private var emojiSearchView: androidx.appcompat.widget.SearchView? = null
+    private var emojiSearchListener: ((String) -> Unit)? = null
+    private var emojiSearchResults: List<String>? = null
+
     init {
         inflate(context, R.layout.symbol_keyboard_main_layout, this)
 
@@ -192,6 +197,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         clipboardSearchView = findViewById(R.id.clipboard_search_view)
         clipboardClearAllButton = findViewById(R.id.clipboard_clear_all_button)
 
+        emojiControlLayout = findViewById(R.id.emoji_control_layout)
+        emojiSearchView = findViewById(R.id.emoji_search_view)
+
         clipboardClearAllButton?.setOnClickListener {
             clipboardClearAllListener?.invoke()
         }
@@ -203,6 +211,23 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 clipboardSearchListener?.invoke(newText.orEmpty())
+                return true
+            }
+        })
+
+        emojiSearchView?.setOnQueryTextListener(object : androidx.appcompat.widget.SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean = false
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                val query = newText.orEmpty()
+                emojiSearchListener?.invoke(query)
+                if (query.isBlank()) {
+                    emojiSearchResults = null
+                    if (currentMode == SymbolMode.EMOJI) {
+                        categoryTab.visibility = View.VISIBLE
+                        updateSymbolsForCategory(categoryTab.selectedTabPosition)
+                    }
+                }
                 return true
             }
         })
@@ -516,6 +541,20 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             androidx.appcompat.R.id.search_close_btn
         )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
+        emojiSearchView?.background = buttonBackground
+        emojiSearchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text
+        )?.apply {
+            setTextColor(iconColor)
+            setHintTextColor(hintColor)
+        }
+        emojiSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_mag_icon
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        emojiSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_close_btn
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
         emojiKitchenResetButton?.background = buttonBackground
         emojiKitchenResetButton?.setTextColor(iconColor)
         emojiKitchenPreviewLabel?.setTextColor(iconColor)
@@ -748,6 +787,23 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
     fun setOnClipboardItemLongClickListener(l: ClipboardItemLongClickListener) {
         clipboardItemLongClickListener = l
+    }
+
+    fun setOnEmojiSearchListener(listener: (String) -> Unit) {
+        emojiSearchListener = listener
+    }
+
+    fun displayEmojiSearchResults(results: List<String>) {
+        emojiSearchResults = results
+        if (currentMode != SymbolMode.EMOJI) return
+        val hasQuery = !emojiSearchView?.query.isNullOrBlank()
+        categoryTab.visibility = if (hasQuery) View.GONE else View.VISIBLE
+        refreshEmojiGrid()
+    }
+
+    private fun refreshEmojiGrid() {
+        if (currentMode != SymbolMode.EMOJI) return
+        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     fun setOnClipboardControlListener(onClearAll: () -> Unit, onSearch: (String) -> Unit) {
@@ -1059,13 +1115,27 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     }
 
     private fun updateSymbolsForCategory(index: Int) {
-        if (currentMode == SymbolMode.CLIPBOARD) {
-            clipboardControlLayout?.visibility = View.VISIBLE
-            categoryTab.visibility = View.GONE
-        } else {
-            clipboardControlLayout?.visibility = View.GONE
-            clipboardSearchView?.setQuery("", false)
-            categoryTab.visibility = View.VISIBLE
+        when (currentMode) {
+            SymbolMode.CLIPBOARD -> {
+                clipboardControlLayout?.visibility = View.VISIBLE
+                emojiControlLayout?.visibility = View.GONE
+                categoryTab.visibility = View.GONE
+            }
+            SymbolMode.EMOJI -> {
+                clipboardControlLayout?.visibility = View.GONE
+                clipboardSearchView?.setQuery("", false)
+                emojiControlLayout?.visibility = View.VISIBLE
+                val hasQuery = !emojiSearchView?.query.isNullOrBlank()
+                categoryTab.visibility = if (hasQuery) View.GONE else View.VISIBLE
+            }
+            else -> {
+                clipboardControlLayout?.visibility = View.GONE
+                emojiControlLayout?.visibility = View.GONE
+                clipboardSearchView?.setQuery("", false)
+                emojiSearchView?.setQuery("", false)
+                emojiSearchResults = null
+                categoryTab.visibility = View.VISIBLE
+            }
         }
 
         skinTonePopup?.dismiss()
@@ -1096,19 +1166,31 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         gridLM.spanSizeLookup = GridLayoutManager.DefaultSpanSizeLookup()
                         val listForPaging = when (currentMode) {
                             SymbolMode.EMOJI -> {
-                                val hasHistory = historyEmojiList.isNotEmpty()
-                                if (hasHistory && index == 0) historyEmojiList
-                                else {
-                                    val adj = index - if (hasHistory) 1 else 0
-                                    emojiMap.keys.elementAtOrNull(adj)
-                                        ?.let {
-                                            emojiMap[it]?.map { e ->
-                                                EmojiSkinToneSupport.withSkinTone(
-                                                    e.symbol,
-                                                    this@CustomSymbolKeyboardView.defaultEmojiSkinTone
-                                                )
-                                            }
-                                        } ?: emptyList()
+                                val searchResults = emojiSearchResults
+                                if (!searchResults.isNullOrEmpty()) {
+                                    searchResults.map { symbol ->
+                                        EmojiSkinToneSupport.withSkinTone(
+                                            symbol,
+                                            this@CustomSymbolKeyboardView.defaultEmojiSkinTone,
+                                        )
+                                    }
+                                } else if (!emojiSearchView?.query.isNullOrBlank()) {
+                                    emptyList()
+                                } else {
+                                    val hasHistory = historyEmojiList.isNotEmpty()
+                                    if (hasHistory && index == 0) historyEmojiList
+                                    else {
+                                        val adj = index - if (hasHistory) 1 else 0
+                                        emojiMap.keys.elementAtOrNull(adj)
+                                            ?.let {
+                                                emojiMap[it]?.map { e ->
+                                                    EmojiSkinToneSupport.withSkinTone(
+                                                        e.symbol,
+                                                        this@CustomSymbolKeyboardView.defaultEmojiSkinTone
+                                                    )
+                                                }
+                                            } ?: emptyList()
+                                    }
                                 }
                             }
 

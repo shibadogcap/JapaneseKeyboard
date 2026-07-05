@@ -403,6 +403,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     lateinit var kanaKanjiEngine: KanaKanjiEngine
 
     @Inject
+    lateinit var azooKeyDictionaryAssetProvider: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider
+
+    @Inject
     lateinit var dictionarySourceResolver: DictionarySourceResolver
 
     @Inject
@@ -819,6 +822,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private val keyboardSymbolViewState: StateFlow<SymbolKeyboardState> =
         _keyboardSymbolViewState.asStateFlow()
     private val clipboardSearchQuery = MutableStateFlow("")
+    private val emojiSearchQuery = MutableStateFlow("")
     private val _tenKeyQWERTYMode = MutableStateFlow<TenKeyQWERTYMode>(TenKeyQWERTYMode.Default)
     private val qwertyMode = _tenKeyQWERTYMode.asStateFlow()
     private val _physicalKeyboardEnable = MutableSharedFlow<Boolean>(replay = 1)
@@ -1155,6 +1159,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         private const val ZENZ_RERANK_ALPHA = 0.7f
         private const val ZENZ_RERANK_BETA = 0.3f
         private const val ZENZ_LEFT_CONTEXT_MAX = 20
+        private const val CANDIDATE_REFRESH_DEBOUNCE_MS = 24L
         private val DEFAULT_DELETE_KEY_FLICK_TARGETS =
             DeleteKeyFlickDeleteTargetRepository.DEFAULT_TARGET_SYMBOLS.toSet()
         private val ALWAYS_DELETE_KEY_FLICK_BOUNDARIES = setOf(' ', '　', '\n')
@@ -1254,6 +1259,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private var zenzContextCacheInput: String? = null
     private var zenzContextCacheHardwareKeyboard: Boolean? = null
     private var zenzContextCache: com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateZenzContext? = null
+    private var cachedCandidateLeftContext: String = ""
 
     private var previousTenKeyQWERTYMode: TenKeyQWERTYMode? = null
 
@@ -11045,7 +11051,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
 
                     CandidateShowFlag.Updating -> {
-                        setSuggestionOnView(insertString, mainView)
+                        delay(CANDIDATE_REFRESH_DEBOUNCE_MS)
+                        setSuggestionOnView(inputString.value, mainView)
                     }
                 }
                 prevFlag = currentFlag
@@ -11222,6 +11229,26 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 renderCurrentKeyboardStateOnActiveSurface()
                 updateFloatingKeyboardSizeForMode(it)
             }
+        }
+
+        launch {
+            emojiSearchQuery
+                .debounce(200)
+                .collectLatest { query ->
+                    val results = if (query.isBlank()) {
+                        emptyList()
+                    } else {
+                        withContext(Dispatchers.Default) {
+                            azooKeyDictionaryAssetProvider.emojiDictionarySearch
+                                ?.searchInputPrefix(query, limit = 80)
+                                ?.map { entry -> entry.surface }
+                                ?.distinct()
+                                .orEmpty()
+                        }
+                    }
+                    mainLayoutBinding?.keyboardSymbolView?.displayEmojiSearchResults(results)
+                    floatingKeyboardBinding?.floatingSymbolKeyboard?.displayEmojiSearchResults(results)
+                }
         }
 
         launch {
@@ -11419,7 +11446,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 zenzCandidates = resultFromZenz,
                             )
                             if (mergedCandidates != null) {
-                                suggestionAdapter?.suggestions = mergedCandidates
+                                suggestionAdapter?.suggestions =
+                                    com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+                                        .filterDisplayedCandidates(mergedCandidates)
                             }
                         } else {
                             if (inputString.value.isEmpty()) {
@@ -11441,9 +11470,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         launch {
             var lastString = ""
             inputString.collectLatest { string ->
-                if (string.length < lastString.length && string.isNotEmpty()) {
-                    delay(50)
-                }
                 lastString = string
                 processInputString(string, mainView)
             }
@@ -11454,7 +11480,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun beginZenzRerankRequest(): Long {
         zenzRerankJob?.cancel()
         zenzRerankJob = null
-        clearZenzContextCache()
         zenzRerankRequestToken += 1L
         return zenzRerankRequestToken
     }
@@ -11484,6 +11509,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun syncZenzLeftContextFromEditor() {
         val left = truncateZenzLeftContext(getLeftContext(inputLength = 0))
+        cachedCandidateLeftContext = left
         candidateCoordinator.updateLeftSideContext(left)
         Timber.d("syncZenzLeftContextFromEditor: synced memory leftSideContext to [$left]")
     }
@@ -11786,9 +11812,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 return@launch
             }
             if (candidates.isNotEmpty()) {
-                suggestionAdapter?.suggestions = candidates
-                suggestionAdapterFull?.suggestions = candidates
-                filteredCandidateList = candidates
+                val filtered = com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+                    .filterDisplayedCandidates(candidates)
+                suggestionAdapter?.suggestions = filtered
+                suggestionAdapterFull?.suggestions = filtered
+                filteredCandidateList = filtered
                 mainLayoutBinding?.let { updateUpperAreaVisibility(it) }
             } else {
                 isPostCommitPredictionActive = false
@@ -14903,6 +14931,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     clipboardSearchQuery.value = query
                 }
             )
+            setOnEmojiSearchListener { query ->
+                emojiSearchQuery.value = query
+            }
             setClipboardHistoryEnabled(isClipboardHistoryFeatureEnabled)
             setOnClipboardHistoryToggleListener(this@IMEService)
             setDefaultEmojiSkinTone(defaultEmojiSkinTonePreference)
@@ -14990,6 +15021,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     clipboardSearchQuery.value = query
                 }
             )
+            setOnEmojiSearchListener { query ->
+                emojiSearchQuery.value = query
+            }
             setClipboardHistoryEnabled(isClipboardHistoryFeatureEnabled)
             setOnClipboardHistoryToggleListener(this@IMEService)
             setDefaultEmojiSkinTone(defaultEmojiSkinTonePreference)
@@ -17306,7 +17340,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val ngWords =
             if (snapshot.isNgWordEnable) cachedNgWordsStringList else emptyList()
         val insertLength = inputString.value.length
-        val leftContext = truncateZenzLeftContext(getLeftContext(inputLength = 0))
+        val leftContext = cachedCandidateLeftContext.ifEmpty {
+            truncateZenzLeftContext(getLeftContext(inputLength = 0))
+        }
         val rightContext = if (snapshot.enableZenzRightContextPreference) {
             getRightContext(inputLength = insertLength).take(
                 com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyConversionDefaults.ZENZ_RIGHT_CONTEXT_MAX,

@@ -440,7 +440,11 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             )
             val mainResults = (additional + specialCandidates)
                 .map { it.applyAppropriateActions().parseTemplate() }
-            return AzooKeyStyleConversionResult(mainResults = mainResults, firstClauseResults = mainResults)
+                .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
+            return AzooKeyStyleConversionResult(
+                mainResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(mainResults),
+                firstClauseResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(mainResults),
+            )
         }
 
         val wholeSentenceUniqueCandidates: List<Candidate>
@@ -471,7 +475,11 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             } else {
                 merged.sortedByDescending { it.value }
             }
-            return AzooKeyStyleConversionResult(mainResults = mainResults.map { it.applyAppropriateActions().parseTemplate() })
+            return AzooKeyStyleConversionResult(
+                mainResults = AzooKeyJapaneseConversionText.filterDisplayedCandidates(
+                    mainResults.map { it.applyAppropriateActions().parseTemplate() },
+                ),
+            )
         }
 
         val bestFiveSentenceCandidates = if (options.zenzaiMode.isEnabled) {
@@ -650,6 +658,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
         result = result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         result = result + firstClauseCandidates + wordList
+        result = AzooKeyJapaneseConversionText.filterDisplayedCandidates(
+            result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) },
+        )
 
         result = result.map { it.applyAppropriateActions().parseTemplate() }
         firstClauseResults = firstClauseResults.map { it.applyAppropriateActions().parseTemplate() }

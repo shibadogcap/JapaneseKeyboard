@@ -27,11 +27,40 @@ internal object AzooKeyJapaneseConversionText {
         return surface.codePoints().allMatch { isAllowedClauseCodePoint(it) }
     }
 
-    /** 候補バー表示から除外すべき surface（ハングル含有のみ） */
-    fun shouldRejectDisplayedCandidate(surface: String): Boolean = containsHangul(surface)
+    /** 候補バー表示から除外すべき surface */
+    fun shouldRejectDisplayedCandidate(surface: String): Boolean {
+        if (surface.isEmpty()) return true
+        if (containsHangul(surface)) return true
+        if (isPureHalfWidthKatakana(surface)) return true
+        if (containsHangul(surface) && containsHalfWidthKatakana(surface)) return true
+        return false
+    }
 
     fun filterDisplayedCandidates(candidates: List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate>): List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate> {
         return candidates.filterNot { shouldRejectDisplayedCandidate(it.string) }
+    }
+
+    fun containsHalfWidthKatakana(text: String): Boolean {
+        var offset = 0
+        while (offset < text.length) {
+            val codePoint = text.codePointAt(offset)
+            if (codePoint in 0xFF66..0xFF9F) return true
+            offset += Character.charCount(codePoint)
+        }
+        return false
+    }
+
+    fun isPureHalfWidthKatakana(text: String): Boolean {
+        if (text.isEmpty()) return false
+        var offset = 0
+        while (offset < text.length) {
+            val codePoint = text.codePointAt(offset)
+            if (codePoint !in 0xFF66..0xFF9F && codePoint != 0xFF9E && codePoint != 0xFF9F) {
+                return false
+            }
+            offset += Character.charCount(codePoint)
+        }
+        return true
     }
 
     fun containsHangul(text: String): Boolean {

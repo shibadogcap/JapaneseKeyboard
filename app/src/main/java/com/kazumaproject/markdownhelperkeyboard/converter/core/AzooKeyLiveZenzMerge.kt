@@ -40,5 +40,6 @@ object AzooKeyLiveZenzMerge {
             it.type.toInt() != CandidateType.LEARNED_HISTORY.toInt() && it.string.length <= inputLength
         }).sortedByDescending { it.value }
         return AzooKeyZenzaiValueReorder.reorderTopValues(merged.take(5))
+            .let { AzooKeyJapaneseConversionText.filterDisplayedCandidates(it) }
     }
 }

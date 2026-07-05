@@ -21,7 +21,13 @@ class AzooKeyJapaneseConversionTextTest {
     }
 
     @Test
-    fun acceptsHalfWidthKanaSurfaces() {
+    fun rejectsPureHalfWidthKatakanaForDisplay() {
+        assertTrue(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ﾄｳｷｮｳ"))
+        assertTrue(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ｱｲｳ"))
+    }
+
+    @Test
+    fun acceptsHalfWidthKanaSurfacesForEngineValidation() {
         assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳｷｮｳ"))
         assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("ｱｲｳ"))
     }

@@ -6,4 +6,5 @@
     <string name="symbol_clipboard_action_pin">ピン留め</string>
     <string name="symbol_clipboard_action_unpin">ピン留めを解除</string>
     <string name="symbol_clipboard_action_delete">削除</string>
+    <string name="symbol_emoji_search_hint">絵文字を検索（例: けーき、えがお）</string>
 </resources>
