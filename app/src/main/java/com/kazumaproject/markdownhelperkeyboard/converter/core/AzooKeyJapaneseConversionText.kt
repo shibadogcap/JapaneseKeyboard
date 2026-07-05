@@ -30,6 +30,10 @@ internal object AzooKeyJapaneseConversionText {
     /** 候補バー表示から除外すべき surface（ハングル含有のみ） */
     fun shouldRejectDisplayedCandidate(surface: String): Boolean = containsHangul(surface)
 
+    fun filterDisplayedCandidates(candidates: List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate>): List<com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate> {
+        return candidates.filterNot { shouldRejectDisplayedCandidate(it.string) }
+    }
+
     fun containsHangul(text: String): Boolean {
         var offset = 0
         while (offset < text.length) {
@@ -54,6 +58,8 @@ internal object AzooKeyJapaneseConversionText {
 
     private fun isAllowedClauseCodePoint(codePoint: Int): Boolean {
         if (isHangulCodePoint(codePoint)) return false
+        if (codePoint == 0x200D) return true // ZWJ (compound emoji)
+        if (codePoint in 0x1F3FB..0x1F3FF) return true // emoji skin tone modifiers
         if (isEmojiCodePoint(codePoint)) return true
         if (isDecoratedAlphanumericCodePoint(codePoint)) return true
         if (codePoint in 0x3041..0x3096) return true // ひらがな

@@ -517,7 +517,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             }
 
             // キー背景色でボタン面を描画（パネル背景色だと影が見えなくなる）
-            tabView.background = getTabNeumorphDrawable(buttonColor, cornerRadius)
+            tabView.background = getTabNeumorphDrawable(
+                baseColor = buttonColor,
+                radius = cornerRadius,
+                selectedAccentColor = if (isCustomThemeApplied) themeSelectedIconColor else null,
+            )
 
             // パディング調整 (Drawable内のpaddingとは別に、Viewのコンテンツ位置調整)
             // TenKeyのロジックではDrawable自体がpaddingを持つため、View自体のpaddingは少なめでOK
@@ -533,7 +537,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     /**
      * TenKeyの getDynamicNeumorphDrawable と同等の実装
      */
-    private fun getTabNeumorphDrawable(@ColorInt baseColor: Int, radius: Float): Drawable {
+    private fun getTabNeumorphDrawable(
+        @ColorInt baseColor: Int,
+        radius: Float,
+        @ColorInt selectedAccentColor: Int? = null,
+    ): Drawable {
         // 1. 色の計算 (TenKeyと同じ係数を使用)
         // ハイライト色: 明るくする
         val highlightColor = manipulateColor(baseColor, 1.25f)
@@ -584,14 +592,19 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // --- B. 押下・選択状態 (Pressed / Selected) の作成 ---
 
-        val pressedDrawable = GradientDrawable().apply {
+        val selectedSurfaceDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
-            setColor(pressedColor)
+            if (selectedAccentColor != null) {
+                setColor(manipulateColor(baseColor, 0.88f))
+                setStroke((2 * density).toInt().coerceAtLeast(2), selectedAccentColor)
+            } else {
+                setColor(pressedColor)
+            }
         }
 
         // サイズが変わらないようにLayerDrawableにして同じInsetを与える
-        val pressedLayer = LayerDrawable(arrayOf(pressedDrawable))
+        val pressedLayer = LayerDrawable(arrayOf(selectedSurfaceDrawable))
         pressedLayer.setLayerInset(0, padding, padding, padding, padding)
 
 
