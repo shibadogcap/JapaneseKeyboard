@@ -3843,6 +3843,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (candidatesStart != -1 && candidatesEnd != -1) {
             // User moved cursor inside composing text.
             if (newSelStart == newSelEnd && newSelStart >= candidatesStart && newSelStart <= candidatesEnd) {
+                if (isLiveConversionEnable == true && !isHenkan.get()) {
+                    refreshReconversionUi()
+                    return
+                }
                 if (newSelStart < candidatesEnd) {
                     val fullComposing = inputString.value + stringInTail.get()
                     val composingRangeLength = candidatesEnd - candidatesStart
@@ -13181,11 +13185,26 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     /**
-     * AzooKey [InputManager.userMovedCursor] 相当。
-     * ライブ変換中は composing 内カーソル移動（stringInTail 分割）を行わない。
+     * AzooKey [InputManager.moveCursor] 相当。
+     * ライブ変換中のキーボード ←→ は enter() で確定してから committed text 上を移動する。
      */
-    private fun shouldDisableInternalPreeditCursorMove(): Boolean {
+    private enum class LiveConversionCursorDirection {
+        LEFT, RIGHT,
+    }
+
+    private fun isLiveConversionComposingActive(): Boolean {
         return isLiveConversionEnable == true && !isHenkan.get() && inputString.value.isNotEmpty()
+    }
+
+    private fun handleLiveConversionCursorKey(direction: LiveConversionCursorDirection) {
+        val insertString = inputString.value
+        if (insertString.isNotEmpty()) {
+            commitEnterKeyForJapaneseInput(insertString)
+        }
+        when (direction) {
+            LiveConversionCursorDirection.LEFT -> sendDpadLeftIfPossible()
+            LiveConversionCursorDirection.RIGHT -> sendDpadRightIfPossible()
+        }
     }
 
     private fun invalidateLiveConversionAfterInternalCursorMove() {
@@ -17529,8 +17548,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
             if (liveText.isNotEmpty() &&
                 liveText != lastCandidate &&
-                com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
-                    .isValidCandidateSurface(liveText)
+                !com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+                    .containsHangul(liveText)
             ) {
                 applyLiveConversionDisplay(liveText)
             }
@@ -18689,7 +18708,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sendDpadLeftIfPossible()
             }
         } else if (!isHenkan.get()) {
-            if (shouldDisableInternalPreeditCursorMove()) {
+            if (isLiveConversionComposingActive()) {
+                if (gestureType == GestureType.Tap) {
+                    handleLiveConversionCursorKey(LiveConversionCursorDirection.LEFT)
+                }
                 return
             }
             lastFlickConvertedNextHiragana.set(true)
@@ -18768,11 +18790,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
 
                 if (insertString.isNotEmpty()) {
-                    if (shouldDisableInternalPreeditCursorMove()) {
-                        delay(LONG_DELAY_TIME)
-                        continue
+                    if (isLiveConversionComposingActive()) {
+                        handleLiveConversionCursorKey(LiveConversionCursorDirection.LEFT)
+                    } else {
+                        updateLeftInputString(insertString)
                     }
-                    updateLeftInputString(insertString)
                 } else if (stringInTail.get().isEmpty() && !isCursorAtBeginning()) {
                     if (selectMode.value) {
                         extendOrShrinkLeftOneChar()
@@ -18798,7 +18820,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             var finalSuggestionFlag: CandidateShowFlag? = null
             while (isActive && rightCursorKeyLongKeyPressed.get() && !onRightKeyLongPressUp.get()) {
                 val insertString = inputString.value
-                if (shouldDisableInternalPreeditCursorMove()) {
+                if (isLiveConversionComposingActive()) {
+                    handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
                     delay(LONG_DELAY_TIME)
                     continue
                 }
@@ -18818,7 +18841,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun updateLeftInputString(insertString: String) {
-        if (shouldDisableInternalPreeditCursorMove()) return
+        if (isLiveConversionComposingActive()) return
         if (insertString.isNotEmpty()) {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18856,9 +18879,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 insertString.isNotEmpty() &&
                 stringInTail.get().isNotEmpty()
             ) {
-                if (!shouldDisableInternalPreeditCursorMove()) {
+                if (isLiveConversionComposingActive()) {
+                    handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
+                } else {
                     handleNonHenkan(insertString)
                 }
+            } else if (isLiveConversionComposingActive() && gestureType == GestureType.Tap) {
+                handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
             } else {
                 handleEmptyInputString(gestureType)
             }
@@ -18890,9 +18917,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sendDpadRightIfPossible()
             }
         } else if (isLiveConversionEnable == true) {
-            if (gestureType == GestureType.Tap) {
-                sendDpadRightIfPossible()
-            }
+            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
         } else {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18962,7 +18987,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 handleRightCursorMoveAction()
             }
         } else if (isLiveConversionEnable == true) {
-            handleRightCursorMoveAction()
+            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
         } else {
             beginZenzRerankRequest()
             lastCandidate = null
@@ -18974,7 +18999,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun handleNonHenkanTap(insertString: String) {
-        if (shouldDisableInternalPreeditCursorMove()) return
+        if (isLiveConversionComposingActive()) {
+            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
+            return
+        }
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)
         isContinuousTapInputEnabled.set(true)
@@ -18989,7 +19017,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun handleNonHenkan(insertString: String) {
-        if (shouldDisableInternalPreeditCursorMove()) return
+        if (isLiveConversionComposingActive()) {
+            handleLiveConversionCursorKey(LiveConversionCursorDirection.RIGHT)
+            return
+        }
         Timber.d("handleNonHenkan: $insertString ${stringInTail.get()}")
         englishSpaceKeyPressed.set(false)
         lastFlickConvertedNextHiragana.set(true)

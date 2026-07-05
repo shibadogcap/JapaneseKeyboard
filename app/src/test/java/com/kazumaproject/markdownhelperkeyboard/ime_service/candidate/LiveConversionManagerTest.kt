@@ -120,7 +120,7 @@ class LiveConversionManagerTest {
     }
 
     @Test
-    fun ignoresKatakanaCandidateForLiveConversionDisplay() {
+    fun selectsKatakanaCandidateForLiveConversionDisplayWhenReadingMatches() {
         val manager = LiveConversionManager(enabled = true)
         val katakana = Candidate(
             string = "アイウ",
@@ -148,11 +148,39 @@ class LiveConversionManagerTest {
             convertTarget = "あいう",
         )
 
-        assertEquals("あいう", result)
+        assertEquals("アイウ", result)
     }
 
     @Test
-    fun testFirstClauseAutoCompletion() {
+    fun rejectsHangulCandidateForLiveConversionDisplay() {
+        val manager = LiveConversionManager(enabled = true)
+        val hangul = Candidate(
+            string = "한국",
+            type = 1.toByte(),
+            length = 2u,
+            score = 0,
+            data = listOf(
+                AzooKeyDictionaryEntryMapper.systemDictionary(
+                    surface = "한국",
+                    reading = "カンコク",
+                    wordCost = 0,
+                    leftId = 0,
+                    rightId = 0,
+                    mid = 0,
+                ),
+            ),
+        )
+
+        val result = manager.updateWithNewResults(
+            composingText = ComposingText.fromConvertTarget("かんこく"),
+            candidates = listOf(hangul),
+            firstClauseResults = emptyList(),
+            convertTargetCursorPosition = 4,
+            convertTarget = "かんこく",
+        )
+
+        assertEquals("かんこく", result)
+    }
         val manager = LiveConversionManager(enabled = true)
         
         val entry1 = AzooKeyDictionaryEntryMapper.systemDictionary(

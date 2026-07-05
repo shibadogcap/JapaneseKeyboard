@@ -7,6 +7,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOpti
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
 import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.api.KanaKanjiConverter
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyLiveZenzMerge
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessEnvironment
@@ -105,17 +106,28 @@ class ImeCandidateCoordinator @Inject constructor(
         }
 
         val cachedReranked = rerankPlan?.let { getCachedZenzRerank(it.cacheKey) }
-        val mainResults = cachedReranked ?: response.result.mainResults
+        val filteredMainResults = response.result.mainResults.filterNot {
+            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
+        }
+        val mainResults = (cachedReranked ?: filteredMainResults).filterNot {
+            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
+        }
+        val filteredSupplementary = response.result.supplementaryCandidates.filterNot {
+            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
+        }
         val displayCandidates = if (cachedReranked != null) {
-            CandidateLanePresentation.mergeForDisplay(cachedReranked, response.result.supplementaryCandidates)
+            CandidateLanePresentation.mergeForDisplay(mainResults, filteredSupplementary)
         } else {
-            response.result.displayCandidates()
+            response.result.copy(
+                mainResults = filteredMainResults,
+                supplementaryCandidates = filteredSupplementary,
+            ).displayCandidates()
         }
 
         return ImeCandidateSuggestResult(
             candidates = displayCandidates,
             mainResults = mainResults,
-            supplementaryCandidates = response.result.supplementaryCandidates,
+            supplementaryCandidates = filteredSupplementary,
             predictionResults = response.result.predictionResults,
             englishPredictionResults = response.result.englishPredictionResults,
             bunsetsuResult = response.bunsetsuResult,

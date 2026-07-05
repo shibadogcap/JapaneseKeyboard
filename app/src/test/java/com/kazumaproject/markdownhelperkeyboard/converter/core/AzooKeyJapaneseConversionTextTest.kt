@@ -21,20 +21,27 @@ class AzooKeyJapaneseConversionTextTest {
     }
 
     @Test
-    fun rejectsHalfWidthKanaSurfaces() {
-        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳｷｮｳ"))
-        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ｱｲｳ"))
+    fun acceptsHalfWidthKanaSurfaces() {
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳｷｮｳ"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("ｱｲｳ"))
     }
 
     @Test
-    fun rejectsMixedHangulAndHalfWidthKanaSurfaces() {
-        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("ﾄｳ한국"))
+    fun rejectsMixedHangulSurfaces() {
+        assertFalse(AzooKeyJapaneseConversionText.isValidCandidateSurface("東京한국"))
+        assertTrue(AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate("ﾄｳ한국"))
     }
 
     @Test
-    fun acceptsParenthesisSymbolSurfaces() {
+    fun acceptsParenthesisAndEmojiSurfaces() {
         assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("（）"))
         assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("「」"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("🙇"))
+    }
+
+    @Test
+    fun acceptsDecoratedAlphanumericSurfaces() {
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("abc"))
     }
 
     @Test

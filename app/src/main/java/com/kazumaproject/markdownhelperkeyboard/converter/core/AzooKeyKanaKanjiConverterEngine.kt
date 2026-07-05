@@ -571,11 +571,13 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var firstClauseResults = uniqueFirstClauseCandidates
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
+            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
 
         val seenCandidate = fullCandidates.map { it.string }.toMutableSet()
         val firstClauseCandidates = getUniqueCandidate(uniqueFirstClauseCandidates, seenCandidate)
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
+            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         firstClauseCandidates.forEach { seenCandidate.add(it.string) }
 
         val dicCandidates = latticeResult.second[

@@ -3,8 +3,6 @@ package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLane
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.adjustCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.makePrefixClauseCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
@@ -63,7 +61,7 @@ class LiveConversionManager(var enabled: Boolean) {
         var candidate: Candidate
         if (convertTargetCursorPosition > 1) {
             val matched = candidates.firstOrNull {
-                isEligibleForLiveConversion(it) &&
+                !AzooKeyJapaneseConversionText.containsHangul(it.string) &&
                     it.coversFullConvertTarget(convertTarget.length)
             }
             candidate = matched ?: fallbackCandidate(convertTarget)
@@ -134,25 +132,6 @@ class LiveConversionManager(var enabled: Boolean) {
             return history.last()
         }
         return null
-    }
-
-    /**
-     * ライブ変換表示は変換候補（漢字等）のみ。ひらがな/カタカナ/英語/特殊候補は除外する。
-     * AzooKey [LiveConversionManager.updateWithNewResults](https://github.com/azooKey/azooKey) と同様、
-     * 該当なし時は [convertTarget] そのものを表示する。
-     */
-    private fun isEligibleForLiveConversion(candidate: Candidate): Boolean {
-        if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(candidate.string)) {
-            return false
-        }
-        return when (CandidateType.laneOf(candidate)) {
-            CandidateLane.Transform,
-            CandidateLane.Special,
-            CandidateLane.Prediction,
-            CandidateLane.Neural,
-            -> false
-            else -> true
-        }
     }
 
     private fun fallbackCandidate(convertTarget: String): Candidate {

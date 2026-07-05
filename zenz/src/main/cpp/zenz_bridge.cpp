@@ -828,6 +828,8 @@ static bool is_japanese_conversion_codepoint(char32_t code) {
     if (code >= 0xAC00 && code <= 0xD7A3) return false; // hangul syllables
     if (code >= 0x1100 && code <= 0x11FF) return false; // hangul jamo
     if (code >= 0x3130 && code <= 0x318F) return false; // hangul compat jamo
+    if (code >= 0xA960 && code <= 0xA97F) return false; // hangul jamo ext A
+    if (code >= 0xD7B0 && code <= 0xD7FF) return false; // hangul jamo ext B
     if ((code >= 'a' && code <= 'z') || (code >= 'A' && code <= 'Z')) return true;
     if ((code >= '0' && code <= '9')) return true;
     if (code == 0x30FC || code == 0x301C) return true; // prolonged sound marks
