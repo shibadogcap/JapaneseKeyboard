@@ -18,6 +18,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRunti
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessor
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeySupplementaryCandidateAugmenter
 import com.kazumaproject.markdownhelperkeyboard.repository.CandidateOrderOverrideRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -87,9 +88,15 @@ class DefaultKanaKanjiConverter @Inject constructor(
             },
         )
         val split = splitConversionResult(engineResult.conversionResult)
-        val withEmoji = appendInputEmojiCandidates(input, split, environment)
+        val withSupplementary = AzooKeySupplementaryCandidateAugmenter.appendDicdataEmojiInputCandidates(
+            input = input,
+            result = split,
+            emojiDictionarySearch = dictionaryAssetProvider.emojiDictionarySearch,
+            kanaKanjiEngine = kanaKanjiEngine,
+            limit = environment.auxiliaryConfig.emojiDictionaryLimit,
+        )
         ConvertCandidatesResponse(
-            result = withEmoji,
+            result = withSupplementary,
             bunsetsuResult = engineResult.bunsetsuResult,
             usedAfterComplete = engineResult.usedAfterComplete,
         )
@@ -123,47 +130,6 @@ class DefaultKanaKanjiConverter @Inject constructor(
         return raw.copy(
             mainResults = main,
             supplementaryCandidates = raw.supplementaryCandidates + extracted,
-        )
-    }
-
-    private suspend fun appendInputEmojiCandidates(
-        input: ComposingText,
-        result: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConversionResult,
-        environment: ImeCandidateEnvironment,
-    ): com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleConversionResult {
-        val convertTarget = input.convertTarget
-        if (convertTarget.isBlank()) return result
-        val limit = environment.auxiliaryConfig.emojiDictionaryLimit
-        if (limit <= 0) return result
-
-        val entries = withContext(Dispatchers.IO) {
-            dictionaryAssetProvider.emojiDictionarySearch
-                ?.searchInputPrefix(convertTarget, limit)
-                ?.takeIf { it.isNotEmpty() }
-                ?: kanaKanjiEngine.searchEmojiDictionaryEntries(convertTarget, limit)
-        }
-        if (entries.isEmpty()) return result
-
-        val existingSurfaces = buildSet {
-            result.mainResults.forEach { add(it.string) }
-            result.supplementaryCandidates.forEach { add(it.string) }
-        }
-        val emojiCandidates = entries.asSequence()
-            .filter { com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryMetadata.EmojiVariation !in it.metadata }
-            .filter { com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText.isValidCandidateSurface(it.surface) }
-            .filter { it.surface !in existingSurfaces }
-            .distinctBy { it.surface }
-            .take(limit)
-            .map { entry ->
-                entry.toCandidate(
-                    type = CandidateType.EMOJI_LEGACY,
-                    connectionIdResolver = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryConnectionIdPolicies.Default,
-                )
-            }
-            .toList()
-        if (emojiCandidates.isEmpty()) return result
-        return result.copy(
-            supplementaryCandidates = result.supplementaryCandidates + emojiCandidates,
         )
     }
 
