@@ -62,14 +62,18 @@ class AzooKeyZenzaiTypoKeyTopology private constructor(
         val MacOsStandardQwerty = buildCoordinateTopology(
             id = AzooKeyZenzaiTypoKeyTopologyId.MacOsStandardQwerty,
             coordinates = mapOf(
+                '1' to (-1.0f to 0f), '2' to (0.25f to 0f), '3' to (1.25f to 0f), '4' to (2.25f to 0f),
+                '5' to (3.25f to 0f), '6' to (4.25f to 0f), '7' to (5.25f to 0f), '8' to (6.25f to 0f),
+                '9' to (7.25f to 0f), '0' to (8.25f to 0f), '-' to (9.25f to 0f), '^' to (10.25f to 0f),
                 'q' to (0.00f to 1f), 'w' to (1.00f to 1f), 'e' to (2.00f to 1f), 'r' to (3.00f to 1f),
                 't' to (4.00f to 1f), 'y' to (5.00f to 1f), 'u' to (6.00f to 1f), 'i' to (7.00f to 1f),
-                'o' to (8.00f to 1f), 'p' to (9.00f to 1f),
+                'o' to (8.00f to 1f), 'p' to (9.00f to 1f), '@' to (10.00f to 1f), '[' to (11.00f to 1f),
                 'a' to (0.25f to 2f), 's' to (1.25f to 2f), 'd' to (2.25f to 2f), 'f' to (3.25f to 2f),
                 'g' to (4.25f to 2f), 'h' to (5.25f to 2f), 'j' to (6.25f to 2f), 'k' to (7.25f to 2f),
-                'l' to (8.25f to 2f),
+                'l' to (8.25f to 2f), ';' to (9.25f to 2f), ']' to (10.25f to 2f),
                 'z' to (0.80f to 3f), 'x' to (1.80f to 3f), 'c' to (2.80f to 3f), 'v' to (3.80f to 3f),
-                'b' to (4.80f to 3f), 'n' to (5.80f to 3f), 'm' to (6.80f to 3f),
+                'b' to (4.80f to 3f), 'n' to (5.80f to 3f), 'm' to (6.80f to 3f), ',' to (7.80f to 3f),
+                '.' to (8.80f to 3f), '/' to (9.80f to 3f), '_' to (10.80f to 3f),
             ),
         )
 

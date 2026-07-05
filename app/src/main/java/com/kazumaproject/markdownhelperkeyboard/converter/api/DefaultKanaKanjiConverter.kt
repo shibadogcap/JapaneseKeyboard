@@ -12,6 +12,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.zenz.ZenzRerankRequest
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.PostCommitPredictionFacade
 import com.kazumaproject.markdownhelperkeyboard.repository.UserTemplateRepository
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLearningMemoryRepository
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyRuntimeConversionPolicyResolver
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleLearningType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidatePostProcessor
@@ -40,9 +41,21 @@ class DefaultKanaKanjiConverter @Inject constructor(
         mode: CandidateRequestMode,
     ): ConvertCandidatesResponse = withContext(Dispatchers.Default) {
         syncSessionState(runtime, environment)
+        val bridged = CandidateRequestBridge.toCandidateRequest(
+            composingText = input,
+            options = applyMode(options, mode),
+            runtime = runtime,
+            mode = mode,
+        )
+        val policy = bridged.runtimeConversionPolicy
+        val engineOptions = applyMode(options, mode).copy(
+            zenzaiMode = policy.zenzaiMode,
+            experimentalZenzaiPredictiveInput = policy.shouldUseZenzaiPredictiveInput,
+            learningType = policy.learningType,
+        )
         val engineResult = converterEngine.requestCandidates(
             inputData = input,
-            options = applyMode(options, mode),
+            options = engineOptions,
             session = environment.conversionSession ?: ConversionSession(),
             searchMemory = { reading, limit ->
                 withContext(Dispatchers.IO) {

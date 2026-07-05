@@ -95,20 +95,12 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
 
         val facade = dicdataFacadeSource.create(searchMemory)
         val kana2Kanji = AzooKeyKana2Kanji(facade)
-        val inputStyle = inputData.input.lastOrNull()?.inputStyle ?: InputStyle.Direct
-        val typoCorrectedInput = applyZenzaiTypoCorrectionIfEnabled(
-            inputData = inputData,
-            options = options,
-            session = session,
-            sessionState = sessionState,
-            inputStyle = inputStyle,
-        )
         val needTypo = !options.zenzaiMode.isEnabled &&
             AzooKeyTypoCorrectionPolicy.isClassicTypoCorrectionEnabled(options.typoCorrectionMode)
         val useMemory = options.learningType != AzooKeyStyleLearningType.Nothing
 
         val convertResult = convertToLattice(
-            inputData = typoCorrectedInput,
+            inputData = inputData,
             options = options,
             session = session,
             sessionState = sessionState,
@@ -118,7 +110,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         ) ?: return emptyResult()
 
         val conversionResult = processResult(
-            inputData = typoCorrectedInput,
+            inputData = inputData,
             latticeResult = convertResult.latticeResult,
             options = options,
             kana2Kanji = kana2Kanji,
@@ -178,6 +170,10 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             inputStyle = inputStyle,
             zenzaiMode = options.zenzaiMode,
             zenzProfile = options.zenzProfile,
+            zenzTopic = options.zenzTopic,
+            zenzStyle = options.zenzStyle,
+            zenzPreference = options.zenzPreference,
+            zenzRightSideContext = options.zenzRightSideContext,
         )
         cachedPredictiveInputText(
             sessionId = session.sessionId,
@@ -257,55 +253,6 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             cache = sessionState.zenzaiTypoCache,
             customInputTable = options.roman2KanaTransducer.table,
         )
-    }
-
-    private suspend fun applyZenzaiTypoCorrectionIfEnabled(
-        inputData: ComposingText,
-        options: ConvertRequestOptions,
-        session: ConversionSession,
-        sessionState: SessionState,
-        inputStyle: InputStyle,
-    ): ComposingText {
-        if (!options.zenzaiMode.isEnabled || zenzEngine == null) {
-            return inputData
-        }
-        val leftSideContext = session.leftSideContext.takeLast(AzooKeyConversionDefaults.ZENZ_LEFT_CONTEXT_MAX)
-        val candidates = experimentalRequestTypoCorrection(
-            leftSideContext = leftSideContext,
-            composingText = inputData,
-            options = options,
-            inputStyle = inputStyle,
-            session = session,
-        )
-        val best = candidates.firstOrNull() ?: return inputData
-        return rebuildComposingAfterTypoCorrection(
-            original = inputData,
-            candidate = best,
-            inputStyle = inputStyle,
-            roman2Kana = options.roman2KanaTransducer,
-        )
-    }
-
-    private fun rebuildComposingAfterTypoCorrection(
-        original: ComposingText,
-        candidate: AzooKeyZenzaiTypoCandidate,
-        inputStyle: InputStyle,
-        roman2Kana: com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer,
-    ): ComposingText {
-        return when (inputStyle) {
-            InputStyle.Roman2Kana -> {
-                var text = ComposingText.fromConvertTarget("")
-                candidate.correctedInput.forEach { ch ->
-                    text = text.insertRoman2KanaAtCursor(ch.toString(), roman2Kana)
-                }
-                text
-            }
-            else -> {
-                val surface = candidate.convertedText.katakanaToHiragana()
-                if (surface == original.convertTarget) original
-                else ComposingText.fromConvertTarget(surface)
-            }
-        }
     }
 
     private suspend fun experimentalZenzaiPredictionCandidates(
