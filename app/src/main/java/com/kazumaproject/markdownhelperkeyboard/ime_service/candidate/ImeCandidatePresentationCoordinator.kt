@@ -45,7 +45,8 @@ class ImeCandidatePresentationCoordinator(
         @Suppress("UNUSED_PARAMETER")
         insertString: String,
     ): List<Candidate> {
-        return candidates
+        return com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
+            .filterDisplayedCandidates(candidates)
     }
 
     suspend fun mergeBunsetsuAfterCandidateRequest(

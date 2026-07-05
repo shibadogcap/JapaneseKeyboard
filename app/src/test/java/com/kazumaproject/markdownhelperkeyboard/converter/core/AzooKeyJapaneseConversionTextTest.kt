@@ -53,4 +53,30 @@ class AzooKeyJapaneseConversionTextTest {
         assertEquals(1, parsed.alternativeConstraints.size)
         assertEquals("東京", parsed.alternativeConstraints.first().prefix)
     }
+
+    @Test
+    fun acceptsCompoundEmojiWithZeroWidthJoiner() {
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("👨‍👩‍👧"))
+    }
+
+    @Test
+    fun filterDisplayedCandidatesRemovesHangul() {
+        val candidates = listOf(
+            com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate(
+                string = "東京",
+                type = 3,
+                length = 2u,
+                score = 0,
+            ),
+            com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate(
+                string = "한국",
+                type = 3,
+                length = 2u,
+                score = 0,
+            ),
+        )
+        val filtered = AzooKeyJapaneseConversionText.filterDisplayedCandidates(candidates)
+        assertEquals(1, filtered.size)
+        assertEquals("東京", filtered.first().string)
+    }
 }
