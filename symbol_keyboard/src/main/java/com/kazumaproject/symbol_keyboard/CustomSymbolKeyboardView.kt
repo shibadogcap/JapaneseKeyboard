@@ -835,10 +835,15 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         return true
     }
 
-    fun clearSymbolPanelSearchFocus() {
+    fun clearSymbolPanelSearchFocus(resetQueries: Boolean = false) {
         activeSearchTarget = null
         clipboardSearchView?.clearFocus()
         emojiSearchView?.clearFocus()
+        if (resetQueries) {
+            clipboardSearchView?.setQuery("", false)
+            emojiSearchView?.setQuery("", false)
+            emojiSearchResults = null
+        }
         symbolPanelSearchFocusListener?.invoke(false)
     }
 

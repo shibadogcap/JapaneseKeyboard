@@ -6557,9 +6557,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
             override fun stopDeleteLongPress() = this@IMEService.stopDeleteLongPress()
             override fun toggleSymbolKeyboard() {
-                _keyboardSymbolViewState.value = SymbolKeyboardState(
-                    isShown = !_keyboardSymbolViewState.value.isShown,
-                )
+                toggleEmojiPanel()
             }
             override fun finishComposingAndClearTail() {
                 stringInTail.set("")
@@ -8932,12 +8930,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                     )
                                 }
                             } else if (!isSymbolPanelSearchRoutingActive()) {
-                                _keyboardSymbolViewState.value = SymbolKeyboardState(
-                                    isShown = !_keyboardSymbolViewState.value.isShown
-                                )
-                                stringInTail.set("")
-                                finishComposingText()
-                                setComposingText("", 0)
+                                toggleEmojiPanel()
                             }
                         }
                     }
@@ -9734,12 +9727,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                         )
                                     }
                                 } else if (!isSymbolPanelSearchRoutingActive()) {
-                                    _keyboardSymbolViewState.value = SymbolKeyboardState(
-                                        isShown = !_keyboardSymbolViewState.value.isShown
-                                    )
-                                    stringInTail.set("")
-                                    finishComposingText()
-                                    setComposingText("", 0)
+                                    toggleEmojiPanel()
                                 }
                             }
 
@@ -11089,52 +11077,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         }
 
         launch {
-            keyboardSymbolViewState.collectLatest { isSymbolKeyboardShow ->
-                Timber.d("keyboardSymbolViewState: $isSymbolKeyboardShow")
-                setKeyboardSizeSwitchKeyboard(mainView)
-                if (isKeyboardFloatingMode == true) {
-                    floatingKeyboardBinding?.let { floatingKeyboardLayoutBinding ->
-                        setSymbolsFloating(floatingKeyboardLayoutBinding)
-                        if (isSymbolKeyboardShow.isShown) {
-                            hideKeyboardViews(getFloatingKeyboardSurface() ?: return@let)
-                            floatingKeyboardLayoutBinding.floatingSymbolKeyboard.isVisible = true
-                        } else {
-                            floatingKeyboardLayoutBinding.floatingSymbolKeyboard.isVisible = false
-                            renderCurrentKeyboardStateOnActiveSurface()
-                        }
-                        updateFloatingKeyboardSizeForMode(qwertyMode.value)
-                    }
-                } else {
-                    setKeyboardSizeForHeightSymbol(mainView, isSymbolKeyboardShow.isShown)
-                }
-                mainView.apply {
-                    if (isSymbolKeyboardShow.isShown) {
-                        shortcutToolbarRecyclerview.isVisible = false
-                    } else {
-                        updateUpperAreaVisibility(mainView)
-                    }
-                    if (isSymbolKeyboardShow.isShown) {
-                        applySymbolPanelKeyboardVisibility(
-                            mainView = mainView,
-                            keepMainKeyboardVisible = symbolPanelSearchFocused,
-                        )
-                        animateViewVisibility(keyboardSymbolView, true)
-                        suggestionRecyclerView.isVisible = false
-                        if (isSymbolKeyboardShow.mode == SymbolMode.CLIPBOARD) {
-                            setSymbolsClipboard(mainView = mainView)
-                        } else {
-                            setSymbols(mainView)
-                        }
-                    } else {
-                        symbolPanelSearchFocused = false
-                        mainLayoutBinding?.keyboardSymbolView?.clearSymbolPanelSearchFocus()
-                        floatingKeyboardBinding?.floatingSymbolKeyboard?.clearSymbolPanelSearchFocus()
-                        renderCurrentKeyboardStateOnActiveSurface()
-                        updateKeyboardLayout(mainView)
-                        animateViewVisibility(keyboardSymbolView, false)
-                        updateUpperAreaVisibility(mainView)
-                    }
-                }
+            keyboardSymbolViewState.collectLatest { symbolState ->
+                Timber.d("keyboardSymbolViewState: $symbolState")
+                syncSymbolPanelPresentation(mainView, symbolState)
             }
         }
 
@@ -11529,14 +11474,84 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             lastQwertyRomajiRawInput = null
         }
         mainLayoutBinding?.let { mainView ->
-            if (keyboardSymbolViewState.value.isShown) {
-                if (active) {
-                    updateKeyboardLayout(mainView, isSymbolOverride = true)
-                } else {
-                    applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = false)
-                    updateKeyboardLayout(mainView, isSymbolOverride = true)
-                }
+            if (!keyboardSymbolViewState.value.isShown) return@let
+            if (active) {
+                updateKeyboardLayout(mainView, isSymbolOverride = true)
+            } else {
+                applySymbolPanelKeyboardVisibility(mainView, keepMainKeyboardVisible = false)
+                updateKeyboardLayout(mainView, isSymbolOverride = true)
             }
+        }
+    }
+
+    private suspend fun syncSymbolPanelPresentation(
+        mainView: MainLayoutBinding,
+        state: SymbolKeyboardState,
+    ) {
+        if (isKeyboardFloatingMode == true) {
+            floatingKeyboardBinding?.let { floatingBinding ->
+                setSymbolsFloating(floatingBinding)
+                if (state.isShown) {
+                    hideKeyboardViews(getFloatingKeyboardSurface() ?: return@let)
+                    setSymbolPanelViewVisible(floatingBinding.floatingSymbolKeyboard, true)
+                } else {
+                    setSymbolPanelViewVisible(floatingBinding.floatingSymbolKeyboard, false)
+                    renderCurrentKeyboardStateOnActiveSurface()
+                }
+                updateFloatingKeyboardSizeForMode(qwertyMode.value)
+            }
+        }
+
+        if (state.isShown) {
+            mainView.shortcutToolbarRecyclerview.isVisible = false
+            mainView.suggestionRecyclerView.isVisible = false
+            if (state.mode == SymbolMode.CLIPBOARD) {
+                setSymbolsClipboard(mainView)
+            } else {
+                setSymbols(mainView)
+            }
+            applySymbolPanelKeyboardVisibility(
+                mainView = mainView,
+                keepMainKeyboardVisible = symbolPanelSearchFocused,
+            )
+            updateKeyboardLayout(mainView, isSymbolOverride = true)
+            setSymbolPanelViewVisible(mainView.keyboardSymbolView, true)
+            return
+        }
+
+        symbolPanelSearchFocused = false
+        mainLayoutBinding?.keyboardSymbolView?.clearSymbolPanelSearchFocus(resetQueries = true)
+        floatingKeyboardBinding?.floatingSymbolKeyboard?.clearSymbolPanelSearchFocus(resetQueries = true)
+        setSymbolPanelViewVisible(mainView.keyboardSymbolView, false)
+        renderCurrentKeyboardStateOnActiveSurface()
+        updateKeyboardLayout(mainView, isSymbolOverride = false)
+        updateUpperAreaVisibility(mainView)
+    }
+
+    private fun setSymbolPanelViewVisible(view: View, visible: Boolean) {
+        view.animate().cancel()
+        view.translationY = 0f
+        view.isVisible = visible
+    }
+
+    private fun closeSymbolPanel() {
+        val current = _keyboardSymbolViewState.value
+        _keyboardSymbolViewState.value = current.copy(isShown = false)
+    }
+
+    private fun toggleEmojiPanel() {
+        val current = _keyboardSymbolViewState.value
+        _keyboardSymbolViewState.value = when {
+            current.isShown && current.mode == SymbolMode.EMOJI -> current.copy(isShown = false)
+            else -> current.copy(isShown = true, mode = SymbolMode.EMOJI)
+        }
+    }
+
+    private fun toggleClipboardPanel() {
+        val current = _keyboardSymbolViewState.value
+        _keyboardSymbolViewState.value = when {
+            current.isShown && current.mode == SymbolMode.CLIPBOARD -> current.copy(isShown = false)
+            else -> current.copy(isShown = true, mode = SymbolMode.CLIPBOARD)
         }
     }
 
@@ -15009,9 +15024,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
                 ShortcutType.EMOJI -> {
                     vibrate()
-                    _keyboardSymbolViewState.value = SymbolKeyboardState(
-                        isShown = !_keyboardSymbolViewState.value.isShown
-                    )
+                    toggleEmojiPanel()
                 }
 
                 ShortcutType.TEMPLATE -> {
@@ -15044,13 +15057,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
                 ShortcutType.CLIP_BOARD -> {
                     vibrate()
-                    val isClipboardPanelShown =
-                        _keyboardSymbolViewState.value.isShown &&
-                            _keyboardSymbolViewState.value.mode == SymbolMode.CLIPBOARD
-                    _keyboardSymbolViewState.value = SymbolKeyboardState(
-                        isShown = !isClipboardPanelShown,
-                        mode = SymbolMode.CLIPBOARD
-                    )
+                    toggleClipboardPanel()
                 }
             }
         }
@@ -15082,11 +15089,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             setOnReturnToTenKeyButtonClickListener(object : ReturnToTenKeyButtonClickListener {
                 override fun onClick() {
                     vibrate()
-                    _keyboardSymbolViewState.value = SymbolKeyboardState(
-                        isShown = !_keyboardSymbolViewState.value.isShown
-                    )
-                    finishComposingText()
-                    setComposingText("", 0)
+                    closeSymbolPanel()
                 }
             })
             setOnDeleteButtonSymbolViewClickListener(object : DeleteButtonSymbolViewClickListener {
@@ -15176,11 +15179,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             setOnReturnToTenKeyButtonClickListener(object : ReturnToTenKeyButtonClickListener {
                 override fun onClick() {
                     vibrate()
-                    _keyboardSymbolViewState.value = SymbolKeyboardState(
-                        isShown = !_keyboardSymbolViewState.value.isShown
-                    )
-                    finishComposingText()
-                    setComposingText("", 0)
+                    closeSymbolPanel()
                 }
             })
             setOnDeleteButtonSymbolViewClickListener(object : DeleteButtonSymbolViewClickListener {
@@ -20255,13 +20254,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun toggleEmojiKeyboard() {
-        _keyboardSymbolViewState.value = SymbolKeyboardState(
-            isShown = !_keyboardSymbolViewState.value.isShown
-        )
-        stringInTail.set("")
-        finishComposingText()
-        setComposingText("", 0)
-        _inputString.update { "" }
+        toggleEmojiPanel()
     }
 
     private fun getKeySoundType(action: KeyAction): KeySoundType {
