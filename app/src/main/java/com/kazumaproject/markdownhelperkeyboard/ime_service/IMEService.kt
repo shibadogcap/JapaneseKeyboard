@@ -162,6 +162,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPostC
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPostCommitPredictionPolicyInput
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyStyleCandidateRanker
 import com.kazumaproject.markdownhelperkeyboard.converter.api.CandidateRequestBridge
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidateCoordinator
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeCandidatePresentationCoordinator
 import com.kazumaproject.markdownhelperkeyboard.ime_service.candidate.ImeSuggestionOrchestrator
@@ -11128,39 +11129,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         symbolPanelSearchFocused = false
                         mainLayoutBinding?.keyboardSymbolView?.clearSymbolPanelSearchFocus()
                         floatingKeyboardBinding?.floatingSymbolKeyboard?.clearSymbolPanelSearchFocus()
-                        if (isTabletGojuonSurface()) {
-                            when {
-                                tabletView.isInvisible -> {
-                                    tabletView.isVisible = true
-                                }
-
-                                qwertyView.isInvisible -> {
-                                    qwertyView.isVisible = true
-                                }
-
-                                customLayoutDefault.isInvisible -> {
-                                    customLayoutDefault.isVisible = true
-                                }
-                            }
-                        } else {
-                            when {
-                                keyboardView.isInvisible -> {
-                                    keyboardView.isVisible = true
-                                }
-
-                                qwertyView.isInvisible -> {
-                                    qwertyView.isVisible = true
-                                }
-
-                                customLayoutDefault.isInvisible -> {
-                                    customLayoutDefault.isVisible = true
-                                }
-                            }
-                        }
+                        renderCurrentKeyboardStateOnActiveSurface()
+                        updateKeyboardLayout(mainView)
                         animateViewVisibility(keyboardSymbolView, false)
                         updateUpperAreaVisibility(mainView)
-                        if (customLayoutDefault.isInvisible) customLayoutDefault.visibility =
-                            View.VISIBLE
                     }
                 }
             }
@@ -13450,6 +13422,74 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private fun candidateMatchesInsertString(candidate: Candidate, insertString: String): Boolean {
         return candidateReadingLength(candidate) == insertString.length
+    }
+
+    private fun effectiveComposingCountForCandidate(candidate: Candidate): ComposingCount {
+        return when (val count = candidate.composingCount) {
+            is ComposingCount.InputCount -> {
+                if (count.count == 0) {
+                    val readingLength = candidateReadingLength(candidate)
+                    if (readingLength > 0) {
+                        ComposingCount.SurfaceCount(readingLength)
+                    } else {
+                        ComposingCount.SurfaceCount(candidate.string.length)
+                    }
+                } else {
+                    count
+                }
+            }
+            else -> count
+        }
+    }
+
+    /**
+     * AzooKey [InputManager.complete] 相当。
+     * 文節部分確定後に composing セッションと変換セッションを更新する。
+     */
+    private fun prepareComposingSessionAfterPartialCandidate(
+        candidate: Candidate,
+        insertString: String,
+        remainingKana: String,
+    ) {
+        val readingLength = candidateReadingLength(candidate)
+        if (readingLength <= 0 || readingLength >= insertString.length) return
+
+        candidateCoordinator.setCompletedData(candidate)
+        val composingCount = effectiveComposingCountForCandidate(candidate)
+
+        if (shouldUseQwertyRoman2KanaComposing()) {
+            val composingText = composingTextForCandidateRequest(insertString)
+            val indexMap = composingText.inputIndexToSurfaceIndexMap(azooKeyRoman2KanaTransducer)
+            val inputIndex = indexMap.entries.firstOrNull { it.value == readingLength }?.key
+                ?: readingLength
+            val raw = lastQwertyRomajiRawInput ?: ""
+            lastQwertyRomajiRawInput = raw.drop(inputIndex)
+            if (remainingKana.isNotEmpty()) {
+                candidateCoordinator.composingTextSession.rebuildFromQwertyRawInput(
+                    rawInput = lastQwertyRomajiRawInput.orEmpty(),
+                    zenkakuRomaji = isDefaultRomajiHenkanMap,
+                    displayInput = remainingKana,
+                )
+            } else {
+                candidateCoordinator.composingTextSession.prefixComplete(
+                    composingCount,
+                    azooKeyRoman2KanaTransducer,
+                )
+            }
+        } else {
+            candidateCoordinator.composingTextSession.prefixComplete(
+                composingCount,
+                azooKeyRoman2KanaTransducer,
+            )
+            val trimmedTarget = candidateCoordinator.composingTextSession.current().convertTarget
+            if (remainingKana.isNotEmpty() && trimmedTarget != remainingKana) {
+                candidateCoordinator.composingTextSession.applyDirectInput(remainingKana)
+            }
+        }
+
+        if (isLiveConversionEnable == true) {
+            liveConversionManager.updateAfterFirstClauseCompletion()
+        }
     }
 
     /**
@@ -16746,26 +16786,43 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         currentInputMode: InputMode,
         position: Int
     ) {
-        val candidateLength = candidate.length.toInt()
+        val candidateReadingLength = candidateReadingLength(candidate)
         val candidateString = candidate.string
-        if (insertString.length > candidateLength) {
-            val tail = insertString.substring(candidateLength)
+        if (insertString.length > candidateReadingLength) {
+            val tail = insertString.substring(candidateReadingLength)
             if (shouldLearnTappedCandidate(currentInputMode, position, candidate)) {
                 launchLearningMemoryCommit {
                     learningMemoryRepository.commitTappedCandidate(
-                        reading = insertString.substring(0, candidateLength),
+                        reading = insertString.substring(0, candidateReadingLength),
                         candidate = candidate,
                         position = position,
                     )
                 }
             }
-            commitPartialCandidateAndPromoteTail(candidateString, tail)
+            commitPartialCandidateAndPromoteTail(
+                candidateString = candidateString,
+                tail = tail,
+                candidate = candidate,
+                insertString = insertString,
+            )
             return
         }
         commitAndClearInput(candidateString)
     }
 
-    private fun commitPartialCandidateAndPromoteTail(candidateString: String, tail: String) {
+    private fun commitPartialCandidateAndPromoteTail(
+        candidateString: String,
+        tail: String,
+        candidate: Candidate? = null,
+        insertString: String? = null,
+    ) {
+        if (tail.isNotEmpty() && candidate != null && !insertString.isNullOrEmpty()) {
+            prepareComposingSessionAfterPartialCandidate(
+                candidate = candidate,
+                insertString = insertString,
+                remainingKana = tail,
+            )
+        }
         isPromotingTail = true
         suppressSelectionCleanupForInternalPreEditMove()
         beginBatchEdit()
@@ -16787,7 +16844,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 suggestionAdapterFull?.updateHighlightPosition(androidx.recyclerview.widget.RecyclerView.NO_POSITION)
                 isFirstClickHasStringTail = false
                 clearBunsetsuConversionSession()
-                if (isLiveConversionEnable == true) {
+                if (isLiveConversionEnable == true && candidate == null) {
                     liveConversionManager.updateAfterFirstClauseCompletion()
                 }
 
@@ -16832,7 +16889,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         learnTransitionFromLastCommittedWord(candidate.string, candidate)
         val tail = stringInTail.get()
         if (tail.isNotEmpty()) {
-            commitPartialCandidateAndPromoteTail(candidate.string, tail)
+            commitPartialCandidateAndPromoteTail(
+                candidateString = candidate.string,
+                tail = tail,
+                candidate = candidate,
+                insertString = insertString,
+            )
         } else {
             if (insertString.isNotEmpty() && stringInTail.get().isEmpty()) {
                 rememberCommittedTextForReconversion(
@@ -16893,7 +16955,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             }
 
             else -> {
-                if (insertString.length == candidate.length.toInt()) {
+                if (candidateMatchesInsertString(candidate, insertString)) {
                     handleExactLengthMatch(
                         insertString = insertString,
                         candidateString = candidate.string,
@@ -16935,7 +16997,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         learnTransitionFromLastCommittedWord(candidate.string, candidate)
         val tail = stringInTail.get()
         if (tail.isNotEmpty()) {
-            commitPartialCandidateAndPromoteTail(candidate.string, tail)
+            commitPartialCandidateAndPromoteTail(
+                candidateString = candidate.string,
+                tail = tail,
+                candidate = candidate,
+                insertString = insertString,
+            )
         } else {
             if (insertString.isNotEmpty() && stringInTail.get().isEmpty()) {
                 rememberCommittedTextForReconversion(
@@ -17794,27 +17861,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 val firstClauseReadingLength = autoCompletedClause.data.sumOf { it.reading.length }
                     .coerceAtMost(insertString.length)
                 val remainingKana = insertString.drop(firstClauseReadingLength)
-                candidateCoordinator.setCompletedData(autoCompletedClause)
-
-                if (shouldUseQwertyRoman2KanaComposing()) {
-                    val composingText = composingTextForCandidateRequest(insertString)
-                    val indexMap = composingText.inputIndexToSurfaceIndexMap(azooKeyRoman2KanaTransducer)
-                    val inputIndex = indexMap.entries.firstOrNull { it.value == firstClauseReadingLength }?.key
-                        ?: firstClauseReadingLength
-                    val raw = lastQwertyRomajiRawInput ?: ""
-                    lastQwertyRomajiRawInput = raw.drop(inputIndex)
-                    if (remainingKana.isNotEmpty()) {
-                        candidateCoordinator.composingTextSession.rebuildFromQwertyRawInput(
-                            rawInput = lastQwertyRomajiRawInput.orEmpty(),
-                            zenkakuRomaji = isDefaultRomajiHenkanMap,
-                            displayInput = remainingKana,
-                        )
-                    }
-                } else if (remainingKana.isNotEmpty()) {
-                    candidateCoordinator.composingTextSession.applyDirectInput(remainingKana)
-                }
-
-                commitPartialCandidateAndPromoteTail(autoCompletedClause.string, remainingKana)
+                commitPartialCandidateAndPromoteTail(
+                    candidateString = autoCompletedClause.string,
+                    tail = remainingKana,
+                    candidate = autoCompletedClause,
+                    insertString = insertString,
+                )
                 if (remainingKana.isEmpty()) {
                     resetAllFlags()
                 }
@@ -18681,10 +18733,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 applyCandidateCompleteActions(candidate!!)
             }
             if (tail.isNotEmpty()) {
-                commitPartialCandidateAndPromoteTail(commitString, tail)
-                if (canUseCandidate) {
-                    liveConversionManager.updateAfterFirstClauseCompletion()
-                } else {
+                commitPartialCandidateAndPromoteTail(
+                    candidateString = commitString,
+                    tail = tail,
+                    candidate = candidate?.takeIf { canUseCandidate },
+                    insertString = insertString,
+                )
+                if (!canUseCandidate) {
                     liveConversionManager.stopComposition()
                 }
                 candidateCoordinator.resetConversionSession()

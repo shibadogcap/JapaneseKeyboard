@@ -80,7 +80,8 @@ fun makePrefixClauseCandidate(data: List<AzooKeyDictionaryEntry>): Candidate {
         value = -5f,
         yomi = candidateData.joinToString("") { it.reading },
         data = candidateData,
-        lastMid = lastMid
+        lastMid = lastMid,
+        composingCount = ComposingCount.SurfaceCount(composingCount),
     )
 }
 
