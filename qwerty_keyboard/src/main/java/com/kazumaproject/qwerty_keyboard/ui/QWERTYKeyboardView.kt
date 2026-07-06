@@ -805,7 +805,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     ) {
         val density = context.resources.displayMetrics.density
         val radius = 8f * density // 角丸の半径 (8dp)
-        val enterRadius = 32f * density
+        val enterRadius = 1000f
 
         // 1. 全体の背景色を設定
         if (liquidGlassEnable) {
@@ -1473,6 +1473,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val bgSideRes = if (isDarkMode) com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
         else com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
 
+        val roundRes = if (isDarkMode) com.kazumaproject.core.R.drawable.round_key_bg_material
+        else com.kazumaproject.core.R.drawable.round_key_bg_material_light
+
         binding.apply {
             listOf(
                 key1, key2, key3, key4, key5, key6, key7, key8, key9, key0,
@@ -1495,7 +1498,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
             }
-            keyReturn.setBackgroundResource(com.kazumaproject.core.R.drawable.enter_key_bg)
+            keyReturn.background = ContextCompat.getDrawable(context, roundRes)
+            if (liquidGlassEnable) {
+                keyReturn.setDrawableAlpha(liquidGlassKeyAlphaEnable)
+            }
         }
     }
 

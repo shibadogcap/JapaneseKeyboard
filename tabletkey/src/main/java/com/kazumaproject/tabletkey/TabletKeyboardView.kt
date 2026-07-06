@@ -175,8 +175,7 @@ class TabletKeyboardView @JvmOverloads constructor(
         binding.keyLeftCursor,
         binding.keyRightCursor,
         binding.keyDelete,
-        binding.keySpace,
-        binding.keyEnter
+        binding.keySpace
     )
 
     private val listKeys: Map<Key, Any> = mapOf(
@@ -384,6 +383,17 @@ class TabletKeyboardView @JvmOverloads constructor(
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
             }
+            val roundRes = if (isNightMode) {
+                com.kazumaproject.core.R.drawable.round_key_bg_material
+            } else {
+                com.kazumaproject.core.R.drawable.round_key_bg_material_light
+            }
+            binding.keyEnter.background = insetEnterBackground(
+                ContextCompat.getDrawable(this.context, roundRes)
+            )
+            if (liquidGlassEnable) {
+                binding.keyEnter.setDrawableAlpha(liquidGlassKeyAlphaEnable)
+            }
             return
         }
     }
@@ -476,6 +486,7 @@ class TabletKeyboardView @JvmOverloads constructor(
     ) {
         val density = context.resources.displayMetrics.density
         val radius = 8f * density // 角丸の半径 (8dp)
+        val enterRadius = 1000f
 
         // 1. 全体の背景色を設定
         if (liquidGlassEnable) {
@@ -542,7 +553,7 @@ class TabletKeyboardView @JvmOverloads constructor(
 
             // 4. 確定キーへの適用
             val enterDrawableState =
-                getDynamicNeumorphDrawable(enterKeyColor, radius).constantState
+                getDynamicNeumorphDrawable(enterKeyColor, enterRadius).constantState
             val enterColorStateList = ColorStateList.valueOf(enterKeyTextColor)
 
             enterKeys.forEach { view ->
@@ -609,6 +620,12 @@ class TabletKeyboardView @JvmOverloads constructor(
         stateListDrawable.addState(intArrayOf(), idleLayer)
 
         return stateListDrawable
+    }
+
+    private fun insetEnterBackground(drawable: Drawable?): Drawable? {
+        if (drawable == null) return null
+        val verticalInset = (6 * context.resources.displayMetrics.density).toInt()
+        return android.graphics.drawable.InsetDrawable(drawable, 0, verticalInset, 0, verticalInset)
     }
 
     /**

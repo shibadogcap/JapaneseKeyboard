@@ -24,6 +24,7 @@ import androidx.appcompat.widget.AppCompatImageButton
 import androidx.core.content.ContextCompat
 import com.kazumaproject.core.domain.extensions.isDarkThemeOn
 import com.kazumaproject.custom_keyboard.data.GridPlacement
+import com.kazumaproject.custom_keyboard.data.KeyAction
 import com.kazumaproject.custom_keyboard.data.KeyData
 import com.kazumaproject.custom_keyboard.data.KeyIconResolver
 import com.kazumaproject.custom_keyboard.data.KeyItem
@@ -520,6 +521,14 @@ class EditableFlickKeyboardView @JvmOverloads constructor(
         }
     }
 
+    private fun isEnterKey(keyData: KeyData): Boolean {
+        return keyData.keyId == "enter_key" ||
+                keyData.action is KeyAction.Enter ||
+                keyData.action is KeyAction.Confirm ||
+                keyData.action is KeyAction.NewLine ||
+                keyData.action is KeyAction.ForceNewLine
+    }
+
     private fun createKeyView(
         keyData: KeyData,
         placement: GridPlacement
@@ -552,7 +561,13 @@ class EditableFlickKeyboardView @JvmOverloads constructor(
                 // ▼▼▼ 変更点2: InsetDrawable を使用 ▼▼▼
                 val originalBg = ContextCompat.getDrawable(
                     context,
-                    if (isDarkTheme) com.kazumaproject.core.R.drawable.ten_keys_side_bg_material else com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
+                    if (isEnterKey(keyData)) {
+                        com.kazumaproject.core.R.drawable.enter_key_bg
+                    } else if (isDarkTheme) {
+                        com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
+                    } else {
+                        com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
+                    }
                 )
                 val insetBg = android.graphics.drawable.InsetDrawable(
                     originalBg,
@@ -606,6 +621,15 @@ class EditableFlickKeyboardView @JvmOverloads constructor(
 
                 // ▼▼▼ 変更点3: 背景設定ロジックを InsetDrawable を使うように変更 ▼▼▼
                 val originalBg = when {
+                    isEnterKey(keyData) -> {
+                        elevation = 2f
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        ContextCompat.getDrawable(
+                            context,
+                            com.kazumaproject.core.R.drawable.enter_key_bg
+                        )
+                    }
+
                     keyData.isSpecialKey -> {
                         elevation = 2f
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
