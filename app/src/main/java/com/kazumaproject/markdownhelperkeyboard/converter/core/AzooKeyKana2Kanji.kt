@@ -46,6 +46,22 @@ class AzooKeyKana2Kanji(
             )
         }
         val value = data.clauses.last().second + mmValue
+        val composingCount = data.clauses.fold(ComposingCount.InputCount(0) as ComposingCount) { acc, (clause, _) ->
+            clause.ranges.fold(acc) { inner, (from, to) ->
+                ComposingCount.Composite(inner, ComposingCount.SurfaceCount(to - from))
+            }
+        }.let { count ->
+            if (count is ComposingCount.InputCount && count.count == 0) {
+                val rubyLength = data.data.sumOf { it.reading.length }
+                if (rubyLength > 0) {
+                    ComposingCount.SurfaceCount(rubyLength)
+                } else {
+                    count
+                }
+            } else {
+                count
+            }
+        }
         return Candidate(
             string = text,
             type = CandidateType.NBEST,
@@ -58,6 +74,7 @@ class AzooKeyKana2Kanji(
             data = data.data,
             lastMid = data.clauses.last().first.mid,
             rubyCount = data.data.sumOf { it.reading.length },
+            composingCount = composingCount,
         )
     }
 

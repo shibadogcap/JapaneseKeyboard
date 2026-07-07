@@ -152,7 +152,7 @@ class LiveConversionManagerTest {
     }
 
     @Test
-    fun rejectsHangulCandidateForLiveConversionDisplay() {
+    fun usesHangulCandidateWhenItCoversFullConvertTarget() {
         val manager = LiveConversionManager(enabled = true)
         val hangul = Candidate(
             string = "한국",
@@ -179,7 +179,7 @@ class LiveConversionManagerTest {
             convertTarget = "かんこく",
         )
 
-        assertEquals("かんこく", result)
+        assertEquals("한국", result)
     }
 
     @Test

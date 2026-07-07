@@ -56,6 +56,11 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/category_learning_dictionary_title">
+        <Preference
+            android:key="learn_dictionary_view_preference"
+            android:summary="@string/settings_open_learn_dictionary_summary"
+            android:title="@string/settings_open_learn_dictionary_title" />
+
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="learn_dictionary_preference"
@@ -123,6 +128,13 @@
             android:summaryOff="@string/user_template_summary_off"
             android:summaryOn="@string/user_template_summary_on"
             android:title="@string/user_template_title" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/ngram_rule_settings_category_title">
+        <Preference
+            android:key="ngram_rule_preference"
+            android:summary="@string/ngram_rule_settings_summary"
+            android:title="@string/ngram_rule_settings_title" />
     </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

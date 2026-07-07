@@ -1,10 +1,12 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer
+import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingCount
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.api.appendRoman2KanaCharAtEnd
 import com.kazumaproject.markdownhelperkeyboard.converter.api.insertDirectAtCursor
 import com.kazumaproject.markdownhelperkeyboard.converter.api.insertRoman2KanaAtCursor
+import com.kazumaproject.markdownhelperkeyboard.converter.api.prefixComplete
 import com.kazumaproject.markdownhelperkeyboard.ime_service.romaji_kana.RomajiComposingSnapshot
 
 /**
@@ -32,6 +34,11 @@ class ImeComposingTextSession {
     fun current(): ComposingText = composingText
 
     fun isActive(): Boolean = qwertyModeActive
+
+    /** AzooKey [ComposingText.prefixComplete] 相当。文節部分確定後に composing 状態を更新する。 */
+    fun prefixComplete(composingCount: ComposingCount, roman2Kana: AzooKeyRoman2KanaTransducer) {
+        composingText = composingText.prefixComplete(composingCount, roman2Kana)
+    }
 
     /** フリック等の直接かな入力 */
     fun applyDirectInput(displayInput: String) {

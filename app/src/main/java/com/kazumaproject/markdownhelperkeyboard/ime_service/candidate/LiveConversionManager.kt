@@ -5,7 +5,6 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.adjustCandidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.makePrefixClauseCandidate
-import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
 
 class LiveConversionManager(var enabled: Boolean) {
 
@@ -61,8 +60,7 @@ class LiveConversionManager(var enabled: Boolean) {
         var candidate: Candidate
         if (convertTargetCursorPosition > 1) {
             val matched = candidates.firstOrNull {
-                !AzooKeyJapaneseConversionText.containsHangul(it.string) &&
-                    it.coversFullConvertTarget(convertTarget.length)
+                it.coversFullConvertTarget(convertTarget.length)
             }
             candidate = matched ?: fallbackCandidate(convertTarget)
         } else {

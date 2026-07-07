@@ -101,7 +101,8 @@ class ImeCandidateCoordinatorTest {
             preferences = testPreferences(),
         )
 
-        assertEquals(filtered, result.candidates)
+        assertEquals(filtered, result.mainResults)
+        assertTrue(result.candidates.size >= filtered.size)
     }
 
     @Test

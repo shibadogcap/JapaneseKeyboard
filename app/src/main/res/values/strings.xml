@@ -699,6 +699,13 @@
     <string name="qwerty_romaji_hankaku_symbol_preference_summary">When enabled, symbols typed on the Romaji QWERTY keyboard are inserted as half-width characters.</string>
     <string name="zenz_preference_category_title">Settings for zenz</string>
     <string name="category_common">Common</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_theme_tab_summary">Theme mode, colors, fonts, and icons</string>
+    <string name="settings_open_learn_dictionary_title">View learned words</string>
+    <string name="settings_open_learn_dictionary_summary">Open the learned dictionary list from the bottom navigation</string>
+    <string name="ngram_rule_settings_category_title">Conversion rules</string>
+    <string name="ngram_rule_settings_title">N-gram rules</string>
+    <string name="ngram_rule_settings_summary">Adjust candidate scoring with custom word-sequence rules</string>
     <string name="category_dictionary">Dictionary</string>
     <string name="external_dictionary_settings_title">External Dictionary Files</string>
     <string name="external_dictionary_settings_summary">Replace bundled dictionaries with files you choose.</string>

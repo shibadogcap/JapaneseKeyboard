@@ -63,19 +63,41 @@ class AzooKeyEmojiDictionarySearchTest {
 
     @Test
     fun postCommitProviderDropsVariationEmojiLikeAzooKeyTextReplacer() = runTest {
-        val search = AzooKeyEmojiDictionarySearch.fromAzooKeyEmojiDictionaryText(
-            "🎂\tケーキ\t🥳"
+        val textReplacer = AzooKeyTextReplacer.fromEmojiTextReplacerText(
+            "🎂\tケーキ,たんじょうび\t🥳"
         )
         val provider = PostCommitEmojiDictionaryProvider(
             limit = 10,
-            search = { committedText, reading, limit ->
-                search.searchPostCommit(committedText, limit, committedReading = reading)
-            },
+            textReplacer = textReplacer,
         )
 
         assertEquals(
             listOf("🎂"),
-            provider.provide("ケーキ").map { it.string },
+            provider.provide(
+                Candidate(
+                    string = "ケーキ",
+                    type = CandidateType.NBEST,
+                    length = 3u,
+                    score = 0,
+                    data = listOf(
+                        AzooKeyDictionaryEntryMapper.emoji("ケーキ", "ケーキ"),
+                    ),
+                ),
+            ).map { it.string },
         )
+    }
+
+    @Test
+    fun searchDicdataInputPrefixUsesDicdataOnly() {
+        val search = AzooKeyEmojiDictionarySearch.fromAzooKeyEmojiDictionaryTexts(
+            textReplacerText = "😀️\tえがお,笑顔\t",
+            dicdataText = "エガオ\t😀️\t5\t5\t501\t-20\nエガオ\t😄\t5\t5\t501\t-10",
+        )
+
+        val dicdataOnly = search.searchDicdataInputPrefix("えが", limit = 10).map { it.surface }
+        val mixed = search.searchInputPrefix("えが", limit = 10).map { it.surface }
+
+        assertEquals(listOf("😄", "😀️"), dicdataOnly)
+        assertTrue("😀️" in mixed)
     }
 }

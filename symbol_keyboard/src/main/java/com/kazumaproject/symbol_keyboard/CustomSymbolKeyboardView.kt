@@ -142,6 +142,19 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     private var clipboardClearAllListener: (() -> Unit)? = null
     private var clipboardSearchListener: ((String) -> Unit)? = null
 
+    private var emojiControlLayout: LinearLayout? = null
+    private var emojiSearchView: androidx.appcompat.widget.SearchView? = null
+    private var emojiSearchListener: ((String) -> Unit)? = null
+    private var emojiSearchResults: List<String>? = null
+    private var symbolPanelSearchFocusListener: ((Boolean) -> Unit)? = null
+
+    private enum class ActiveSearchTarget {
+        CLIPBOARD,
+        EMOJI,
+    }
+
+    private var activeSearchTarget: ActiveSearchTarget? = null
+
     init {
         inflate(context, R.layout.symbol_keyboard_main_layout, this)
 
@@ -192,6 +205,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         clipboardSearchView = findViewById(R.id.clipboard_search_view)
         clipboardClearAllButton = findViewById(R.id.clipboard_clear_all_button)
 
+        emojiControlLayout = findViewById(R.id.emoji_control_layout)
+        emojiSearchView = findViewById(R.id.emoji_search_view)
+
         clipboardClearAllButton?.setOnClickListener {
             clipboardClearAllListener?.invoke()
         }
@@ -206,6 +222,25 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 return true
             }
         })
+        setupSymbolSearchView(clipboardSearchView, ActiveSearchTarget.CLIPBOARD)
+
+        emojiSearchView?.setOnQueryTextListener(object : androidx.appcompat.widget.SearchView.OnQueryTextListener {
+            override fun onQueryTextChange(newText: String?): Boolean {
+                val query = newText.orEmpty()
+                emojiSearchListener?.invoke(query)
+                if (query.isBlank()) {
+                    emojiSearchResults = null
+                    if (currentMode == SymbolMode.EMOJI) {
+                        categoryTab.visibility = View.VISIBLE
+                        updateSymbolsForCategory(categoryTab.selectedTabPosition)
+                    }
+                }
+                return true
+            }
+
+            override fun onQueryTextSubmit(query: String?): Boolean = false
+        })
+        setupSymbolSearchView(emojiSearchView, ActiveSearchTarget.EMOJI)
 
         emojiKitchenPreviewImage?.setOnClickListener {
             val bitmap = generatedStickerBitmap
@@ -334,10 +369,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                 buildCategoryTabs()
                 categoryTab.getTabAt(0)?.select()
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+                reapplyTabThemesIfNeeded()
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
+                reapplyTabThemesIfNeeded()
             }
             override fun onTabReselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -348,10 +385,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             override fun onTabSelected(tab: TabLayout.Tab?) {
                 updateSymbolsForCategory(tab?.position ?: 0)
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+                reapplyTabThemesIfNeeded()
             }
 
             override fun onTabUnselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
+                reapplyTabThemesIfNeeded()
             }
             override fun onTabReselected(tab: TabLayout.Tab?) {
                 customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
@@ -386,13 +425,14 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // 2. ColorStateList の作成（選択中を濃く、非選択を薄く）
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
-            intArrayOf(-android.R.attr.state_selected)
+            intArrayOf(),
         )
         val colors = intArrayOf(
             selectedIconColor,
-            iconColor
+            iconColor,
         )
         val tabColorStateList = ColorStateList(states, colors)
+        val effectiveKeyColor = ensureKeyContrast(backgroundColor, keyBackgroundColor)
         val bgTintList = ColorStateList.valueOf(backgroundColor)
         val tabButtonRadius = dpToPx(8).toFloat()
         val auxiliaryButtonRadius = dpToPx(8).toFloat()
@@ -410,7 +450,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★重要: タブの生成完了を待ってから背景を適用 (postを使用)
         categoryTab.post {
-            applyThemeToTabs(categoryTab, keyBackgroundColor, tabButtonRadius)
+            applyThemeToTabs(categoryTab, effectiveKeyColor, tabButtonRadius)
         }
 
         // 4. Mode Tab (Bottom Bar) の全体設定
@@ -422,13 +462,13 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         // ★重要: クリッピング無効化と遅延適用
         disableClipping(modeTab)
         modeTab.post {
-            applyThemeToTabs(modeTab, keyBackgroundColor, tabButtonRadius)
+            applyThemeToTabs(modeTab, effectiveKeyColor, tabButtonRadius)
         }
 
         // 5. 機能キー (Return/Delete) のニューモーフィズム設定
         val keyRadius = dpToPx(25).toFloat()
-        returnButton.background = getTabNeumorphDrawable(keyBackgroundColor, keyRadius)
-        deleteButton.background = getTabNeumorphDrawable(keyBackgroundColor, keyRadius)
+        returnButton.background = getTabNeumorphDrawable(effectiveKeyColor, keyRadius)
+        deleteButton.background = getTabNeumorphDrawable(effectiveKeyColor, keyRadius)
 
         val p = dpToPx(8)
         returnButton.setPadding(p, p, p, p)
@@ -438,7 +478,7 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         deleteButton.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
         applyThemeToAuxiliaryControls(
-            keyBackgroundColor = keyBackgroundColor,
+            keyBackgroundColor = effectiveKeyColor,
             iconColor = iconColor,
             cornerRadius = auxiliaryButtonRadius,
         )
@@ -448,9 +488,42 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
         }
 
         symbolAdapter.setThemeColors(
-            textColor = iconColor,
+            textColor = selectedIconColor,
             highlightColor = selectedIconColor
         )
+    }
+
+    @ColorInt
+    private fun ensureKeyContrast(@ColorInt panelColor: Int, @ColorInt keyColor: Int): Int {
+        if (colorDistance(panelColor, keyColor) >= 40f) {
+            return keyColor
+        }
+        return if (ColorUtils.calculateLuminance(panelColor) > 0.5) {
+            manipulateColor(panelColor, 0.82f)
+        } else {
+            manipulateColor(panelColor, 1.18f)
+        }
+    }
+
+    private fun colorDistance(@ColorInt left: Int, @ColorInt right: Int): Float {
+        val lr = Color.red(left)
+        val lg = Color.green(left)
+        val lb = Color.blue(left)
+        val rr = Color.red(right)
+        val rg = Color.green(right)
+        val rb = Color.blue(right)
+        val dr = (lr - rr).toFloat()
+        val dg = (lg - rg).toFloat()
+        val db = (lb - rb).toFloat()
+        return kotlin.math.sqrt(dr * dr + dg * dg + db * db)
+    }
+
+    private fun reapplyTabThemesIfNeeded() {
+        if (!isCustomThemeApplied) return
+        val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+        val tabButtonRadius = dpToPx(8).toFloat()
+        applyThemeToTabs(categoryTab, effectiveKeyColor, tabButtonRadius)
+        applyThemeToTabs(modeTab, effectiveKeyColor, tabButtonRadius)
     }
 
     private fun applyThemeToAuxiliaryControls(
@@ -475,6 +548,20 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             androidx.appcompat.R.id.search_mag_icon
         )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
         clipboardSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_close_btn
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+
+        emojiSearchView?.background = buttonBackground
+        emojiSearchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text
+        )?.apply {
+            setTextColor(iconColor)
+            setHintTextColor(hintColor)
+        }
+        emojiSearchView?.findViewById<android.widget.ImageView>(
+            androidx.appcompat.R.id.search_mag_icon
+        )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
+        emojiSearchView?.findViewById<android.widget.ImageView>(
             androidx.appcompat.R.id.search_close_btn
         )?.setColorFilter(iconColor, PorterDuff.Mode.SRC_IN)
 
@@ -517,7 +604,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             }
 
             // キー背景色でボタン面を描画（パネル背景色だと影が見えなくなる）
-            tabView.background = getTabNeumorphDrawable(buttonColor, cornerRadius)
+            tabView.backgroundTintList = null
+            tabView.background = getTabNeumorphDrawable(
+                baseColor = buttonColor,
+                radius = cornerRadius,
+                selectedAccentColor = if (isCustomThemeApplied) themeSelectedIconColor else null,
+            )
 
             // パディング調整 (Drawable内のpaddingとは別に、Viewのコンテンツ位置調整)
             // TenKeyのロジックではDrawable自体がpaddingを持つため、View自体のpaddingは少なめでOK
@@ -533,7 +625,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     /**
      * TenKeyの getDynamicNeumorphDrawable と同等の実装
      */
-    private fun getTabNeumorphDrawable(@ColorInt baseColor: Int, radius: Float): Drawable {
+    private fun getTabNeumorphDrawable(
+        @ColorInt baseColor: Int,
+        radius: Float,
+        @ColorInt selectedAccentColor: Int? = null,
+    ): Drawable {
         // 1. 色の計算 (TenKeyと同じ係数を使用)
         // ハイライト色: 明るくする
         val highlightColor = manipulateColor(baseColor, 1.25f)
@@ -568,6 +664,12 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
             setColor(baseColor)
+            val strokeColor = if (ColorUtils.calculateLuminance(baseColor) > 0.5) {
+                manipulateColor(baseColor, 0.78f)
+            } else {
+                manipulateColor(baseColor, 1.22f)
+            }
+            setStroke((1 * density).toInt().coerceAtLeast(1), strokeColor)
         }
 
         // LayerDrawableで重ねる (下から順に描画)
@@ -584,14 +686,19 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // --- B. 押下・選択状態 (Pressed / Selected) の作成 ---
 
-        val pressedDrawable = GradientDrawable().apply {
+        val selectedSurfaceDrawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = radius
-            setColor(pressedColor)
+            if (selectedAccentColor != null) {
+                setColor(manipulateColor(baseColor, 0.88f))
+                setStroke((2 * density).toInt().coerceAtLeast(2), selectedAccentColor)
+            } else {
+                setColor(pressedColor)
+            }
         }
 
         // サイズが変わらないようにLayerDrawableにして同じInsetを与える
-        val pressedLayer = LayerDrawable(arrayOf(pressedDrawable))
+        val pressedLayer = LayerDrawable(arrayOf(selectedSurfaceDrawable))
         pressedLayer.setLayerInset(0, padding, padding, padding, padding)
 
 
@@ -690,6 +797,100 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
     fun setOnClipboardItemLongClickListener(l: ClipboardItemLongClickListener) {
         clipboardItemLongClickListener = l
+    }
+
+    fun setOnEmojiSearchListener(listener: (String) -> Unit) {
+        emojiSearchListener = listener
+    }
+
+    fun setOnSymbolPanelSearchFocusListener(listener: (Boolean) -> Unit) {
+        symbolPanelSearchFocusListener = listener
+    }
+
+    fun isSymbolPanelSearchActive(): Boolean = activeSearchTarget != null
+
+    fun getActiveSearchQuery(): String {
+        return activeSearchView()?.query?.toString().orEmpty()
+    }
+
+    fun appendActiveSearchText(text: String) {
+        if (text.isEmpty()) return
+        val searchView = activeSearchView() ?: return
+        val updated = searchView.query?.toString().orEmpty() + text
+        searchView.setQuery(updated, true)
+    }
+
+    fun setActiveSearchText(text: String) {
+        val searchView = activeSearchView() ?: return
+        val current = searchView.query?.toString().orEmpty()
+        if (current == text) return
+        searchView.setQuery(text, true)
+    }
+
+    fun deleteActiveSearchChar(): Boolean {
+        val searchView = activeSearchView() ?: return false
+        val current = searchView.query?.toString().orEmpty()
+        if (current.isEmpty()) return false
+        searchView.setQuery(current.dropLast(1), true)
+        return true
+    }
+
+    fun clearSymbolPanelSearchFocus(resetQueries: Boolean = false) {
+        activeSearchTarget = null
+        clipboardSearchView?.clearFocus()
+        emojiSearchView?.clearFocus()
+        if (resetQueries) {
+            clipboardSearchView?.setQuery("", false)
+            emojiSearchView?.setQuery("", false)
+            emojiSearchResults = null
+        }
+        symbolPanelSearchFocusListener?.invoke(false)
+    }
+
+    private fun activeSearchView(): androidx.appcompat.widget.SearchView? {
+        return when (activeSearchTarget) {
+            ActiveSearchTarget.CLIPBOARD -> clipboardSearchView
+            ActiveSearchTarget.EMOJI -> emojiSearchView
+            null -> null
+        }
+    }
+
+    private fun setupSymbolSearchView(
+        searchView: androidx.appcompat.widget.SearchView?,
+        target: ActiveSearchTarget,
+    ) {
+        val editText = searchView?.findViewById<android.widget.EditText>(
+            androidx.appcompat.R.id.search_src_text,
+        ) ?: return
+        editText.showSoftInputOnFocus = false
+        editText.isFocusableInTouchMode = true
+        val activate = {
+            activeSearchTarget = target
+            editText.requestFocus()
+            symbolPanelSearchFocusListener?.invoke(true)
+        }
+        searchView.setOnClickListener { activate() }
+        editText.setOnClickListener { activate() }
+        // Keep search routing active while the user types on the IME keyboard below.
+        // Deactivation is handled explicitly via clearSymbolPanelSearchFocus().
+        editText.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                activate()
+            }
+        }
+    }
+
+    fun displayEmojiSearchResults(results: List<String>) {
+        emojiSearchResults = results
+        if (currentMode != SymbolMode.EMOJI) return
+        val hasQuery = !emojiSearchView?.query.isNullOrBlank()
+        categoryTab.visibility = if (hasQuery) View.GONE else View.VISIBLE
+        refreshEmojiGrid()
+    }
+
+    private fun refreshEmojiGrid() {
+        if (currentMode != SymbolMode.EMOJI) return
+        updateSymbolsForCategory(categoryTab.selectedTabPosition)
     }
 
     fun setOnClipboardControlListener(onClearAll: () -> Unit, onSearch: (String) -> Unit) {
@@ -857,9 +1058,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★ テーマ適用フラグが立っている場合、タブ再構築後にテーマを適用
         if (isCustomThemeApplied) {
-            // postを使って描画後に適用
             modeTab.post {
-                applyThemeToTabs(modeTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
+                val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+                applyThemeToTabs(modeTab, effectiveKeyColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(modeTab, it) }
@@ -877,11 +1078,11 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         val states = arrayOf(
             intArrayOf(android.R.attr.state_selected),
-            intArrayOf(-android.R.attr.state_selected)
+            intArrayOf(),
         )
         val colors = intArrayOf(
             selectedColor,
-            normalColor
+            normalColor,
         )
         val tabColorStateList = ColorStateList(states, colors)
         categoryTab.tabIconTint = tabColorStateList
@@ -969,9 +1170,9 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
 
         // ★ テーマ適用フラグが立っている場合、タブ再構築後にテーマを適用
         if (isCustomThemeApplied) {
-            // postを使って描画後に適用
             categoryTab.post {
-                applyThemeToTabs(categoryTab, themeKeyBackgroundColor, dpToPx(8).toFloat())
+                val effectiveKeyColor = ensureKeyContrast(themeBackgroundColor, themeKeyBackgroundColor)
+                applyThemeToTabs(categoryTab, effectiveKeyColor, dpToPx(8).toFloat())
             }
         }
         customTypeface?.let { applyTypefaceToTabLayout(categoryTab, it) }
@@ -1001,13 +1202,29 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
     }
 
     private fun updateSymbolsForCategory(index: Int) {
-        if (currentMode == SymbolMode.CLIPBOARD) {
-            clipboardControlLayout?.visibility = View.VISIBLE
-            categoryTab.visibility = View.GONE
-        } else {
-            clipboardControlLayout?.visibility = View.GONE
-            clipboardSearchView?.setQuery("", false)
-            categoryTab.visibility = View.VISIBLE
+        when (currentMode) {
+            SymbolMode.CLIPBOARD -> {
+                clipboardControlLayout?.visibility = View.VISIBLE
+                emojiControlLayout?.visibility = View.GONE
+                emojiSearchView?.setQuery("", false)
+                categoryTab.visibility = View.GONE
+            }
+            SymbolMode.EMOJI -> {
+                clipboardControlLayout?.visibility = View.GONE
+                clipboardSearchView?.setQuery("", false)
+                emojiControlLayout?.visibility = View.VISIBLE
+                val hasQuery = !emojiSearchView?.query.isNullOrBlank()
+                categoryTab.visibility = if (hasQuery) View.GONE else View.VISIBLE
+            }
+            else -> {
+                clearSymbolPanelSearchFocus()
+                clipboardControlLayout?.visibility = View.GONE
+                emojiControlLayout?.visibility = View.GONE
+                clipboardSearchView?.setQuery("", false)
+                emojiSearchView?.setQuery("", false)
+                emojiSearchResults = null
+                categoryTab.visibility = View.VISIBLE
+            }
         }
 
         skinTonePopup?.dismiss()
@@ -1038,19 +1255,31 @@ class CustomSymbolKeyboardView @JvmOverloads constructor(
                         gridLM.spanSizeLookup = GridLayoutManager.DefaultSpanSizeLookup()
                         val listForPaging = when (currentMode) {
                             SymbolMode.EMOJI -> {
-                                val hasHistory = historyEmojiList.isNotEmpty()
-                                if (hasHistory && index == 0) historyEmojiList
-                                else {
-                                    val adj = index - if (hasHistory) 1 else 0
-                                    emojiMap.keys.elementAtOrNull(adj)
-                                        ?.let {
-                                            emojiMap[it]?.map { e ->
-                                                EmojiSkinToneSupport.withSkinTone(
-                                                    e.symbol,
-                                                    this@CustomSymbolKeyboardView.defaultEmojiSkinTone
-                                                )
-                                            }
-                                        } ?: emptyList()
+                                val searchResults = emojiSearchResults
+                                if (!searchResults.isNullOrEmpty()) {
+                                    searchResults.map { symbol ->
+                                        EmojiSkinToneSupport.withSkinTone(
+                                            symbol,
+                                            this@CustomSymbolKeyboardView.defaultEmojiSkinTone,
+                                        )
+                                    }
+                                } else if (!emojiSearchView?.query.isNullOrBlank()) {
+                                    emptyList()
+                                } else {
+                                    val hasHistory = historyEmojiList.isNotEmpty()
+                                    if (hasHistory && index == 0) historyEmojiList
+                                    else {
+                                        val adj = index - if (hasHistory) 1 else 0
+                                        emojiMap.keys.elementAtOrNull(adj)
+                                            ?.let {
+                                                emojiMap[it]?.map { e ->
+                                                    EmojiSkinToneSupport.withSkinTone(
+                                                        e.symbol,
+                                                        this@CustomSymbolKeyboardView.defaultEmojiSkinTone
+                                                    )
+                                                }
+                                            } ?: emptyList()
+                                    }
                                 }
                             }
 

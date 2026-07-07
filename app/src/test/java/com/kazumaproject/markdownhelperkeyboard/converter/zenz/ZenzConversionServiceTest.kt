@@ -156,4 +156,56 @@ class ZenzConversionServiceTest {
         )
         assertNull(result)
     }
+
+    @Test
+    fun evaluateZenzaiWholeResultUsesDictionarySurface() = runTest {
+        val service = ZenzConversionService(FakeZenzEngine(evaluateResult = "WHOLE:視界"))
+        val candidates = service.evaluateZenzai(
+            ZenzPredictiveRequest(
+                insertReading = "しかい",
+                dictionaryCandidates = listOf(
+                    Candidate(string = "司会", type = CandidateType.NBEST, length = 3u, score = 0),
+                    Candidate(string = "視界", type = CandidateType.NBEST, length = 3u, score = 0),
+                ),
+                leftContext = "",
+                nBest = 3,
+                config = ZenzConversionConfig(),
+            ),
+        )
+        assertEquals(1, candidates.size)
+        assertEquals("視界", candidates.first().string)
+    }
+
+    @Test
+    fun evaluateZenzaiWholeResultFallsBackWhenNotInDictionary() = runTest {
+        val service = ZenzConversionService(FakeZenzEngine(evaluateResult = "WHOLE:世界"))
+        val candidates = service.evaluateZenzai(
+            ZenzPredictiveRequest(
+                insertReading = "しかい",
+                dictionaryCandidates = listOf(
+                    Candidate(string = "司会", type = CandidateType.NBEST, length = 3u, score = 0),
+                ),
+                leftContext = "",
+                nBest = 3,
+                config = ZenzConversionConfig(),
+            ),
+        )
+        assertEquals(1, candidates.size)
+        assertEquals("司会", candidates.first().string)
+    }
+
+    @Test
+    fun getPredictiveReadingRejectsHangulGeneration() = runTest {
+        val fake = FakeZenzEngine(generateResult = "한글")
+        val service = ZenzConversionService(fake)
+        val result = service.getPredictiveReading(
+            request = ZenzGenerationRequest(
+                insertReading = "てすと",
+                leftContext = "",
+                config = ZenzConversionConfig(),
+            ),
+            policy = policy(),
+        )
+        assertNull(result)
+    }
 }

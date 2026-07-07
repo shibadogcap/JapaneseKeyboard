@@ -39,6 +39,9 @@ data class ConvertRequestOptions(
     val zenzModelIdentity: String = "",
     val specialCandidateProviders: List<SpecialCandidateProvider> =
         com.kazumaproject.markdownhelperkeyboard.converter.candidate.DefaultSpecialCandidateProviders.providers,
+    /** AzooKey `ConvertRequestOptions.textReplacer` 相当。空の場合は [AzooKeyTextReplacer.empty] として扱う。 */
+    val textReplacer: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTextReplacer =
+        com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyTextReplacer.empty,
     val metadata: Metadata? = null,
     val useUserDictionary: Boolean = true,
     val useUserTemplate: Boolean = true,

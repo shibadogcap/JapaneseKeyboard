@@ -130,7 +130,7 @@ object AzooKeyMovingTowardPrefixSearch {
         while (true) {
             val (katakana, info) = generator.next() ?: break
             if (katakana.isEmpty()) continue
-            val charIds = charIdMap.encode(katakana) ?: continue
+            val charIds = charIdMap.encodeAllowingUnknown(katakana)
 
             val firstChar = katakana.first().toString()
             val keys = if (useMemory) {

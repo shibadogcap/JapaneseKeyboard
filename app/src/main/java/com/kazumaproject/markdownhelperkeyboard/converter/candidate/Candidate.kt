@@ -31,6 +31,19 @@ data class Candidate(
     /** azooKey互換: dataの各reading長の合計 */
     val effectiveRubyCount: Int
         get() = if (rubyCount >= 0) rubyCount else data.sumOf { it.reading.length }
+
+    /**
+     * 候補確定時に入力文字列と比較する読み長。
+     * data / rubyCount / yomi が無い候補では [length]（表記長）にフォールバックする。
+     */
+    fun resolvedReadingLength(): Int {
+        val fromData = data.sumOf { it.reading.length }
+        if (fromData > 0) return fromData
+        if (rubyCount >= 0) return rubyCount
+        val yomiLength = yomi?.length ?: 0
+        if (yomiLength > 0) return yomiLength
+        return length.toInt()
+    }
 }
 
 fun Candidate.adjustCandidate(): Candidate {
@@ -80,7 +93,8 @@ fun makePrefixClauseCandidate(data: List<AzooKeyDictionaryEntry>): Candidate {
         value = -5f,
         yomi = candidateData.joinToString("") { it.reading },
         data = candidateData,
-        lastMid = lastMid
+        lastMid = lastMid,
+        composingCount = ComposingCount.SurfaceCount(composingCount),
     )
 }
 
@@ -223,7 +237,7 @@ private val HALF_TO_FULL_WIDTH_ALPHANUM_MAP: Map<Char, Char> = run {
 /**
  * 文字列を半角カナに変換（azooKey `halfWidthKanaCandidate` 相当）
  */
-fun String.toHalfWidthKana(): String = this.map { KATAKANA_TO_HALF_WIDTH_MAP[it] ?: it }.joinToString("")
+fun String.toHalfWidthKana(): String = HalfWidthKatakanaConverter.convertFullWidthKatakana(this)
 
 /**
  * 文字列を全角英数字に変換（azooKey `fullWidthRomanCandidate` 相当）

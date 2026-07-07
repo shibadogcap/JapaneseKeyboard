@@ -25,6 +25,10 @@ class AzooKeyDictionaryAssetProvider @Inject constructor(
         AndroidAssetAzooKeyEmojiDictionaryLoader.createSearch(assets = assets)
     }
 
+    val textReplacer: AzooKeyTextReplacer by lazy {
+        AndroidAssetAzooKeyEmojiDictionaryLoader.createTextReplacer(assets = assets)
+    }
+
     val charIdMap: AzooKeyCharIdMap? by lazy {
         runCatching {
             assets.open("louds/charID.chid").use { stream ->
