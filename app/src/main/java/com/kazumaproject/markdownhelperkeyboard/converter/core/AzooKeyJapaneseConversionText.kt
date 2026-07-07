@@ -1,10 +1,19 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.core
 
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateLane
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
 import java.lang.Character.UnicodeBlock
 
 /**
  * AzooKey 変換候補向けの日本語テキスト判定。
- * Zenz rich alternative などモデル由来の非日本語トークン（ハングル等）を除外する。
+ *
+ * 役割は 3 層に分かれる:
+ * 1. [isValidPrefix] … Zenz rich alternative 向け（厳しめ。記号・絵文字は不可）
+ * 2. [isValidCandidateSurface] … 辞書・Zenz・システム候補の surface 向け（日本語＋IME 記号）
+ * 3. [shouldAcceptEngineCandidate] … エンジン出力全体（特殊候補は curated のため緩和）
+ *
+ * 表示バー向けの [shouldRejectDisplayedCandidate] はハングルのみ除外する。
  */
 internal object AzooKeyJapaneseConversionText {
     private val allowedAsciiSymbols = setOf(
@@ -25,6 +34,28 @@ internal object AzooKeyJapaneseConversionText {
     fun isValidCandidateSurface(surface: String): Boolean {
         if (surface.isEmpty() || containsHangul(surface)) return false
         return surface.codePoints().allMatch { isAllowedClauseCodePoint(it) }
+    }
+
+    /**
+     * 変換エンジンが候補リストへ載せてよいか。
+     * 特殊候補（記号・Unicode 入力等）はプロバイダ側で意図的に生成されるため、
+     * surface 文字種チェックよりハングル除外を優先する。
+     */
+    fun shouldAcceptEngineCandidate(candidate: Candidate): Boolean {
+        if (containsHangul(candidate.string)) return false
+        if (CandidateType.laneOf(candidate) == CandidateLane.Special) return true
+        return isValidCandidateSurface(candidate.string)
+    }
+
+    fun shouldAcceptEngineCandidateSurface(surface: String, type: Byte): Boolean {
+        return shouldAcceptEngineCandidate(
+            Candidate(
+                string = surface,
+                type = type,
+                length = surface.length.toUByte(),
+                score = 0,
+            ),
+        )
     }
 
     /** 候補バー表示から除外すべき surface（Zenz 由来のハングル等の謎候補） */
@@ -96,12 +127,50 @@ internal object AzooKeyJapaneseConversionText {
         if (codePoint in 0xFF41..0xFF5A || codePoint in 0xFF21..0xFF3A) return true // 全角英字
         if (codePoint in '0'.code..'9'.code || codePoint in 0xFF10..0xFF19) return true // 数字
         if (codePoint.toChar() in allowedAsciiSymbols) return true
-        if (codePoint in 0x2190..0x21FF) return true // 矢印（→←↑↓ 等）
-        if (codePoint in 0x25A0..0x25FF) return true // 幾何学図形（○●□■ 等）
-        if (codePoint == 0x3007) return true // 〇
+        if (isCommonImeSymbolCodePoint(codePoint)) return true
         if (codePoint == 0xEE08) return true
         if (isCjkIdeographCodePoint(codePoint)) return true
         return false
+    }
+
+    /** 辞書・記号変換で使われる一般的な記号ブロック（Zenz prefix には含めない） */
+    private fun isCommonImeSymbolCodePoint(codePoint: Int): Boolean {
+        if (codePoint in 0x2190..0x21FF) return true // Arrows
+        if (codePoint in 0x2200..0x22FF) return true // Mathematical Operators
+        if (codePoint in 0x2300..0x23FF) return true // Miscellaneous Technical
+        if (codePoint in 0x25A0..0x25FF) return true // Geometric Shapes
+        if (codePoint in 0x3000..0x303F) return true // CJK Symbols and Punctuation（〒・々 等）
+        if (codePoint == 0x3007) return true // 〇
+        if (codePoint in 0x20A0..0x20CF) return true // Currency Symbols（₿ 等）
+        if (codePoint in 0x2000..0x206F && !isBidiControlCodePoint(codePoint)) return true // General Punctuation
+        if (codePoint in 0x00A0..0x00FF && isLatin1ImeSymbol(codePoint)) return true
+        return false
+    }
+
+    private fun isLatin1ImeSymbol(codePoint: Int): Boolean {
+        if (codePoint in 'A'.code..'Z'.code || codePoint in 'a'.code..'z'.code) return false
+        if (codePoint in '0'.code..'9'.code) return false
+        return when (Character.getType(codePoint)) {
+            Character.MATH_SYMBOL.toInt(),
+            Character.CURRENCY_SYMBOL.toInt(),
+            Character.MODIFIER_SYMBOL.toInt(),
+            Character.OTHER_SYMBOL.toInt(),
+            Character.DASH_PUNCTUATION.toInt(),
+            Character.START_PUNCTUATION.toInt(),
+            Character.END_PUNCTUATION.toInt(),
+            Character.CONNECTOR_PUNCTUATION.toInt(),
+            Character.OTHER_PUNCTUATION.toInt(),
+            Character.INITIAL_QUOTE_PUNCTUATION.toInt(),
+            Character.FINAL_QUOTE_PUNCTUATION.toInt(),
+            -> true
+            else -> false
+        }
+    }
+
+    private fun isBidiControlCodePoint(codePoint: Int): Boolean {
+        return codePoint in 0x200E..0x200F ||
+            codePoint in 0x202A..0x202E ||
+            codePoint in 0x2066..0x2069
     }
 
     private fun isHangulCodePoint(codePoint: Int): Boolean {
