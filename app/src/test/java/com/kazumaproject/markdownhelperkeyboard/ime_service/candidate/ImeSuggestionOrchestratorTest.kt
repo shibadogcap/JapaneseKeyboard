@@ -140,7 +140,8 @@ class ImeSuggestionOrchestratorTest {
             roman2Kana = com.kazumaproject.markdownhelperkeyboard.converter.api.AzooKeyRoman2KanaTransducer.Identity,
             onBunsetsuMerged = { _, _, _ -> },
         )
-        assertEquals(listOf("司会"), candidates.map { it.string })
+        assertEquals(listOf("司会"), candidates.map { it.string }.take(1))
+        assertTrue(candidates.size >= 4)
     }
 
     private fun createEnglishKanaCoordinator(): ImeCandidateCoordinator {

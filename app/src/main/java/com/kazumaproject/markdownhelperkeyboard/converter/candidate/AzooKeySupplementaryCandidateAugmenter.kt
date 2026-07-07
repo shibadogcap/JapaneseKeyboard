@@ -1,7 +1,6 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ComposingText
-import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
 
 /**
@@ -33,7 +32,6 @@ object AzooKeySupplementaryCandidateAugmenter {
         }
         val emojiCandidates = entries.asSequence()
             .filter { AzooKeyDictionaryMetadata.EmojiVariation !in it.metadata }
-            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.surface) }
             .filter { it.surface !in existingSurfaces }
             .distinctBy { it.surface }
             .take(limit)

@@ -11,9 +11,10 @@ import org.junit.Test
 
 class ImeCandidateLiveZenzMixerTest {
     @Test
-    fun mergePromotesZenzCandidateAheadOfDictionary() {
+    fun mergePromotesDictionaryMatchedZenzCandidateAheadOfDictionary() {
         val dictionary = listOf(
             Candidate(string = "司会", type = 1, length = 3u, score = 3000),
+            Candidate(string = "視界", type = 1, length = 3u, score = 2500),
         )
         val zenz = listOf(
             ZenzCandidate(
@@ -34,7 +35,7 @@ class ImeCandidateLiveZenzMixerTest {
     }
 
     @Test
-    fun mergeReturnsNullWhenReadingMismatch() {
+    fun mergeReturnsNullWhenZenzSurfaceNotInDictionary() {
         val merged = AzooKeyLiveZenzMerge.mergeIfApplicable(
             insertReading = "しかい",
             dictionaryCandidates = listOf(
@@ -43,6 +44,26 @@ class ImeCandidateLiveZenzMixerTest {
             zenzCandidates = listOf(
                 ZenzCandidate(
                     string = "視界",
+                    type = CandidateType.ZENZ,
+                    length = 3u,
+                    score = 2000,
+                    originalString = "しかい",
+                ),
+            ),
+        )
+        assertNull(merged)
+    }
+
+    @Test
+    fun mergeReturnsNullWhenReadingMismatch() {
+        val merged = AzooKeyLiveZenzMerge.mergeIfApplicable(
+            insertReading = "しかい",
+            dictionaryCandidates = listOf(
+                Candidate(string = "司会", type = 1, length = 3u, score = 3000),
+            ),
+            zenzCandidates = listOf(
+                ZenzCandidate(
+                    string = "司会",
                     type = CandidateType.ZENZ,
                     length = 3u,
                     score = 2000,
@@ -90,31 +111,6 @@ class ImeCandidateLiveZenzMixerTest {
         requireNotNull(merged)
         assertEquals(1, merged.first().data.size)
         assertEquals("シカイ", merged.first().data.first().reading)
-    }
-
-    @Test
-    fun mergePopulatesYomiForZenzCandidates() {
-        val dictionary = listOf(
-            Candidate(string = "司会", type = 1, length = 3u, score = 3000),
-        )
-        val zenz = listOf(
-            ZenzCandidate(
-                string = "視界",
-                type = CandidateType.ZENZ,
-                length = 3u,
-                score = 2000,
-                originalString = "しかい",
-            ),
-        )
-        val merged = AzooKeyLiveZenzMerge.mergeIfApplicable(
-            insertReading = "しかい",
-            dictionaryCandidates = dictionary,
-            zenzCandidates = zenz,
-        )
-        requireNotNull(merged)
-        val zenzResult = merged.firstOrNull { it.string == "視界" }
-        requireNotNull(zenzResult)
-        assertEquals("しかい", zenzResult.yomi)
     }
 
     @Test

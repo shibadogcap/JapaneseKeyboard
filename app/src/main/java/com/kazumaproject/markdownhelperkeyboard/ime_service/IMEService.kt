@@ -11370,9 +11370,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 zenzCandidates = resultFromZenz,
                             )
                             if (mergedCandidates != null) {
-                                suggestionAdapter?.suggestions =
-                                    com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
-                                        .filterDisplayedCandidates(mergedCandidates)
+                                suggestionAdapter?.suggestions = mergedCandidates
                             }
                         } else {
                             if (inputString.value.isEmpty()) {
@@ -11669,8 +11667,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             return
         }
         // supplementaryCandidates は main と分離済み。ライブ変換は mainResults のみ参照する。
-        val displayCandidates = com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
-            .filterDisplayedCandidates(candidates)
+        val displayCandidates = candidates
         val request = keyboardSurfaceCoordinator.buildCandidateSurfaceRequest(
             physicalKeyboardEnableReplayFirst = physicalKeyboardEnable.replayCache.firstOrNull() == true &&
                 hasHardwareKeyboardConnected == true,
@@ -11934,11 +11931,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 return@launch
             }
             if (candidates.isNotEmpty()) {
-                val filtered = com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
-                    .filterDisplayedCandidates(candidates)
-                suggestionAdapter?.suggestions = filtered
-                suggestionAdapterFull?.suggestions = filtered
-                filteredCandidateList = filtered
+                suggestionAdapter?.suggestions = candidates
+                suggestionAdapterFull?.suggestions = candidates
+                filteredCandidateList = candidates
                 mainLayoutBinding?.let { updateUpperAreaVisibility(it) }
             } else {
                 isPostCommitPredictionActive = false
@@ -17879,11 +17874,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 return
             }
 
-            if (liveText.isNotEmpty() &&
-                liveText != lastCandidate &&
-                !com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
-                    .containsHangul(liveText)
-            ) {
+            if (liveText.isNotEmpty() && liveText != lastCandidate) {
                 applyLiveConversionDisplay(liveText)
             }
             isContinuousTapInputEnabled.set(true)

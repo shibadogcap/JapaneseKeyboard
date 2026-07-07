@@ -7,7 +7,6 @@ import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRequestOpti
 import com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext
 import com.kazumaproject.markdownhelperkeyboard.converter.api.InputStyle
 import com.kazumaproject.markdownhelperkeyboard.converter.api.KanaKanjiConverter
-import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyJapaneseConversionText
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyLiveZenzMerge
 import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyReadingVariantAugmenter
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
@@ -107,20 +106,13 @@ class ImeCandidateCoordinator @Inject constructor(
         }
 
         val cachedReranked = rerankPlan?.let { getCachedZenzRerank(it.cacheKey) }
-        val filteredMainResults = response.result.mainResults.filterNot {
-            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
-        }
-        val mainResults = (cachedReranked ?: filteredMainResults).filterNot {
-            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
-        }
-        val filteredSupplementary = response.result.supplementaryCandidates.filterNot {
-            AzooKeyJapaneseConversionText.shouldRejectDisplayedCandidate(it.string)
-        }
+        val mainResults = cachedReranked ?: response.result.mainResults
+        val filteredSupplementary = response.result.supplementaryCandidates
         val displayCandidates = if (cachedReranked != null) {
             CandidateLanePresentation.mergeForDisplay(mainResults, filteredSupplementary)
         } else {
             response.result.copy(
-                mainResults = filteredMainResults,
+                mainResults = mainResults,
                 supplementaryCandidates = filteredSupplementary,
             ).displayCandidates()
         }
@@ -165,12 +157,10 @@ class ImeCandidateCoordinator @Inject constructor(
             policy = request.runtimeConversionPolicy,
         ) ?: return null
         putCachedZenzRerank(plan.cacheKey, reranked)
-        return AzooKeyJapaneseConversionText.filterDisplayedCandidates(
-            AzooKeyReadingVariantAugmenter.augment(
-                candidates = reranked,
-                reading = input,
-                includeHalfWidthKana = convertOptions.halfWidthKanaCandidate,
-            ),
+        return AzooKeyReadingVariantAugmenter.augment(
+            candidates = reranked,
+            reading = input,
+            includeHalfWidthKana = convertOptions.halfWidthKanaCandidate,
         )
     }
 

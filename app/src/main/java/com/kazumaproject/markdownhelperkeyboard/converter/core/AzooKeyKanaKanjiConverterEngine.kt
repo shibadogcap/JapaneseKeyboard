@@ -440,7 +440,6 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             )
             val mainResults = (additional + specialCandidates)
                 .map { it.applyAppropriateActions().parseTemplate() }
-                .filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) }
             return AzooKeyStyleConversionResult(
                 mainResults = mainResults,
                 firstClauseResults = mainResults,
@@ -477,8 +476,7 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             }
             return AzooKeyStyleConversionResult(
                 mainResults = mainResults
-                    .map { it.applyAppropriateActions().parseTemplate() }
-                    .filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) },
+                    .map { it.applyAppropriateActions().parseTemplate() },
             )
         }
 
@@ -592,22 +590,17 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var firstClauseResults = uniqueFirstClauseCandidates
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
-            .filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) }
 
         val seenCandidate = fullCandidates.map { it.string }.toMutableSet()
         val firstClauseCandidates = getUniqueCandidate(uniqueFirstClauseCandidates, seenCandidate)
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
-            .filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) }
         firstClauseCandidates.forEach { seenCandidate.add(it.string) }
 
         val dicCandidates = latticeResult.second[
             AzooKeyLatticeDualIndexMap.DualIndex.BothIndex(inputIdx = 0, surfaceIdx = 0),
         ].let { array ->
-            (array.inputIndexedNodes + array.surfaceIndexedNodes).mapNotNull { node ->
-                if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(node.entry.surface)) {
-                    return@mapNotNull null
-                }
+            (array.inputIndexedNodes + array.surfaceIndexedNodes).map { node ->
                 val length = when (val range = node.range) {
                     is AzooKeyLatticeRange.Surface -> (range.to - range.from).toUByte()
                     is AzooKeyLatticeRange.Input -> node.entry.reading.length.toUByte()
@@ -656,10 +649,8 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
 
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
-        result = result.filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) }
         result = result + firstClauseCandidates + wordList
         result = result
-            .filter { AzooKeyJapaneseConversionText.shouldAcceptEngineCandidate(it) }
             .map { it.applyAppropriateActions().parseTemplate() }
         firstClauseResults = firstClauseResults.map { it.applyAppropriateActions().parseTemplate() }
         predictionResults = predictionResults.map { it.applyAppropriateActions().parseTemplate() }

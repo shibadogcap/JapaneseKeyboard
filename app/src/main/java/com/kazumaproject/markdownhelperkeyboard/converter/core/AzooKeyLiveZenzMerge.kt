@@ -22,38 +22,26 @@ object AzooKeyLiveZenzMerge {
         if (dictionaryCandidates.isEmpty()) return null
 
         val inputLength = insertReading.length
-        val zenzAsCandidates = zenzCandidates
-            .filter { it.string.length <= inputLength }
-            .map { zenz ->
-                val dictionaryMatch = dictionaryCandidates.firstOrNull { it.string == zenz.string }
-                if (dictionaryMatch != null) {
-                    dictionaryMatch.copy(
-                        type = zenz.type,
-                        score = zenz.score,
-                        value = zenz.score.toFloat(),
-                    )
-                } else {
-                    Candidate(
-                        string = zenz.string,
-                        type = zenz.type,
-                        length = zenz.length,
-                        score = zenz.score,
-                        value = zenz.score.toFloat(),
-                        yomi = zenz.originalString,
-                    )
-                }
+        val zenzAsCandidates = zenzCandidates.mapNotNull { zenz ->
+            dictionaryCandidates.firstOrNull { it.string == zenz.string }?.let { dictionaryMatch ->
+                dictionaryMatch.copy(
+                    type = zenz.type,
+                    score = zenz.score,
+                    value = zenz.score.toFloat(),
+                )
             }
+        }
+        if (zenzAsCandidates.isEmpty()) return null
+
         val merged = (zenzAsCandidates + dictionaryCandidates.filter {
             it.type.toInt() != CandidateType.LEARNED_HISTORY.toInt() && it.string.length <= inputLength
         }).sortedByDescending { it.value }
         val mergedTop = AzooKeyZenzaiValueReorder.reorderTopValues(merged.take(5))
         val readingVariants = dictionaryCandidates.filter { candidate ->
-            candidate.type.toInt() in readingVariantTypes ||
-                AzooKeyJapaneseConversionText.isPureHalfWidthKatakana(candidate.string)
+            candidate.type.toInt() in readingVariantTypes
         }
-        val combined = mergedTop + readingVariants.filter { variant ->
+        return mergedTop + readingVariants.filter { variant ->
             mergedTop.none { it.string == variant.string }
         }
-        return AzooKeyJapaneseConversionText.filterDisplayedCandidates(combined)
     }
 }

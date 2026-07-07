@@ -64,7 +64,6 @@ internal object AzooKeyReadingVariantAugmenter {
         rubyCount: Int,
     ) {
         if (surface.isEmpty() || surface in seen) return
-        if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(surface)) return
         result += Candidate(
             string = surface,
             type = type,
