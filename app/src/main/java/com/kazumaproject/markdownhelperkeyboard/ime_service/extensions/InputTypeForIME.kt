@@ -1,214 +1,45 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.extensions
 
+import com.kazumaproject.core.domain.key.EnterKeyVisual
+import com.kazumaproject.core.domain.key.englishLabel
+import com.kazumaproject.core.domain.key.japaneseLabel
+import com.kazumaproject.core.domain.key.toSumireEnterKeyIndex
 import com.kazumaproject.markdownhelperkeyboard.ime_service.state.InputTypeForIME
 
-fun InputTypeForIME.getQWERTYReturnTextInJp(): String {
+fun InputTypeForIME.getEnterKeyVisual(): EnterKeyVisual {
     return when (this) {
-        InputTypeForIME.Text,
-        InputTypeForIME.TextAutoComplete,
-        InputTypeForIME.TextAutoCorrect,
-        InputTypeForIME.TextCapCharacters,
-        InputTypeForIME.TextCapSentences,
-        InputTypeForIME.TextCapWords,
-        InputTypeForIME.TextFilter,
-        InputTypeForIME.TextNoSuggestion,
-        InputTypeForIME.TextPersonName,
-        InputTypeForIME.TextPhonetic,
-        InputTypeForIME.TextWebEditText,
-            -> {
-            "確定"
-        }
-
         InputTypeForIME.TextMultiLine,
         InputTypeForIME.TextImeMultiLine,
         InputTypeForIME.TextShortMessage,
         InputTypeForIME.TextLongMessage,
-            -> {
-            "改行"
-        }
+            -> EnterKeyVisual.RETURN
 
-        InputTypeForIME.TextEmailAddress, InputTypeForIME.TextEmailSubject, InputTypeForIME.TextNextLine -> {
-            "確定"
-        }
+        InputTypeForIME.TextEmailAddress,
+        InputTypeForIME.TextEmailSubject,
+        InputTypeForIME.TextNextLine,
+            -> EnterKeyVisual.TAB
 
-        InputTypeForIME.TextDone -> {
-            "確定"
-        }
+        InputTypeForIME.TextDone -> EnterKeyVisual.CHECK
 
-        InputTypeForIME.TextSend -> {
-            "確定"
-        }
+        InputTypeForIME.TextWebSearchView,
+        InputTypeForIME.TextWebSearchViewFireFox,
+        InputTypeForIME.TextSearchView,
+            -> EnterKeyVisual.SEARCH
 
-        InputTypeForIME.TextWebSearchView, InputTypeForIME.TextWebSearchViewFireFox, InputTypeForIME.TextSearchView -> {
-            "検索"
-        }
+        InputTypeForIME.TextSend -> EnterKeyVisual.ARROW
 
-        InputTypeForIME.TextEditTextInWebView,
-        InputTypeForIME.TextUri,
-        InputTypeForIME.TextPostalAddress,
-        InputTypeForIME.TextWebEmailAddress,
-        InputTypeForIME.TextPassword,
-        InputTypeForIME.TextVisiblePassword,
-        InputTypeForIME.TextWebPassword,
-            -> {
-            "確定"
-        }
-
-        InputTypeForIME.None, InputTypeForIME.TextNotCursorUpdate -> {
-            "確定"
-        }
-
-        InputTypeForIME.Number,
-        InputTypeForIME.NumberDecimal,
-        InputTypeForIME.NumberPassword,
-        InputTypeForIME.NumberSigned,
-        InputTypeForIME.Phone,
-        InputTypeForIME.Date,
-        InputTypeForIME.Datetime,
-        InputTypeForIME.Time,
-            -> {
-            "確定"
-        }
+        else -> EnterKeyVisual.ARROW
     }
+}
+
+fun InputTypeForIME.getQWERTYReturnTextInJp(): String {
+    return getEnterKeyVisual().japaneseLabel()
 }
 
 fun InputTypeForIME.getQWERTYReturnTextInEn(): String {
-    return when (this) {
-        InputTypeForIME.Text,
-        InputTypeForIME.TextAutoComplete,
-        InputTypeForIME.TextAutoCorrect,
-        InputTypeForIME.TextCapCharacters,
-        InputTypeForIME.TextCapSentences,
-        InputTypeForIME.TextCapWords,
-        InputTypeForIME.TextFilter,
-        InputTypeForIME.TextNoSuggestion,
-        InputTypeForIME.TextPersonName,
-        InputTypeForIME.TextPhonetic,
-        InputTypeForIME.TextWebEditText,
-            -> {
-            "return"
-        }
-
-        InputTypeForIME.TextMultiLine,
-        InputTypeForIME.TextImeMultiLine,
-        InputTypeForIME.TextShortMessage,
-        InputTypeForIME.TextLongMessage,
-            -> {
-            "return"
-        }
-
-        InputTypeForIME.TextEmailAddress, InputTypeForIME.TextEmailSubject, InputTypeForIME.TextNextLine -> {
-            "return"
-        }
-
-        InputTypeForIME.TextDone -> {
-            "done"
-        }
-
-        InputTypeForIME.TextSend -> {
-            "return"
-        }
-
-        InputTypeForIME.TextWebSearchView, InputTypeForIME.TextWebSearchViewFireFox, InputTypeForIME.TextSearchView -> {
-            "search"
-        }
-
-        InputTypeForIME.TextEditTextInWebView,
-        InputTypeForIME.TextUri,
-        InputTypeForIME.TextPostalAddress,
-        InputTypeForIME.TextWebEmailAddress,
-        InputTypeForIME.TextPassword,
-        InputTypeForIME.TextVisiblePassword,
-        InputTypeForIME.TextWebPassword,
-            -> {
-            "return"
-        }
-
-        InputTypeForIME.None, InputTypeForIME.TextNotCursorUpdate -> {
-            "return"
-        }
-
-        InputTypeForIME.Number,
-        InputTypeForIME.NumberDecimal,
-        InputTypeForIME.NumberPassword,
-        InputTypeForIME.NumberSigned,
-        InputTypeForIME.Phone,
-        InputTypeForIME.Date,
-        InputTypeForIME.Datetime,
-        InputTypeForIME.Time,
-            -> {
-            "return"
-        }
-    }
+    return getEnterKeyVisual().englishLabel()
 }
 
 fun InputTypeForIME.getEnterKeyIndexSumire(): Int {
-    return when (this) {
-        InputTypeForIME.Text,
-        InputTypeForIME.TextAutoComplete,
-        InputTypeForIME.TextAutoCorrect,
-        InputTypeForIME.TextCapCharacters,
-        InputTypeForIME.TextCapSentences,
-        InputTypeForIME.TextCapWords,
-        InputTypeForIME.TextFilter,
-        InputTypeForIME.TextNoSuggestion,
-        InputTypeForIME.TextPersonName,
-        InputTypeForIME.TextPhonetic,
-        InputTypeForIME.TextWebEditText,
-            -> {
-            1
-        }
-
-        InputTypeForIME.TextMultiLine,
-        InputTypeForIME.TextImeMultiLine,
-        InputTypeForIME.TextShortMessage,
-        InputTypeForIME.TextLongMessage,
-            -> {
-            0
-        }
-
-        InputTypeForIME.TextEmailAddress, InputTypeForIME.TextEmailSubject, InputTypeForIME.TextNextLine -> {
-            4
-        }
-
-        InputTypeForIME.TextWebSearchView, InputTypeForIME.TextWebSearchViewFireFox, InputTypeForIME.TextSearchView -> {
-            3
-        }
-
-        InputTypeForIME.TextEditTextInWebView,
-        InputTypeForIME.TextUri,
-        InputTypeForIME.TextPostalAddress,
-        InputTypeForIME.TextWebEmailAddress,
-        InputTypeForIME.TextPassword,
-        InputTypeForIME.TextVisiblePassword,
-        InputTypeForIME.TextWebPassword,
-            -> {
-            1
-        }
-
-        InputTypeForIME.None, InputTypeForIME.TextNotCursorUpdate -> {
-            1
-        }
-
-        InputTypeForIME.Number,
-        InputTypeForIME.NumberDecimal,
-        InputTypeForIME.NumberPassword,
-        InputTypeForIME.NumberSigned,
-        InputTypeForIME.Phone,
-        InputTypeForIME.Date,
-        InputTypeForIME.Datetime,
-        InputTypeForIME.Time,
-            -> {
-            1
-        }
-
-        InputTypeForIME.TextDone -> {
-            5
-        }
-
-        InputTypeForIME.TextSend -> {
-            1
-        }
-
-    }
+    return getEnterKeyVisual().toSumireEnterKeyIndex()
 }

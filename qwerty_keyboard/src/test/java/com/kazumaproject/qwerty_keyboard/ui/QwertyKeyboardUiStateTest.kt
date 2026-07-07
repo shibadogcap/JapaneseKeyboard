@@ -1,6 +1,7 @@
 package com.kazumaproject.qwerty_keyboard.ui
 
 import com.kazumaproject.core.data.qwerty.CapsLockState
+import com.kazumaproject.core.domain.key.EnterKeyVisual
 import com.kazumaproject.core.domain.state.QWERTYMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,7 +24,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Default,
             capsLockState = CapsLockState(shiftOn = true, capsLockOn = false),
             romajiMode = false,
-            enterKeyText = "Return",
+            enterKeyVisual = EnterKeyVisual.RETURN,
             spaceKeyText = "Space",
             showRomajiEnglishSwitchKey = false
         )
@@ -31,7 +32,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Default,
             capsLockState = CapsLockState(shiftOn = true, capsLockOn = false),
             romajiMode = false,
-            enterKeyText = "Return",
+            enterKeyVisual = EnterKeyVisual.RETURN,
             spaceKeyText = "Space",
             showRomajiEnglishSwitchKey = false
         )
@@ -46,7 +47,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Default,
             capsLockState = CapsLockState(),
             romajiMode = false,
-            enterKeyText = "",
+            enterKeyVisual = EnterKeyVisual.ARROW,
             spaceKeyText = "",
             showRomajiEnglishSwitchKey = false
         )
@@ -64,7 +65,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Default,
             capsLockState = CapsLockState(),
             romajiMode = false,
-            enterKeyText = "",
+            enterKeyVisual = EnterKeyVisual.ARROW,
             spaceKeyText = "",
             showRomajiEnglishSwitchKey = false
         )
@@ -82,7 +83,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Number,
             capsLockState = CapsLockState(shiftOn = false, capsLockOn = true),
             romajiMode = true,
-            enterKeyText = "決定",
+            enterKeyVisual = EnterKeyVisual.CHECK,
             spaceKeyText = "空白",
             showRomajiEnglishSwitchKey = true
         )
@@ -92,7 +93,7 @@ class QwertyKeyboardUiStateTest {
         assertEquals(QWERTYMode.Symbol, copy.qwertyMode)
         assertEquals(base.capsLockState, copy.capsLockState)
         assertEquals(base.romajiMode, copy.romajiMode)
-        assertEquals(base.enterKeyText, copy.enterKeyText)
+        assertEquals(base.enterKeyVisual, copy.enterKeyVisual)
         assertEquals(base.spaceKeyText, copy.spaceKeyText)
         assertEquals(base.showRomajiEnglishSwitchKey, copy.showRomajiEnglishSwitchKey)
     }
@@ -103,7 +104,7 @@ class QwertyKeyboardUiStateTest {
             qwertyMode = QWERTYMode.Default,
             capsLockState = CapsLockState(),
             romajiMode = true,
-            enterKeyText = "",
+            enterKeyVisual = EnterKeyVisual.ARROW,
             spaceKeyText = "",
             showRomajiEnglishSwitchKey = false
         )

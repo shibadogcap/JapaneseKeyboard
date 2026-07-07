@@ -125,6 +125,7 @@ import com.kazumaproject.core.domain.physical_keyboard.KanaDakutenComposer
 import com.kazumaproject.core.domain.physical_keyboard.PhysicalKanaMapper
 import com.kazumaproject.core.domain.physical_keyboard.PhysicalKeyboardInputMode
 import com.kazumaproject.core.domain.qwerty.QWERTYKey
+import com.kazumaproject.core.domain.key.EnterKeyVisual
 import com.kazumaproject.core.domain.state.GestureType
 import com.kazumaproject.core.domain.state.InputMode
 import com.kazumaproject.core.domain.state.TenKeyQWERTYMode
@@ -178,9 +179,8 @@ import com.kazumaproject.markdownhelperkeyboard.ime_service.clipboard.ClipboardU
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.correctReading
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getCurrentInputTypeForIME2
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getEnterKeyIndexSumire
+import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getEnterKeyVisual
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getLastCharacterAsString
-import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getQWERTYReturnTextInEn
-import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.getQWERTYReturnTextInJp
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isAllEnglishLetters
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isAllHiraganaWithSymbols
 import com.kazumaproject.markdownhelperkeyboard.ime_service.extensions.isPassword
@@ -910,6 +910,23 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         ContextCompat.getDrawable(
             applicationContext, com.kazumaproject.core.R.drawable.baseline_search_24
         )
+    }
+
+    private fun enterKeyDrawableForVisual(visual: EnterKeyVisual): Drawable? {
+        return when (visual) {
+            EnterKeyVisual.ARROW -> cachedArrowRightDrawable
+            EnterKeyVisual.RETURN -> cachedReturnDrawable
+            EnterKeyVisual.TAB -> cachedTabDrawable
+            EnterKeyVisual.CHECK -> cachedCheckDrawable
+            EnterKeyVisual.SEARCH -> cachedSearchDrawable
+        }
+    }
+
+    private fun applyEnterKeyVisualToSurfaces(visual: EnterKeyVisual) {
+        val drawable = enterKeyDrawableForVisual(visual)
+        mainLayoutBinding?.tabletView?.setSideKeyEnterDrawable(drawable)
+        mainLayoutBinding?.keyboardView?.setSideKeyEnterDrawable(drawable)
+        floatingKeyboardBinding?.keyboardViewFloating?.setSideKeyEnterDrawable(drawable)
     }
 
     private val cachedEnglishDrawable: Drawable? by lazy {
@@ -2303,7 +2320,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 setQwertySwitchNumberLayoutKeyVisibilityOnActiveSurface(true)
                 _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTY }
                 updateQwertyOnActiveSurface {
-                    resetQWERTYKeyboard(currentInputType.getQWERTYReturnTextInEn())
+                    resetQWERTYKeyboard(currentInputType.getEnterKeyVisual())
                 }
                 renderCurrentKeyboardStateOnActiveSurface()
             } else {
@@ -2550,7 +2567,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTY }
                     setQwertySwitchNumberLayoutKeyVisibilityOnActiveSurface(true)
                     setCurrentQwertyRomajiModeForSession(false)
-                    qwertyView.resetQWERTYKeyboard(currentInputType.getQWERTYReturnTextInEn())
+                    qwertyView.resetQWERTYKeyboard(currentInputType.getEnterKeyVisual())
                     setKeyboardSizeSwitchKeyboard(mainView)
                 }
             }
@@ -4887,7 +4904,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         setCurrentQwertyRomajiModeForSession(false)
         setQwertySwitchNumberLayoutKeyVisibilityOnActiveSurface(true)
         updateQwertyOnActiveSurface {
-            resetQWERTYKeyboard(currentInputType.getQWERTYReturnTextInEn())
+                    resetQWERTYKeyboard(currentInputType.getEnterKeyVisual())
         }
         renderCurrentKeyboardStateOnActiveSurface()
         if (insertString.isEmpty()) {
@@ -5434,7 +5451,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      * Floating mode を OFF に戻す際に呼ぶことで、ユーザーが Floating 中に変更した
      * Shift / CapsLock / Number / Symbol / Romaji 等の内部状態を引き継ぐ。
      *
-     * ただし enterKeyText / spaceKeyText は InputType に応じて showKeyboard() が常に
+     * ただし enterKeyVisual / spaceKeyText は InputType に応じて showKeyboard() が常に
      * mainView.qwertyView 側に正しい値をセットするのが source of truth であり、
      * Floating 側はその値を mirrorMainQwertyStateToFloating 経由でしか受け取らない。
      * Floating ON 中に showKeyboard(QWERTY/ROMAJI) が走ると mainView.qwertyView だけ
@@ -5454,7 +5471,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val floatingState = floatingView.qwertyViewFloating.snapshotUiState()
         val mainState = mainView.qwertyView.snapshotUiState()
         val merged = floatingState.copy(
-            enterKeyText = mainState.enterKeyText,
+            enterKeyVisual = mainState.enterKeyVisual,
             spaceKeyText = mainState.spaceKeyText
         )
         mainView.qwertyView.renderUiState(merged)
@@ -7718,8 +7735,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTY }
                         setCurrentInputModeForSession(InputMode.ModeEnglish)
                         setCurrentQwertyRomajiModeForSession(false)
-                        val qwertyEnterKeyText = currentInputType.getQWERTYReturnTextInEn()
-                        qwertyView.resetQWERTYKeyboard(qwertyEnterKeyText)
+                        qwertyView.resetQWERTYKeyboard(currentInputType.getEnterKeyVisual())
                     } else {
                         customKeyboardMode = KeyboardInputMode.HIRAGANA
                         customLayoutDefault.isVisible = true
@@ -7738,10 +7754,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                         _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTYRomaji }
                         setCurrentInputModeForSession(InputMode.ModeJapanese)
                         setCurrentQwertyRomajiModeForSession(true)
-                        val qwertyEnterKeyText = currentInputType.getQWERTYReturnTextInJp()
-                        qwertyView.setRomajiKeyboard(
-                            qwertyEnterKeyText
-                        )
+                        qwertyView.setRomajiKeyboard(currentInputType.getEnterKeyVisual())
                         qwertyView.setRomajiEnglishSwitchKeyVisibility(true)
                     } else {
                         customKeyboardMode = KeyboardInputMode.HIRAGANA
@@ -10462,10 +10475,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     if (qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji && currentInputModeForSession == InputMode.ModeJapanese) {
                         updateQwertyOnActiveSurface {
                             setSpaceKeyText("変換")
-                            setReturnKeyText("確定")
+                            setReturnKeyVisual(EnterKeyVisual.CHECK)
                         }
                     } else if ((qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTY && currentInputModeForSession == InputMode.ModeEnglish) || qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji && currentInputModeForSession == InputMode.ModeEnglish) {
-                        updateQwertyOnActiveSurface { setReturnKeyText("done") }
+                        updateQwertyOnActiveSurface { setReturnKeyVisual(EnterKeyVisual.CHECK) }
                     }
                     if (mainView.customLayoutDefault.isVisible) {
                         setSumireKeyboardDakutenKey()
@@ -10509,13 +10522,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             if (qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji && currentInputModeForSession == InputMode.ModeJapanese) {
                                 updateQwertyOnActiveSurface {
                                     setSpaceKeyText("空白")
-                                    val qwertyEnterKeyText =
-                                        currentInputType.getQWERTYReturnTextInJp()
-                                    setReturnKeyText(qwertyEnterKeyText)
+                                    setReturnKeyVisual(currentInputType.getEnterKeyVisual())
                                 }
                             } else if ((qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTY && currentInputModeForSession == InputMode.ModeEnglish) || qwertyMode.value == TenKeyQWERTYMode.TenKeyQWERTYRomaji && currentInputModeForSession == InputMode.ModeEnglish) {
-                                val qwertyEnterKeyText = currentInputType.getQWERTYReturnTextInEn()
-                                updateQwertyOnActiveSurface { setReturnKeyText(qwertyEnterKeyText) }
+                                updateQwertyOnActiveSurface {
+                                    setReturnKeyVisual(currentInputType.getEnterKeyVisual())
+                                }
                             }
                             setKeyboardHeightDefault(mainView)
                             setSumireKeyboardSwitchNumberAndKatakanaKey(0)
@@ -13479,6 +13491,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
                 }
             }
+
+            applyEnterKeyVisualToSurfaces(currentInputType.getEnterKeyVisual())
         }
     }
 
@@ -17975,31 +17989,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun setDrawableToEnterKeyCorrespondingToImeOptions(mainView: MainLayoutBinding) {
-        val currentDrawable = when (currentInputType) {
-            InputTypeForIME.TextWebSearchView, InputTypeForIME.TextWebSearchViewFireFox, InputTypeForIME.TextSearchView -> {
-                cachedSearchDrawable
-            }
-
-            InputTypeForIME.TextMultiLine, InputTypeForIME.TextImeMultiLine, InputTypeForIME.TextShortMessage, InputTypeForIME.TextLongMessage -> {
-                cachedReturnDrawable
-            }
-
-            InputTypeForIME.TextEmailAddress, InputTypeForIME.TextEmailSubject, InputTypeForIME.TextNextLine -> {
-                cachedTabDrawable
-            }
-
-            InputTypeForIME.TextDone -> {
-                cachedCheckDrawable
-            }
-
-            InputTypeForIME.TextSend -> {
-                cachedArrowRightDrawable
-            }
-
-            else -> {
-                cachedArrowRightDrawable
-            }
-        }
+        val currentDrawable = enterKeyDrawableForVisual(currentInputType.getEnterKeyVisual())
         if (isTabletGojuonSurface()) {
             mainView.tabletView.setSideKeyEnterDrawable(currentDrawable)
         } else {
@@ -18008,32 +17998,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun setDrawableToEnterKeyCorrespondingToImeOptionsFloating(floatingKeyboardLayoutBinding: FloatingKeyboardLayoutBinding) {
-        val currentDrawable = when (currentInputType) {
-            InputTypeForIME.TextWebSearchView, InputTypeForIME.TextWebSearchViewFireFox, InputTypeForIME.TextSearchView -> {
-                cachedSearchDrawable
-            }
-
-            InputTypeForIME.TextMultiLine, InputTypeForIME.TextImeMultiLine, InputTypeForIME.TextShortMessage, InputTypeForIME.TextLongMessage -> {
-                cachedReturnDrawable
-            }
-
-            InputTypeForIME.TextEmailAddress, InputTypeForIME.TextEmailSubject, InputTypeForIME.TextNextLine -> {
-                cachedTabDrawable
-            }
-
-            InputTypeForIME.TextDone -> {
-                cachedCheckDrawable
-            }
-
-            InputTypeForIME.TextSend -> {
-                cachedArrowRightDrawable
-            }
-
-            else -> {
-                cachedArrowRightDrawable
-            }
-        }
-        floatingKeyboardLayoutBinding.keyboardViewFloating.setSideKeyEnterDrawable(currentDrawable)
+        floatingKeyboardLayoutBinding.keyboardViewFloating.setSideKeyEnterDrawable(
+            enterKeyDrawableForVisual(currentInputType.getEnterKeyVisual())
+        )
     }
 
     private fun finishInputEnterKey() {
