@@ -96,6 +96,9 @@ internal object AzooKeyJapaneseConversionText {
         if (codePoint in 0xFF41..0xFF5A || codePoint in 0xFF21..0xFF3A) return true // 全角英字
         if (codePoint in '0'.code..'9'.code || codePoint in 0xFF10..0xFF19) return true // 数字
         if (codePoint.toChar() in allowedAsciiSymbols) return true
+        if (codePoint in 0x2190..0x21FF) return true // 矢印（→←↑↓ 等）
+        if (codePoint in 0x25A0..0x25FF) return true // 幾何学図形（○●□■ 等）
+        if (codePoint == 0x3007) return true // 〇
         if (codePoint == 0xEE08) return true
         if (isCjkIdeographCodePoint(codePoint)) return true
         return false

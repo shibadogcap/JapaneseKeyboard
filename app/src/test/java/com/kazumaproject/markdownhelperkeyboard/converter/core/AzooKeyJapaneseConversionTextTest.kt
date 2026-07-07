@@ -46,6 +46,18 @@ class AzooKeyJapaneseConversionTextTest {
     }
 
     @Test
+    fun acceptsArrowAndGeometricSymbolSurfaces() {
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("→"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("←"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("↑"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("↓"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("○"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("●"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("□"))
+        assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("■"))
+    }
+
+    @Test
     fun acceptsDecoratedAlphanumericSurfaces() {
         assertTrue(AzooKeyJapaneseConversionText.isValidCandidateSurface("abc"))
     }

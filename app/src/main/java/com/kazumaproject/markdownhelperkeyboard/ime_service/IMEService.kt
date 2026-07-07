@@ -13526,7 +13526,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         val candidate = liveConversionManager.lastUsedCandidate
         val commitString = when {
             candidate != null && candidateMatchesInsertString(candidate, insertString) -> {
-                applyCandidateCompleteActions(candidate)
                 getCandidateCommitString(candidate)
             }
             !lastCandidate.isNullOrEmpty() && lastCandidate != insertString -> lastCandidate!!
@@ -13539,6 +13538,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             commitText(commitString + tail, 1)
         } finally {
             endBatchEdit()
+        }
+        if (candidate != null && candidateMatchesInsertString(candidate, insertString)) {
+            applyCandidateCompleteActions(candidate)
+        } else {
+            setCursorLeftAfterCommitPair(commitString)
         }
         _inputString.update { "" }
         stringInTail.set("")
@@ -13567,6 +13571,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             candidateCoordinator.resetConversionSession()
         }
         commitText(text, 1)
+        applyDirectInsertCursorActions(text)
         clearSuggestionStateAfterCommit()
         resetFlagsEnterKeyNotHenkan()
     }
@@ -16105,10 +16110,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 currentInputMode = currentInputMode,
                 position = position
             )
-            if (handlePromotedTailAfterCandidateCommit()) {
+            val promotedTail = handlePromotedTailAfterCandidateCommit()
+            applyCandidateCompleteActions(candidate)
+            if (promotedTail) {
                 return
             }
-            applyCandidateCompleteActions(candidate)
         }
         resetFlagsSuggestionClick()
     }
@@ -17222,7 +17228,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             currentInputMode = currentInputMode,
             position = index
         )
-        if (handlePromotedTailAfterCandidateCommit()) {
+        val promotedTail = handlePromotedTailAfterCandidateCommit()
+        applyCandidateCompleteActions(nextSuggestion)
+        if (promotedTail) {
             return
         }
         clearSuggestionStateAfterCommit()
@@ -18798,16 +18806,53 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateCompleteAction.MoveCursor,
             >()
         if (moveActions.isNotEmpty()) {
-            moveActions.forEach { action ->
+            scheduleCursorMoveAfterCommit {
+                moveActions.forEach { action ->
+                    repeat(kotlin.math.abs(action.offset)) {
+                        if (action.offset < 0) {
+                            moveCursorLeftBySelection()
+                        }
+                    }
+                }
+            }
+            return
+        }
+        scheduleCursorMoveAfterCommit {
+            setCursorLeftAfterCommitPair(candidate.string)
+        }
+    }
+
+    private fun applyDirectInsertCursorActions(text: String) {
+        val actions = com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyAppropriateActions
+            .forCandidate(
+                com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate(
+                    string = text,
+                    type = com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType.SYMBOL_SPECIAL,
+                    length = text.length.toUByte(),
+                    score = 0,
+                )
+            )
+        if (actions.isEmpty()) {
+            scheduleCursorMoveAfterCommit {
+                setCursorLeftAfterCommitPair(text)
+            }
+            return
+        }
+        scheduleCursorMoveAfterCommit {
+            actions.filterIsInstance<
+                com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateCompleteAction.MoveCursor,
+                >().forEach { action ->
                 repeat(kotlin.math.abs(action.offset)) {
                     if (action.offset < 0) {
                         moveCursorLeftBySelection()
                     }
                 }
             }
-            return
         }
-        setCursorLeftAfterCommitPair(candidate.string)
+    }
+
+    private fun scheduleCursorMoveAfterCommit(action: () -> Unit) {
+        Handler(mainLooper).post(action)
     }
 
     private fun setCursorLeftAfterCommitPair(insertString: String) {

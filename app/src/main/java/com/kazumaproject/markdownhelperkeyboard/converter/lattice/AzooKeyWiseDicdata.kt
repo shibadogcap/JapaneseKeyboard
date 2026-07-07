@@ -1,5 +1,7 @@
 package com.kazumaproject.markdownhelperkeyboard.converter.lattice
 
+import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
+import com.kazumaproject.core.domain.extensions.toHiragana
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyCid
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionarySourceKind
@@ -66,6 +68,83 @@ object AzooKeyWiseDicdata {
             )
         }
 
+        // 1文字入力のリテラル通過（記号・カナ変換不能文字など）
+        if (convertTarget.length == 1) {
+            val katakana = convertTarget.hiraganaToKatakana()
+            val hiragana = convertTarget.toHiragana()
+            if (katakana == hiragana) {
+                result += literalEntry(surface = katakana, reading = katakana, value = -14f)
+            } else {
+                result += literalEntry(surface = hiragana, reading = katakana, value = -13f)
+                result += literalEntry(surface = katakana, reading = katakana, value = -14f)
+            }
+
+            val first = convertTarget.first()
+            var symbolValue = -14f
+            val halfwidth = fullwidthToHalfwidth[first]
+            if (halfwidth != null && halfwidth != first) {
+                result += literalEntry(
+                    surface = convertTarget,
+                    reading = convertTarget,
+                    leftId = AzooKeyCid.SYMBOL,
+                    value = symbolValue,
+                )
+                symbolValue -= 5f
+                result += literalEntry(
+                    surface = halfwidth.toString(),
+                    reading = convertTarget,
+                    leftId = AzooKeyCid.SYMBOL,
+                    value = symbolValue,
+                )
+                symbolValue -= 5f
+            }
+            val fullwidth = halfwidthToFullwidth[first]
+            if (fullwidth != null && fullwidth != first) {
+                result += literalEntry(
+                    surface = convertTarget,
+                    reading = convertTarget,
+                    leftId = AzooKeyCid.SYMBOL,
+                    value = symbolValue,
+                )
+                symbolValue -= 5f
+                result += literalEntry(
+                    surface = fullwidth.toString(),
+                    reading = convertTarget,
+                    leftId = AzooKeyCid.SYMBOL,
+                    value = symbolValue,
+                )
+            }
+        }
+
         return result
     }
+
+    private fun literalEntry(
+        surface: String,
+        reading: String,
+        leftId: Int = AzooKeyCid.PROPER_NOUN,
+        value: Float,
+    ): AzooKeyDictionaryEntry {
+        return AzooKeyDictionaryEntry(
+            surface = surface,
+            reading = reading,
+            leftId = leftId,
+            rightId = leftId,
+            mid = AzooKeyMid.GENERAL,
+            wordCost = value.toInt(),
+            value = value,
+            sourceKind = AzooKeyDictionarySourceKind.System,
+        )
+    }
+
+    private val fullwidthToHalfwidth: Map<Char, Char> = mapOf(
+        '（' to '(', '）' to ')', '［' to '[', '］' to ']', '｛' to '{', '｝' to '}',
+        '＜' to '<', '＞' to '>', '「' to '「', '」' to '」', '『' to '『', '』' to '』',
+        '＋' to '+', '－' to '-', '＊' to '*', '＝' to '=', '！' to '!', '＃' to '#',
+        '％' to '%', '＆' to '&', '＠' to '@', '；' to ';', '：' to ':', '，' to ',',
+        '．' to '.', '／' to '/', '＿' to '_', '￥' to '\\',
+    )
+
+    private val halfwidthToFullwidth: Map<Char, Char> =
+        fullwidthToHalfwidth.entries.associate { (full, half) -> half to full }
 }
