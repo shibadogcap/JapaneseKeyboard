@@ -13431,8 +13431,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun candidateReadingLength(candidate: Candidate): Int {
-        val fromData = candidate.data.sumOf { it.reading.length }
-        return if (fromData > 0) fromData else candidate.rubyCount
+        return candidate.resolvedReadingLength()
     }
 
     private fun candidateMatchesInsertString(candidate: Candidate, insertString: String): Boolean {
@@ -16787,26 +16786,26 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     ) {
         val candidateReadingLength = candidateReadingLength(candidate)
         val candidateString = candidate.string
-        if (insertString.length > candidateReadingLength) {
-            val tail = insertString.substring(candidateReadingLength)
-            if (shouldLearnTappedCandidate(currentInputMode, position, candidate)) {
-                launchLearningMemoryCommit {
-                    learningMemoryRepository.commitTappedCandidate(
-                        reading = insertString.substring(0, candidateReadingLength),
-                        candidate = candidate,
-                        position = position,
-                    )
-                }
-            }
-            commitPartialCandidateAndPromoteTail(
-                candidateString = candidateString,
-                tail = tail,
-                candidate = candidate,
-                insertString = insertString,
-            )
+        if (candidateReadingLength <= 0 || insertString.length <= candidateReadingLength) {
+            commitAndClearInput(candidateString)
             return
         }
-        commitAndClearInput(candidateString)
+        val tail = insertString.substring(candidateReadingLength)
+        if (shouldLearnTappedCandidate(currentInputMode, position, candidate)) {
+            launchLearningMemoryCommit {
+                learningMemoryRepository.commitTappedCandidate(
+                    reading = insertString.substring(0, candidateReadingLength),
+                    candidate = candidate,
+                    position = position,
+                )
+            }
+        }
+        commitPartialCandidateAndPromoteTail(
+            candidateString = candidateString,
+            tail = tail,
+            candidate = candidate,
+            insertString = insertString,
+        )
     }
 
     private fun commitPartialCandidateAndPromoteTail(

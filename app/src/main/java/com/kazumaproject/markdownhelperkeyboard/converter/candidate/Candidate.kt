@@ -31,6 +31,19 @@ data class Candidate(
     /** azooKey互換: dataの各reading長の合計 */
     val effectiveRubyCount: Int
         get() = if (rubyCount >= 0) rubyCount else data.sumOf { it.reading.length }
+
+    /**
+     * 候補確定時に入力文字列と比較する読み長。
+     * data / rubyCount / yomi が無い候補では [length]（表記長）にフォールバックする。
+     */
+    fun resolvedReadingLength(): Int {
+        val fromData = data.sumOf { it.reading.length }
+        if (fromData > 0) return fromData
+        if (rubyCount >= 0) return rubyCount
+        val yomiLength = yomi?.length ?: 0
+        if (yomiLength > 0) return yomiLength
+        return length.toInt()
+    }
 }
 
 fun Candidate.adjustCandidate(): Candidate {

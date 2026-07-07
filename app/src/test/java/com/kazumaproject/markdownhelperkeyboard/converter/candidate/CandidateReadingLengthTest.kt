@@ -56,4 +56,27 @@ class CandidateReadingLengthTest {
         val trimmed = composing.prefixComplete(ComposingCount.SurfaceCount(5))
         assertEquals("は", trimmed.convertTarget)
     }
+
+    @Test
+    fun resolvedReadingLengthFallsBackWhenMetadataMissing() {
+        val candidate = Candidate(
+            string = "hello",
+            type = CandidateType.NBEST,
+            length = 5u,
+            score = 0,
+        )
+        assertEquals(5, candidate.resolvedReadingLength())
+    }
+
+    @Test
+    fun resolvedReadingLengthNeverReturnsNegative() {
+        val candidate = Candidate(
+            string = "test",
+            type = CandidateType.NBEST,
+            length = 4u,
+            score = 0,
+            rubyCount = -1,
+        )
+        assertEquals(4, candidate.resolvedReadingLength())
+    }
 }
