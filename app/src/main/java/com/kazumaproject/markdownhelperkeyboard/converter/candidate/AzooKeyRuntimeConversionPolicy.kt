@@ -45,7 +45,6 @@ object AzooKeyRuntimeConversionPolicyResolver {
             input.zenzaiMode
         }
         val liveConversionMode = if (
-            blocksPersonalizedPaths ||
             blocksSuggestions ||
             input.isDirectInputMode ||
             input.isCandidateSelectionActive ||

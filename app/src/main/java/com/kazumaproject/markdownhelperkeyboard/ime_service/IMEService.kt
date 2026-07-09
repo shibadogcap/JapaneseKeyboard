@@ -1412,6 +1412,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 gemmaTranslationManager.initializeIfEnabled(forceReload = false)
             }
         }
+        ioScope.launch {
+            azooKeyDictionaryAssetProvider.warmUpConversionAssets()
+        }
         observeDeleteKeyFlickTargets()
         observeSumireSpecialKeyOverrides()
 
@@ -1619,6 +1622,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         )
         applyImePreferences(preferences)
         initializeMozcDictionaries(preferences)
+        ioScope.launch {
+            azooKeyDictionaryAssetProvider.warmUpConversionAssets()
+        }
         suggestionAdapter?.updateCustomTabVisibility(preferences.customKeyboardSuggestionPreference)
         syncZenzLeftContextFromEditor()
     }
@@ -11061,7 +11067,9 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     }
 
                     CandidateShowFlag.Updating -> {
-                        delay(CANDIDATE_REFRESH_DEBOUNCE_MS)
+                        if (inputString.value.length > 1) {
+                            delay(CANDIDATE_REFRESH_DEBOUNCE_MS)
+                        }
                         setSuggestionOnView(inputString.value, mainView)
                     }
                 }

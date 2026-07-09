@@ -20,7 +20,7 @@ class CandidateRequestTest {
         assertEquals(AzooKeyStyleZenzaiMode.Off, request.effectiveZenzaiMode)
         assertFalse(request.shouldReadLearnedCandidates)
         assertFalse(request.shouldUseZenzaiPredictiveInput)
-        assertFalse(request.shouldUseLiveConversion)
+        assertTrue(request.shouldUseLiveConversion)
     }
 
     @Test

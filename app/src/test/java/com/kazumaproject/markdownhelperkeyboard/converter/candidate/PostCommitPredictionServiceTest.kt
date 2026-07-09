@@ -43,7 +43,7 @@ class PostCommitPredictionServiceTest {
             searchLearnedTransitions = { _, _ ->
                 listOf(candidate("です", score = 100, value = 10f))
             },
-            searchLoudsTransitions = { _, _ ->
+            searchLoudsTransitions = { _, limit, _ ->
                 listOf(candidate("駅", score = 300, value = 50f))
             },
             emojiProvider = PostCommitEmojiDictionaryProvider(
@@ -65,7 +65,7 @@ class PostCommitPredictionServiceTest {
     fun predictDoesNotUseSyntheticFallbackPredictionsWhenNoLearnedOrLoudsTransitionExists() = runTest {
         val service = PostCommitPredictionService(
             searchLearnedTransitions = { _, _ -> emptyList() },
-            searchLoudsTransitions = { _, _ -> emptyList() },
+            searchLoudsTransitions = { _, _, _ -> emptyList() },
             emojiProvider = PostCommitEmojiDictionaryProvider(
                 limit = 8,
                 fallbackSearch = { _, _, _ -> emptyList() },
@@ -81,11 +81,39 @@ class PostCommitPredictionServiceTest {
     }
 
     @Test
+    fun predictUsesYomiForLearnedTransitionLookup() = runTest {
+        var learnedQuery: String? = null
+        val service = PostCommitPredictionService(
+            searchLearnedTransitions = { reading, _ ->
+                learnedQuery = reading
+                listOf(candidate("駅", score = 300, value = 50f))
+            },
+            emojiProvider = PostCommitEmojiDictionaryProvider(
+                limit = 8,
+                fallbackSearch = { _, _, _ -> emptyList() },
+            ),
+        )
+
+        service.predict(
+            leftSideCandidate = Candidate(
+                string = "東京",
+                yomi = "とうきょう",
+                type = CandidateType.NBEST,
+                length = 3.toUByte(),
+                score = 0,
+            ),
+            useLearnedTransitions = true,
+        )
+
+        assertEquals("とうきょう", learnedQuery)
+    }
+
+    @Test
     fun predictUsesYomiForLoudsTransitionLookup() = runTest {
         var loudsQuery: String? = null
         val service = PostCommitPredictionService(
             searchLearnedTransitions = { _, _ -> emptyList() },
-            searchLoudsTransitions = { reading, _ ->
+            searchLoudsTransitions = { reading, _, _ ->
                 loudsQuery = reading
                 emptyList()
             },

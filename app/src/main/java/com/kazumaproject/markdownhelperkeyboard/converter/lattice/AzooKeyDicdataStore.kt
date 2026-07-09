@@ -285,7 +285,15 @@ class AzooKeyLoudsBackedDicdataStore(
                         }
                     }
                 }
-                typoSearchers.forEach { searcher ->
+                val activeTypoSearchers = if (typoSearchers.isNotEmpty()) {
+                    typoSearchers
+                } else {
+                    loudsLookups.filterIsInstance<com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLoudsDictionaryRegistry>()
+                        .firstOrNull()
+                        ?.typoSearchersForPrefix(prefix)
+                        ?: emptyList()
+                }
+                activeTypoSearchers.forEach { searcher ->
                     searcher.typoPrefixMatches(prefix).forEach { (typoReading, penalty) ->
                         loudsLookups.forEach { lookup ->
                             lookup.exactEntries(typoReading).forEach { appendEntry(it, penalty, typoReading) }
