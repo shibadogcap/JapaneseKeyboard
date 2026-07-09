@@ -55,6 +55,21 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/category_privacy_learning_title">
+
+        <Preference
+            android:key="privacy_learning_info_preference"
+            android:selectable="false"
+            android:summary="@string/privacy_learning_info_summary"
+            android:title="@string/privacy_learning_info_title" />
+
+        <Preference
+            android:key="clear_learning_data_preference"
+            android:summary="@string/clear_learning_data_summary"
+            android:title="@string/clear_learning_data_title" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/category_learning_dictionary_title">
         <Preference
             android:key="learn_dictionary_view_preference"

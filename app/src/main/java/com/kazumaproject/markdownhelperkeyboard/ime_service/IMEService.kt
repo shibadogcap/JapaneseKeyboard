@@ -11886,7 +11886,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                     previousCommittedText = previous.string,
                     committedText = committedText,
                     isLearnDictionaryMode = learnMode,
-                    isPrivateMode = isPrivateMode,
+                    allowsLearningWrites = currentRuntimeConversionPolicy(inputString.value)
+                        .shouldWriteLearningMemory,
                     candidate = candidate,
                 )
             )
@@ -11908,7 +11909,6 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (!AzooKeyPostCommitPredictionPolicy.shouldRequestPrediction(
                 AzooKeyPostCommitPredictionPolicyInput(
                     committedText = committedText,
-                    isPrivateMode = isPrivateMode,
                     suppressSuggestions = suppressSuggestions,
                     isJapaneseMode = currentInputModeForSession == InputMode.ModeJapanese,
                 )
@@ -16779,7 +16779,8 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             AzooKeyCandidateLearningPolicyInput(
                 isJapaneseMode = currentInputMode == InputMode.ModeJapanese,
                 isLearnDictionaryMode = isLearnDictionaryMode == true,
-                isPrivateMode = isPrivateMode,
+                allowsLearningWrites = currentRuntimeConversionPolicy(inputString.value)
+                    .shouldWriteLearningMemory,
                 position = position,
                 learnFirstCandidate = learnFirstCandidateDictionaryPreference == true,
                 candidate = candidate,

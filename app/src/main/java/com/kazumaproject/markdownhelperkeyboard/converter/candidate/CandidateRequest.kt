@@ -49,7 +49,7 @@ data class CandidateRequest(
         )
 
     val effectiveJapanesePredictionMode: AzooKeyStylePredictionMode
-        get() = if (privacy.blocksPersonalizedCandidates) {
+        get() = if (privacy.suppressSuggestions) {
             AzooKeyStylePredictionMode.Disabled
         } else {
             japanesePredictionMode

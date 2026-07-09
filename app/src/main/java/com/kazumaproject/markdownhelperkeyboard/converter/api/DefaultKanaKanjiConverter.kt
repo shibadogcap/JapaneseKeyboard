@@ -64,7 +64,7 @@ class DefaultKanaKanjiConverter @Inject constructor(
             session = environment.conversionSession ?: ConversionSession(),
             searchMemory = { reading, limit ->
                 withContext(Dispatchers.IO) {
-                    if (options.learningType != AzooKeyStyleLearningType.Nothing) {
+                    if (policy.learningType != AzooKeyStyleLearningType.Nothing) {
                         learningMemoryRepository.prefixSearch(reading, limit.coerceAtMost(options.maxMemoryCount))
                     } else {
                         emptyList()

@@ -12,9 +12,9 @@ class AzooKeyPostCommitPredictionPolicyTest {
     }
 
     @Test
-    fun blocksBlankPrivateSuppressedAndNonJapaneseInput() {
+    fun blocksBlankSuppressedAndNonJapaneseInput() {
         assertFalse(shouldRequest(committedText = " "))
-        assertFalse(shouldRequest(committedText = "東京", isPrivateMode = true))
+        assertTrue(shouldRequest(committedText = "東京", isPrivateMode = true))
         assertFalse(shouldRequest(committedText = "東京", suppressSuggestions = true))
         assertFalse(shouldRequest(committedText = "東京", isJapaneseMode = false))
     }
@@ -100,14 +100,13 @@ class AzooKeyPostCommitPredictionPolicyTest {
 
     private fun shouldRequest(
         committedText: String,
-        isPrivateMode: Boolean = false,
+        @Suppress("UNUSED_PARAMETER") isPrivateMode: Boolean = false,
         suppressSuggestions: Boolean = false,
         isJapaneseMode: Boolean = true,
     ): Boolean {
         return AzooKeyPostCommitPredictionPolicy.shouldRequestPrediction(
             AzooKeyPostCommitPredictionPolicyInput(
                 committedText = committedText,
-                isPrivateMode = isPrivateMode,
                 suppressSuggestions = suppressSuggestions,
                 isJapaneseMode = isJapaneseMode,
             )
