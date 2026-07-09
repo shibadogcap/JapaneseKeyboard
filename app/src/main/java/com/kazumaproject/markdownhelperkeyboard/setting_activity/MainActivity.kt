@@ -77,8 +77,9 @@ class MainActivity : AppCompatActivity() {
             val navController = findNavController(R.id.nav_host_fragment_activity_main)
             when (request) {
                 "setting_fragment_request" -> {
-                    navController.popBackStack()
-                    navController.navigate(R.id.navigation_setting)
+                    navController.navigate(R.id.navigation_setting) {
+                        launchSingleTop = true
+                    }
                 }
 
                 "dictionary_fragment_request" -> {

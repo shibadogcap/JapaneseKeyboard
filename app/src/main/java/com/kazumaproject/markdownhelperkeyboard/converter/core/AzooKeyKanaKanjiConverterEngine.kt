@@ -427,7 +427,23 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             sessionState.stablePredictionCache = null
             sessionState.predictiveInputCache = null
             val additional = getAdditionalCandidate(inputData, options)
-            return AzooKeyStyleConversionResult(mainResults = additional, firstClauseResults = additional)
+            val request = CandidateRequestBridge.toCandidateRequest(
+                composingText = inputData,
+                options = options,
+                runtime = com.kazumaproject.markdownhelperkeyboard.converter.api.ConvertRuntimeContext(),
+                mode = CandidateRequestMode.Normal,
+            )
+            val seenCandidate = additional.map { it.string }.toMutableSet()
+            val specialCandidates = getUniqueCandidate(
+                options.specialCandidateProviders.flatMap { it.provide(request) },
+                seenCandidate,
+            )
+            val mainResults = (additional + specialCandidates)
+                .map { it.applyAppropriateActions().parseTemplate() }
+            return AzooKeyStyleConversionResult(
+                mainResults = mainResults,
+                firstClauseResults = mainResults,
+            )
         }
 
         val wholeSentenceUniqueCandidates: List<Candidate>
@@ -458,7 +474,10 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             } else {
                 merged.sortedByDescending { it.value }
             }
-            return AzooKeyStyleConversionResult(mainResults = mainResults.map { it.applyAppropriateActions().parseTemplate() })
+            return AzooKeyStyleConversionResult(
+                mainResults = mainResults
+                    .map { it.applyAppropriateActions().parseTemplate() },
+            )
         }
 
         val bestFiveSentenceCandidates = if (options.zenzaiMode.isEnabled) {
@@ -571,29 +590,24 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         var firstClauseResults = uniqueFirstClauseCandidates
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
-            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
 
         val seenCandidate = fullCandidates.map { it.string }.toMutableSet()
         val firstClauseCandidates = getUniqueCandidate(uniqueFirstClauseCandidates, seenCandidate)
             .sortedWith(compareByDescending<Candidate> { it.rubyCount }.thenByDescending { it.value })
             .take(firstClauseLimit)
-            .filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         firstClauseCandidates.forEach { seenCandidate.add(it.string) }
 
         val dicCandidates = latticeResult.second[
             AzooKeyLatticeDualIndexMap.DualIndex.BothIndex(inputIdx = 0, surfaceIdx = 0),
         ].let { array ->
-            (array.inputIndexedNodes + array.surfaceIndexedNodes).mapNotNull { node ->
-                if (!AzooKeyJapaneseConversionText.isValidCandidateSurface(node.entry.surface)) {
-                    return@mapNotNull null
-                }
+            (array.inputIndexedNodes + array.surfaceIndexedNodes).map { node ->
                 val length = when (val range = node.range) {
                     is AzooKeyLatticeRange.Surface -> (range.to - range.from).toUByte()
                     is AzooKeyLatticeRange.Input -> node.entry.reading.length.toUByte()
                 }
                 Candidate(
                     string = node.entry.surface,
-                    type = CandidateType.PART_OF_LETTERS,
+                    type = candidateTypeForDictionarySource(node.entry.sourceKind),
                     length = length,
                     score = node.entry.value.toInt(),
                     value = node.entry.value,
@@ -635,10 +649,9 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
         }
 
         var result = promoteExactReading(fullCandidates, bestFiveSentenceCandidates, wholeSentenceUniqueCandidates, inputData)
-        result = result.filter { AzooKeyJapaneseConversionText.isValidCandidateSurface(it.string) }
         result = result + firstClauseCandidates + wordList
-
-        result = result.map { it.applyAppropriateActions().parseTemplate() }
+        result = result
+            .map { it.applyAppropriateActions().parseTemplate() }
         firstClauseResults = firstClauseResults.map { it.applyAppropriateActions().parseTemplate() }
         predictionResults = predictionResults.map { it.applyAppropriateActions().parseTemplate() }
         englishPredictionResults = englishPredictionResults.map { it.applyAppropriateActions().parseTemplate() }
@@ -878,6 +891,14 @@ class AzooKeyKanaKanjiConverterEngine private constructor(
             splitPatterns = splitPatterns.distinct(),
             splitPatternByCandidateString = splitPatternByCandidateString,
         )
+    }
+
+    private fun candidateTypeForDictionarySource(sourceKind: AzooKeyDictionarySourceKind): Byte {
+        return when (sourceKind) {
+            AzooKeyDictionarySourceKind.Emoji -> CandidateType.EMOJI_LEGACY
+            AzooKeyDictionarySourceKind.Symbol -> CandidateType.SYMBOL_LEGACY
+            else -> CandidateType.PART_OF_LETTERS
+        }
     }
 }
 

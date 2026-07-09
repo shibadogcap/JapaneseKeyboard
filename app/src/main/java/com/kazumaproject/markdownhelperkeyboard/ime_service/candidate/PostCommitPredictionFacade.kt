@@ -1,62 +1,69 @@
 package com.kazumaproject.markdownhelperkeyboard.ime_service.candidate
 
+import com.kazumaproject.core.domain.extensions.hiraganaToKatakana
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryAssetProvider
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLearningMemoryRepository
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyPostCommitLoudsPredictor
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.Candidate
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.CandidateType
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.LearnedTransitionCandidateMapper
-import com.kazumaproject.markdownhelperkeyboard.converter.candidate.LearnedTransitionRecord
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.PostCommitEmojiDictionaryProvider
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.PostCommitPredictionService
+import com.kazumaproject.markdownhelperkeyboard.converter.core.AzooKeyDicdataFacadeFactory
 import com.kazumaproject.markdownhelperkeyboard.converter.engine.KanaKanjiEngine
-import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class PostCommitPredictionFacade @Inject constructor(
-    learnRepository: LearnRepository,
+    learningMemoryRepository: AzooKeyLearningMemoryRepository,
     azooKeyDictionaryAssets: AzooKeyDictionaryAssetProvider,
+    dicdataFacadeFactory: AzooKeyDicdataFacadeFactory,
     kanaKanjiEngine: KanaKanjiEngine,
 ) {
+    private val dicdataFacade = dicdataFacadeFactory.create { reading, limit ->
+        learningMemoryRepository.prefixSearch(reading, limit)
+    }
+
     private val service = PostCommitPredictionService(
-        searchLearnedTransitions = { input, limit ->
-            learnRepository.predictiveSearchByInput(input, limit).map {
-                LearnedTransitionCandidateMapper.toCandidate(
-                    LearnedTransitionRecord(
-                        input = it.input,
-                        output = it.out,
-                        score = it.score.toInt(),
-                        leftId = it.leftId,
-                        rightId = it.rightId,
-                    )
+        searchLearnedTransitions = { transitionReading, limit ->
+            learningMemoryRepository.prefixSearch(
+                reading = transitionReading.hiraganaToKatakana(),
+                limit = limit,
+            ).map { entry ->
+                Candidate(
+                    string = entry.surface,
+                    type = CandidateType.LEARNED_HISTORY,
+                    length = entry.surface.length.toUByte(),
+                    score = entry.value.toInt(),
+                    value = entry.value,
+                    yomi = entry.reading,
+                    leftId = entry.leftId?.toShort(),
+                    rightId = entry.rightId?.toShort(),
+                    data = listOf(entry),
+                    lastMid = entry.mid,
                 )
             }
         },
-        searchLoudsTransitions = { transitionReading, limit ->
-            azooKeyDictionaryAssets.loudsDictionaryRegistry
-                ?.prefixEntries(
-                    reading = transitionReading,
-                    maxDepth = 4,
-                    maxCount = limit,
-                )
-                ?.map { entry -> entry.toCandidate(type = CandidateType.POST_COMMIT_PREDICTION) }
-                ?: emptyList()
+        searchLoudsTransitions = { transitionReading, limit, leftSideCandidate ->
+            AzooKeyPostCommitLoudsPredictor.predictTransitions(
+                leftSideCandidate = leftSideCandidate,
+                facade = dicdataFacade,
+                useMemory = true,
+                limit = limit,
+            )
         },
         searchZeroHintCandidates = { leftSideCandidate, limit ->
-            val reading = leftSideCandidate.yomi?.takeIf { it.isNotBlank() }
-                ?: leftSideCandidate.string
-            azooKeyDictionaryAssets.loudsDictionaryRegistry
-                ?.prefixEntries(
-                    reading = reading,
-                    maxDepth = 4,
-                    maxCount = limit,
-                )
-                ?.map { entry -> entry.toCandidate(type = CandidateType.ZERO_HINT_PREDICTION) }
-                ?: emptyList()
+            AzooKeyPostCommitLoudsPredictor.predictZeroHint(
+                leftSideCandidate = leftSideCandidate,
+                facade = dicdataFacade,
+                useMemory = true,
+                limit = limit,
+            )
         },
         emojiProvider = PostCommitEmojiDictionaryProvider(
             limit = 8,
-            search = { surface, reading, limit ->
+            textReplacer = azooKeyDictionaryAssets.textReplacer,
+            fallbackSearch = { surface, reading, limit ->
                 azooKeyDictionaryAssets.emojiDictionarySearch?.searchPostCommit(
                     committedText = surface,
                     limit = limit,
@@ -76,5 +83,4 @@ class PostCommitPredictionFacade @Inject constructor(
             useLearnedTransitions = useLearnedTransitions,
         )
     }
-
 }

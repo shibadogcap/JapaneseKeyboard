@@ -6,4 +6,5 @@
     <string name="symbol_clipboard_action_pin">Pin</string>
     <string name="symbol_clipboard_action_unpin">Unpin</string>
     <string name="symbol_clipboard_action_delete">Delete</string>
+    <string name="symbol_emoji_search_hint">Search emoji (e.g. cake, smile)</string>
 </resources>

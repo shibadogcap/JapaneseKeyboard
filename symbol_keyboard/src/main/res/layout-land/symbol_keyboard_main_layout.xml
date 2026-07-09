@@ -31,6 +31,31 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/category_tab_layout" />
 
+    <!-- 絵文字辞書検索 -->
+    <LinearLayout
+        android:id="@+id/emoji_control_layout"
+        android:layout_width="0dp"
+        android:layout_height="44dp"
+        android:orientation="horizontal"
+        android:visibility="gone"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="3dp"
+        android:gravity="center_vertical"
+        android:background="@android:color/transparent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/emoji_kitchen_recycler_view">
+
+        <androidx.appcompat.widget.SearchView
+            android:id="@+id/emoji_search_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/symbol_keyboard_buttons_bg"
+            app:queryHint="@string/symbol_emoji_search_hint"
+            app:iconifiedByDefault="false"
+            app:queryBackground="@android:color/transparent" />
+    </LinearLayout>
+
     <!-- クリップボード検索 ＆ 全クリアコントロール -->
     <LinearLayout
         android:id="@+id/clipboard_control_layout"
@@ -44,7 +69,7 @@
         android:background="@android:color/transparent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/emoji_kitchen_recycler_view">
+        app:layout_constraintTop_toBottomOf="@id/emoji_control_layout">
 
         <androidx.appcompat.widget.SearchView
             android:id="@+id/clipboard_search_view"
@@ -68,6 +93,13 @@
 
     </LinearLayout>
 
+    <androidx.constraintlayout.widget.Barrier
+        android:id="@+id/symbol_controls_barrier"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:barrierDirection="bottom"
+        app:constraint_referenced_ids="emoji_control_layout,clipboard_control_layout" />
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/symbol_candidate_recycler_view"
         android:layout_width="0dp"
@@ -76,7 +108,7 @@
         app:layout_constraintBottom_toTopOf="@id/bottom_bar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/clipboard_control_layout" />
+        app:layout_constraintTop_toBottomOf="@id/symbol_controls_barrier" />
 
     <!-- Emoji Kitchen プレビュー用コンテナ -->
     <androidx.constraintlayout.widget.ConstraintLayout

@@ -71,7 +71,8 @@ class ZenzConversionService @Inject constructor(
             maxTokens = cappedTokens,
         )
         if (generated.isBlank()) return null
-        return generated.trim().katakanaToHiragana()
+        val sanitized = ZenzModelOutputPolicy.sanitizeGeneratedReading(generated) ?: return null
+        return sanitized.katakanaToHiragana()
     }
 
     suspend fun evaluateZenzai(
@@ -118,9 +119,14 @@ class ZenzConversionService @Inject constructor(
                     listOfNotNull(resolved ?: zenzCandidate(request, firstCandidate, CandidateType.ZENZ))
                 }
             }
-            is ZenzaiCandidateEvaluationResult.WholeResult -> listOf(
-                zenzCandidate(request, parsed.result, CandidateType.ZENZ),
-            )
+            is ZenzaiCandidateEvaluationResult.WholeResult -> {
+                val surface = ZenzDictionaryCandidateResolver.resolveSurface(
+                    dictionaryCandidates = request.dictionaryCandidates,
+                    constraint = parsed.result,
+                    fallback = firstCandidate,
+                )
+                listOf(zenzCandidate(request, surface, CandidateType.ZENZ_CONTEXTUAL))
+            }
             is ZenzaiCandidateEvaluationResult.FixRequired -> {
                 val prefix = parsed.prefix
                 val fromPrefix = request.dictionaryCandidates

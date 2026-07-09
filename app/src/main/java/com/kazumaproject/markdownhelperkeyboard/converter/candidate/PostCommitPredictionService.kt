@@ -5,10 +5,12 @@ class PostCommitPredictionService(
     private val loudsTransitionLimit: Int = 15,
     private val zeroHintLimit: Int = 15,
     private val composerEmojiLimit: Int = 3,
-    private val searchLearnedTransitions: suspend (committedText: String, limit: Int) -> List<Candidate>,
-    private val searchLoudsTransitions: suspend (transitionReading: String, limit: Int) -> List<Candidate> = { _, _ ->
-        emptyList()
-    },
+    private val searchLearnedTransitions: suspend (transitionReading: String, limit: Int) -> List<Candidate>,
+    private val searchLoudsTransitions: suspend (
+        transitionReading: String,
+        limit: Int,
+        leftSideCandidate: Candidate,
+    ) -> List<Candidate> = { _, _, _ -> emptyList() },
     private val searchZeroHintCandidates: suspend (leftSideCandidate: Candidate, limit: Int) -> List<Candidate> = { _, _ ->
         emptyList()
     },
@@ -23,14 +25,14 @@ class PostCommitPredictionService(
             return emptyList()
         }
 
-        val learnedTransitions = if (useLearnedTransitions) {
-            searchLearnedTransitions(committedText, learnedLimit)
+        val transitionReading = AzooKeyPostCommitPredictionPolicy.nextWordTransitionReading(leftSideCandidate)
+        val learnedTransitions = if (useLearnedTransitions && transitionReading != null) {
+            searchLearnedTransitions(transitionReading, learnedLimit)
         } else {
             emptyList()
         }
-        val transitionReading = AzooKeyPostCommitPredictionPolicy.nextWordTransitionReading(leftSideCandidate)
         val loudsTransitions = if (transitionReading != null) {
-            searchLoudsTransitions(transitionReading, loudsTransitionLimit)
+            searchLoudsTransitions(transitionReading, loudsTransitionLimit, leftSideCandidate)
         } else {
             emptyList()
         }
@@ -43,7 +45,7 @@ class PostCommitPredictionService(
             emptyList()
         }
         val emojiCandidates = emojiProvider.provide(
-            committedText = committedText,
+            leftSideCandidate = leftSideCandidate,
             committedReading = leftSideCandidate.yomi?.takeIf { it.isNotBlank() },
         )
 

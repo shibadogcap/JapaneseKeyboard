@@ -39,10 +39,20 @@ class AzooKeyLoudsDictionaryRegistry(
     }
 
     fun typoSearchers(): List<AzooKeyLoudsTypoSearcher> {
-        val trieSearchers = identifiers.mapNotNull { identifier ->
-            lookupByIdentifier(identifier)?.typoSearcher()
+        return listOf(AzooKeyClassicTypoCorrection.classicTypoSearcher())
+    }
+
+    fun typoSearchersForPrefix(prefix: String): List<AzooKeyLoudsTypoSearcher> {
+        if (prefix.isEmpty()) {
+            return typoSearchers()
         }
-        return trieSearchers + AzooKeyClassicTypoCorrection.classicTypoSearcher()
+        val identifier = prefix.first().toString()
+        val shardSearcher = lookupByIdentifier(identifier)?.typoSearcher()
+        return if (shardSearcher != null) {
+            listOf(shardSearcher, AzooKeyClassicTypoCorrection.classicTypoSearcher())
+        } else {
+            typoSearchers()
+        }
     }
 
     fun lookupByIdentifier(identifier: String): AzooKeyLoudsDictionaryLookup? {

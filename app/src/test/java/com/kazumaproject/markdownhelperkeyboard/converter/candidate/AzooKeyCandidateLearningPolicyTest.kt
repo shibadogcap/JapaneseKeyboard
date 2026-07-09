@@ -17,8 +17,12 @@ class AzooKeyCandidateLearningPolicyTest {
     }
 
     @Test
-    fun blocksPrivateModeAndNonJapaneseMode() {
-        assertFalse(policy(position = 1, isPrivateMode = true))
+    fun blocksWhenLearningWritesAreDisabled() {
+        assertFalse(policy(position = 1, allowsLearningWrites = false))
+    }
+
+    @Test
+    fun blocksNonJapaneseMode() {
         assertFalse(policy(position = 1, isJapaneseMode = false))
     }
 
@@ -30,7 +34,7 @@ class AzooKeyCandidateLearningPolicyTest {
     private fun policy(
         isJapaneseMode: Boolean = true,
         isLearnDictionaryMode: Boolean = true,
-        isPrivateMode: Boolean = false,
+        allowsLearningWrites: Boolean = true,
         position: Int,
         learnFirstCandidate: Boolean = false,
         candidate: Candidate = candidate(),
@@ -39,7 +43,7 @@ class AzooKeyCandidateLearningPolicyTest {
             AzooKeyCandidateLearningPolicyInput(
                 isJapaneseMode = isJapaneseMode,
                 isLearnDictionaryMode = isLearnDictionaryMode,
-                isPrivateMode = isPrivateMode,
+                allowsLearningWrites = allowsLearningWrites,
                 position = position,
                 learnFirstCandidate = learnFirstCandidate,
                 candidate = candidate,

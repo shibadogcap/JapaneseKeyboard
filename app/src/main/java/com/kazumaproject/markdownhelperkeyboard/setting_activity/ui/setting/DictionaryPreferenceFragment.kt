@@ -1,20 +1,31 @@
 package com.kazumaproject.markdownhelperkeyboard.setting_activity.ui.setting
 
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SeekBarPreference
 import androidx.preference.SwitchPreferenceCompat
 import com.kazumaproject.markdownhelperkeyboard.R
+import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLearningMemoryRepository
+import com.kazumaproject.markdownhelperkeyboard.repository.LearnRepository
 import com.kazumaproject.markdownhelperkeyboard.setting_activity.AppPreference
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class DictionaryPreferenceFragment : PreferenceFragmentCompat() {
 
     @Inject
     lateinit var appPreference: AppPreference
+
+    @Inject
+    lateinit var learnRepository: LearnRepository
+
+    @Inject
+    lateinit var learningMemoryRepository: AzooKeyLearningMemoryRepository
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.pref_dictionary, rootKey)
@@ -61,6 +72,21 @@ class DictionaryPreferenceFragment : PreferenceFragmentCompat() {
             true
         }
 
+        findPreference<Preference>("learn_dictionary_view_preference")?.setOnPreferenceClickListener {
+            navigateSafely(R.id.navigation_learn_dictionary)
+            true
+        }
+
+        findPreference<Preference>("clear_learning_data_preference")?.setOnPreferenceClickListener {
+            showClearLearningDataDialog()
+            true
+        }
+
+        findPreference<Preference>("ngram_rule_preference")?.setOnPreferenceClickListener {
+            navigateSafely(R.id.action_navigation_setting_to_ngramRuleFragment)
+            true
+        }
+
         val learnDictionaryPrefixSeekBar =
             findPreference<SeekBarPreference>("learn_prediction_preference")
         learnDictionaryPrefixSeekBar?.apply {
@@ -93,5 +119,24 @@ class DictionaryPreferenceFragment : PreferenceFragmentCompat() {
             }
         }
 
+    }
+
+    private fun showClearLearningDataDialog() {
+        AlertDialog.Builder(requireContext())
+            .setTitle(getString(R.string.clear_learning_data_title))
+            .setMessage(getString(R.string.clear_learning_data_confirm_message))
+            .setPositiveButton(getString(R.string.yes_string)) { _, _ ->
+                lifecycleScope.launch {
+                    learnRepository.deleteAll()
+                    runCatching { learningMemoryRepository.rebuildLoudsFromRoom() }
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        getString(R.string.clear_learning_data_success),
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            .setNegativeButton(getString(R.string.no_string), null)
+            .show()
     }
 }

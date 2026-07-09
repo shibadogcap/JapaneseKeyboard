@@ -4,6 +4,7 @@ import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDicti
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyDictionaryEntry
 import com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLoudsDictionaryRegistry
 import com.kazumaproject.markdownhelperkeyboard.converter.lattice.AzooKeyConnectionCostStore
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,17 +12,26 @@ import javax.inject.Singleton
 class AzooKeyDicdataFacadeFactory @Inject constructor(
     private val dictionaryAssets: AzooKeyDictionaryAssetProvider,
 ) {
+    private val searchMemoryRef = AtomicReference<suspend (String, Int) -> List<AzooKeyDictionaryEntry>>(
+        { _, _ -> emptyList() },
+    )
+
+    private val sharedFacade: AzooKeyDicdataFacade by lazy {
+        val registry = dictionaryAssets.loudsDictionaryRegistry
+            ?: error("AzooKey LOUDS registry is required for conversion")
+        AzooKeyDicdataFacade(
+            loudsLookups = listOf(registry),
+            searchMemory = { reading, limit -> searchMemoryRef.get()(reading, limit) },
+            typoSearchers = emptyList(),
+            connectionStore = dictionaryAssets.connectionCostStore,
+        )
+    }
+
     fun create(
         searchMemory: suspend (reading: String, limit: Int) -> List<AzooKeyDictionaryEntry>,
     ): AzooKeyDicdataFacade {
-        val registry = dictionaryAssets.loudsDictionaryRegistry
-            ?: error("AzooKey LOUDS registry is required for conversion")
-        return AzooKeyDicdataFacade(
-            loudsLookups = listOf(registry),
-            searchMemory = searchMemory,
-            typoSearchers = registry.typoSearchers(),
-            connectionStore = dictionaryAssets.connectionCostStore,
-        )
+        searchMemoryRef.set(searchMemory)
+        return sharedFacade
     }
 
     fun connectionStore(): AzooKeyConnectionCostStore? = dictionaryAssets.connectionCostStore
@@ -45,7 +55,7 @@ internal fun azooKeyDicdataFacadeSourceForTests(
         AzooKeyDicdataFacade(
             loudsLookups = listOf(registry),
             searchMemory = searchMemory,
-            typoSearchers = registry.typoSearchers(),
+            typoSearchers = emptyList(),
             connectionStore = connectionStore,
         )
     }

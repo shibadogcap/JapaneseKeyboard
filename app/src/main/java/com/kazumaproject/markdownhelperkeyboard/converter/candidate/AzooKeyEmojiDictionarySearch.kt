@@ -28,6 +28,18 @@ class AzooKeyEmojiDictionarySearch(
             .take(limit)
     }
 
+    /** 入力中変換: emoji dicdata の prefix のみ（AzooKey lattice 相当。TextReplacer は使わない）。 */
+    fun searchDicdataInputPrefix(input: String, limit: Int): List<AzooKeyDictionaryEntry> {
+        if (input.isBlank() || limit <= 0) return emptyList()
+        return index.searchPrefix(
+            prefix = input.normalizedEmojiQuery(),
+            sourceKind = AzooKeyDictionarySourceKind.Emoji,
+            limit = limit,
+        ).filter { AzooKeyDictionaryMetadata.EmojiDicdata in it.metadata }
+            .distinctBy { it.surface }
+            .take(limit)
+    }
+
     fun searchPostCommit(
         committedText: String,
         limit: Int,

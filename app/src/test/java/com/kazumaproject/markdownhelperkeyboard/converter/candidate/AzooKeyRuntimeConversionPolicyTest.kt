@@ -7,7 +7,7 @@ import org.junit.Test
 
 class AzooKeyRuntimeConversionPolicyTest {
     @Test
-    fun privateSessionSuppressesLearningZenzaiAndLiveConversion() {
+    fun privateSessionKeepsExistingLearningButStopsNewWrites() {
         val policy = AzooKeyRuntimeConversionPolicyResolver.resolve(
             AzooKeyRuntimeConversionPolicyInput(
                 learningType = AzooKeyStyleLearningType.InputAndOutput,
@@ -19,13 +19,28 @@ class AzooKeyRuntimeConversionPolicyTest {
             )
         )
 
-        assertEquals(AzooKeyStyleLearningType.Nothing, policy.learningType)
+        assertEquals(AzooKeyStyleLearningType.OnlyOutput, policy.learningType)
         assertEquals(AzooKeyStyleZenzaiMode.Off, policy.zenzaiMode)
         assertFalse(policy.allowsPersonalizedConversion)
-        assertFalse(policy.shouldReadLearningMemory)
+        assertTrue(policy.shouldReadLearningMemory)
         assertFalse(policy.shouldWriteLearningMemory)
         assertFalse(policy.shouldUseZenzaiPredictiveInput)
-        assertFalse(policy.shouldUseLiveConversion)
+        assertTrue(policy.shouldUseLiveConversion)
+    }
+
+    @Test
+    fun privateSessionWithLearningDisabledStaysDisabled() {
+        val policy = AzooKeyRuntimeConversionPolicyResolver.resolve(
+            AzooKeyRuntimeConversionPolicyInput(
+                learningType = AzooKeyStyleLearningType.Nothing,
+                privacy = CandidateRequestPrivacy(isPrivateMode = true),
+                isComposing = true,
+            )
+        )
+
+        assertEquals(AzooKeyStyleLearningType.Nothing, policy.learningType)
+        assertFalse(policy.shouldReadLearningMemory)
+        assertFalse(policy.shouldWriteLearningMemory)
     }
 
     @Test

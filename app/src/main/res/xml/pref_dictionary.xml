@@ -55,7 +55,27 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/category_privacy_learning_title">
+
+        <Preference
+            android:key="privacy_learning_info_preference"
+            android:selectable="false"
+            android:summary="@string/privacy_learning_info_summary"
+            android:title="@string/privacy_learning_info_title" />
+
+        <Preference
+            android:key="clear_learning_data_preference"
+            android:summary="@string/clear_learning_data_summary"
+            android:title="@string/clear_learning_data_title" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/category_learning_dictionary_title">
+        <Preference
+            android:key="learn_dictionary_view_preference"
+            android:summary="@string/settings_open_learn_dictionary_summary"
+            android:title="@string/settings_open_learn_dictionary_title" />
+
         <SwitchPreferenceCompat
             android:defaultValue="true"
             android:key="learn_dictionary_preference"
@@ -123,6 +143,13 @@
             android:summaryOff="@string/user_template_summary_off"
             android:summaryOn="@string/user_template_summary_on"
             android:title="@string/user_template_title" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/ngram_rule_settings_category_title">
+        <Preference
+            android:key="ngram_rule_preference"
+            android:summary="@string/ngram_rule_settings_summary"
+            android:title="@string/ngram_rule_settings_title" />
     </PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>

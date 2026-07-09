@@ -7,7 +7,7 @@ import org.junit.Test
 
 class CandidateRequestTest {
     @Test
-    fun privateRequestDisablesPersonalizedPredictionAndLearning() {
+    fun privateRequestDisablesPersonalizedConversionButKeepsExistingLearning() {
         val request = baseRequest(
             zenzaiMode = AzooKeyStyleZenzaiMode.On,
             experimentalZenzaiPredictiveInput = true,
@@ -15,12 +15,13 @@ class CandidateRequestTest {
             privacy = CandidateRequestPrivacy(isPrivateMode = true),
         )
 
-        assertEquals(AzooKeyStylePredictionMode.Disabled, request.effectiveJapanesePredictionMode)
-        assertEquals(AzooKeyStyleLearningType.Nothing, request.effectiveLearningType)
+        assertEquals(AzooKeyStylePredictionMode.AutoMix, request.effectiveJapanesePredictionMode)
+        assertEquals(AzooKeyStyleLearningType.OnlyOutput, request.effectiveLearningType)
         assertEquals(AzooKeyStyleZenzaiMode.Off, request.effectiveZenzaiMode)
-        assertFalse(request.shouldReadLearnedCandidates)
+        assertTrue(request.shouldReadMemoryDictionary)
+        assertTrue(request.shouldReadLearnedCandidates)
         assertFalse(request.shouldUseZenzaiPredictiveInput)
-        assertFalse(request.shouldUseLiveConversion)
+        assertTrue(request.shouldUseLiveConversion)
     }
 
     @Test
@@ -60,8 +61,8 @@ class CandidateRequestTest {
             privacy = CandidateRequestPrivacy(isPrivateMode = true),
         ).toAzooKeyStyleOptions()
 
-        assertEquals(AzooKeyStylePredictionMode.Disabled, options.japanesePredictionMode)
-        assertEquals(AzooKeyStyleLearningType.Nothing, options.learningType)
+        assertEquals(AzooKeyStylePredictionMode.AutoMix, options.japanesePredictionMode)
+        assertEquals(AzooKeyStyleLearningType.OnlyOutput, options.learningType)
         assertEquals(AzooKeyStyleZenzaiMode.Off, options.zenzaiMode)
     }
 

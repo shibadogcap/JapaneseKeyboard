@@ -25,6 +25,10 @@ class AzooKeyDictionaryAssetProvider @Inject constructor(
         AndroidAssetAzooKeyEmojiDictionaryLoader.createSearch(assets = assets)
     }
 
+    val textReplacer: AzooKeyTextReplacer by lazy {
+        AndroidAssetAzooKeyEmojiDictionaryLoader.createTextReplacer(assets = assets)
+    }
+
     val charIdMap: AzooKeyCharIdMap? by lazy {
         runCatching {
             assets.open("louds/charID.chid").use { stream ->
@@ -35,5 +39,22 @@ class AzooKeyDictionaryAssetProvider @Inject constructor(
 
     val connectionCostStore: AzooKeyConnectionCostStore? by lazy {
         AzooKeyConnectionCostStore.fromAssets(assets)
+    }
+
+    /**
+     * Preloads LOUDS shards and connection costs so the first keystroke does not pay cold-start IO.
+     */
+    fun warmUpConversionAssets() {
+        val registry = loudsDictionaryRegistry ?: return
+        WARMUP_IDENTIFIER_PREFIXES.forEach { prefix ->
+            runCatching { registry.lookupByIdentifier(prefix) }
+        }
+        connectionCostStore?.getConnectionCost(0, 0)
+        charIdMap
+    }
+
+    companion object {
+        /** Common first katakana identifiers (あ行・か行・さ行・と・ん). */
+        private val WARMUP_IDENTIFIER_PREFIXES = listOf("あ", "か", "さ", "と", "ん")
     }
 }

@@ -45,7 +45,6 @@ object AzooKeyRuntimeConversionPolicyResolver {
             input.zenzaiMode
         }
         val liveConversionMode = if (
-            blocksPersonalizedPaths ||
             blocksSuggestions ||
             input.isDirectInputMode ||
             input.isCandidateSelectionActive ||
@@ -56,13 +55,16 @@ object AzooKeyRuntimeConversionPolicyResolver {
         } else {
             input.liveConversionMode
         }
+        val learningType = when {
+            blocksSuggestions || input.learningType == AzooKeyStyleLearningType.Nothing ->
+                AzooKeyStyleLearningType.Nothing
+            blocksPersonalizedPaths ->
+                AzooKeyStyleLearningType.OnlyOutput
+            else -> input.learningType
+        }
         return AzooKeyRuntimeConversionPolicy(
             allowsPersonalizedConversion = !blocksPersonalizedPaths && !blocksSuggestions,
-            learningType = if (blocksPersonalizedPaths) {
-                AzooKeyStyleLearningType.Nothing
-            } else {
-                input.learningType
-            },
+            learningType = learningType,
             zenzaiMode = zenzaiMode,
             experimentalZenzaiPredictiveInput = input.experimentalZenzaiPredictiveInput &&
                 zenzaiMode.isEnabled &&

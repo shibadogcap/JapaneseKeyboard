@@ -11,11 +11,11 @@ class AzooKeyTransitionLearningPolicyTest {
     }
 
     @Test
-    fun blocksBlankSamePrivateAndDisabledLearning() {
+    fun blocksBlankSameAndDisabledLearning() {
         assertFalse(shouldLearn(previousCommittedText = null, committedText = "駅"))
         assertFalse(shouldLearn(previousCommittedText = "東京", committedText = " "))
         assertFalse(shouldLearn(previousCommittedText = "東京", committedText = "東京"))
-        assertFalse(shouldLearn(previousCommittedText = "東京", committedText = "駅", isPrivateMode = true))
+        assertFalse(shouldLearn(previousCommittedText = "東京", committedText = "駅", allowsLearningWrites = false))
         assertFalse(shouldLearn(previousCommittedText = "東京", committedText = "駅", isLearnDictionaryMode = false))
     }
 
@@ -34,7 +34,7 @@ class AzooKeyTransitionLearningPolicyTest {
         previousCommittedText: String?,
         committedText: String,
         isLearnDictionaryMode: Boolean = true,
-        isPrivateMode: Boolean = false,
+        allowsLearningWrites: Boolean = true,
         candidate: Candidate? = candidate(),
     ): Boolean {
         return AzooKeyTransitionLearningPolicy.shouldLearnTransition(
@@ -42,7 +42,7 @@ class AzooKeyTransitionLearningPolicyTest {
                 previousCommittedText = previousCommittedText,
                 committedText = committedText,
                 isLearnDictionaryMode = isLearnDictionaryMode,
-                isPrivateMode = isPrivateMode,
+                allowsLearningWrites = allowsLearningWrites,
                 candidate = candidate,
             )
         )

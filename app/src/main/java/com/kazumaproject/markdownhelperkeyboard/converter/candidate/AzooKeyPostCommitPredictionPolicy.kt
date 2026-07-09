@@ -2,7 +2,6 @@ package com.kazumaproject.markdownhelperkeyboard.converter.candidate
 
 data class AzooKeyPostCommitPredictionPolicyInput(
     val committedText: String,
-    val isPrivateMode: Boolean,
     val suppressSuggestions: Boolean,
     val isJapaneseMode: Boolean,
 )
@@ -12,7 +11,6 @@ object AzooKeyPostCommitPredictionPolicy {
 
     fun shouldRequestPrediction(input: AzooKeyPostCommitPredictionPolicyInput): Boolean {
         return input.committedText.isNotBlank() &&
-            !input.isPrivateMode &&
             !input.suppressSuggestions &&
             input.isJapaneseMode &&
             input.committedText !in terminalTexts
@@ -54,7 +52,7 @@ data class AzooKeyTransitionLearningPolicyInput(
     val previousCommittedText: String?,
     val committedText: String,
     val isLearnDictionaryMode: Boolean,
-    val isPrivateMode: Boolean,
+    val allowsLearningWrites: Boolean,
     val candidate: Candidate?,
 )
 
@@ -65,7 +63,7 @@ object AzooKeyTransitionLearningPolicy {
             input.committedText.isNotBlank() &&
             previous != input.committedText &&
             input.isLearnDictionaryMode &&
-            !input.isPrivateMode &&
+            input.allowsLearningWrites &&
             (input.candidate?.isLearningTarget ?: true)
     }
 }

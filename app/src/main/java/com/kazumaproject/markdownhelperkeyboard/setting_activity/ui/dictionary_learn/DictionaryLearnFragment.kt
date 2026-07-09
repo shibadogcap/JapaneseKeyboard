@@ -50,6 +50,9 @@ class DictionaryLearnFragment : Fragment() {
     @Inject
     lateinit var learnRepository: LearnRepository
 
+    @Inject
+    lateinit var learningMemoryRepository: com.kazumaproject.markdownhelperkeyboard.converter.candidate.AzooKeyLearningMemoryRepository
+
     private lateinit var learnDictionaryAdapter: LearnDictionaryAdapter
     private var allLearnItems: List<Pair<String, List<String>>> = emptyList()
     private var learnSearchQuery: String = ""
@@ -286,6 +289,7 @@ class DictionaryLearnFragment : Fragment() {
                     val words: List<LearnEntity> = Gson().fromJson(jsonString, type)
                     val wordsToInsert = words.map { it.copy(id = null) }
                     learnRepository.insertAll(wordsToInsert)
+                    syncLearningMemoryAfterRoomChange()
                     Toast.makeText(
                         context,
                         "${words.size}${getString(R.string.import_text_string)}",
@@ -388,6 +392,7 @@ class DictionaryLearnFragment : Fragment() {
                 originalEntity.copy(input = newInput, out = newOutput, score = newScore)
             when (learnRepository.updateSafely(updatedEntity)) {
                 LearnUpdateResult.Updated -> {
+                    syncLearningMemoryAfterRoomChange()
                     Toast.makeText(context, getString(R.string.updated_string), Toast.LENGTH_SHORT)
                         .show()
                 }
@@ -452,14 +457,23 @@ class DictionaryLearnFragment : Fragment() {
 
     private suspend fun deleteByInput(input: String) {
         learnRepository.deleteByInput(input)
+        syncLearningMemoryAfterRoomChange()
     }
 
     private suspend fun deleteByInputAndOutput(input: String, output: String) {
         learnRepository.deleteByInputAndOutput(input = input, output = output)
+        syncLearningMemoryAfterRoomChange()
     }
 
     private suspend fun deleteAll() {
         learnRepository.deleteAll()
+        syncLearningMemoryAfterRoomChange()
+    }
+
+    private suspend fun syncLearningMemoryAfterRoomChange() {
+        runCatching {
+            learningMemoryRepository.rebuildLoudsFromRoom()
+        }
     }
 
     override fun onDestroyView() {
