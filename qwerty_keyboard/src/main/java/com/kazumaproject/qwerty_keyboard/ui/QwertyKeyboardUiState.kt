@@ -1,6 +1,7 @@
 package com.kazumaproject.qwerty_keyboard.ui
 
 import com.kazumaproject.core.data.qwerty.CapsLockState
+import com.kazumaproject.core.domain.key.EnterKeyVisual
 import com.kazumaproject.core.domain.state.QWERTYMode
 
 /**
@@ -12,7 +13,7 @@ import com.kazumaproject.core.domain.state.QWERTYMode
  * @property qwertyMode 現在の QWERTY 表示モード (Default / Number / Symbol)
  * @property capsLockState Shift / CapsLock の状態
  * @property romajiMode ローマ字入力モードかどうか
- * @property enterKeyText Return キーに表示するラベル
+ * @property enterKeyVisual Return キーに表示する見た目
  * @property spaceKeyText Space キーに表示するラベル
  * @property showRomajiEnglishSwitchKey ローマ字 / 英語 切替キーの可視状態
  */
@@ -20,7 +21,7 @@ data class QwertyKeyboardUiState(
     val qwertyMode: QWERTYMode,
     val capsLockState: CapsLockState,
     val romajiMode: Boolean,
-    val enterKeyText: CharSequence,
+    val enterKeyVisual: EnterKeyVisual,
     val spaceKeyText: CharSequence,
     val showRomajiEnglishSwitchKey: Boolean
 )

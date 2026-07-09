@@ -1276,7 +1276,7 @@
         android:layout_marginVertical="2dp"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="8dp"
-        android:background="@drawable/ten_keys_side_bg"
+        android:background="@drawable/enter_key_bg"
         android:contentDescription="@string/enter_key"
         android:elevation="@dimen/key_elevation"
         android:scaleType="centerInside"

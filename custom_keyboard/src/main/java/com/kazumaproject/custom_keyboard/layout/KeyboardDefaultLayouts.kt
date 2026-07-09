@@ -440,7 +440,11 @@ object KeyboardDefaultLayouts {
     }
 
     private val enterKeyStates = listOf(
-        FlickAction.Action(KeyAction.NewLine, "改行"),
+        FlickAction.Action(
+            KeyAction.NewLine,
+            label = "改行",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
+        ),
         FlickAction.Action(
             KeyAction.Confirm,
             drawableResId = com.kazumaproject.core.R.drawable.baseline_arrow_right_alt_24
@@ -450,10 +454,20 @@ object KeyboardDefaultLayouts {
             drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
         ),
         FlickAction.Action(
-            KeyAction.Enter, "検索",
+            KeyAction.Enter,
+            label = "検索",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_search_24,
         ),
-        FlickAction.Action(KeyAction.Enter, "次"),
-        FlickAction.Action(KeyAction.Enter, "確定"),
+        FlickAction.Action(
+            KeyAction.Enter,
+            label = "次",
+            drawableResId = com.kazumaproject.core.R.drawable.keyboard_tab_24px,
+        ),
+        FlickAction.Action(
+            KeyAction.Enter,
+            label = "確定",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_check_24,
+        ),
     )
 
     private val dakutenToggleStates = listOf(
@@ -500,7 +514,11 @@ object KeyboardDefaultLayouts {
     )
 
     private val enterKeyStatesCursor = listOf(
-        FlickAction.Action(KeyAction.NewLine, "改行"),
+        FlickAction.Action(
+            KeyAction.NewLine,
+            label = "改行",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
+        ),
         FlickAction.Action(
             KeyAction.Confirm,
             drawableResId = com.kazumaproject.core.R.drawable.baseline_arrow_right_alt_24
@@ -510,10 +528,20 @@ object KeyboardDefaultLayouts {
             drawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24,
         ),
         FlickAction.Action(
-            KeyAction.Enter, "Go",
+            KeyAction.Enter,
+            label = "Go",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_search_24,
         ),
-        FlickAction.Action(KeyAction.Enter, "Next"),
-        FlickAction.Action(KeyAction.Enter, "確定"),
+        FlickAction.Action(
+            KeyAction.Enter,
+            label = "Next",
+            drawableResId = com.kazumaproject.core.R.drawable.keyboard_tab_24px,
+        ),
+        FlickAction.Action(
+            KeyAction.Enter,
+            label = "確定",
+            drawableResId = com.kazumaproject.core.R.drawable.baseline_check_24,
+        ),
     )
 
     /**

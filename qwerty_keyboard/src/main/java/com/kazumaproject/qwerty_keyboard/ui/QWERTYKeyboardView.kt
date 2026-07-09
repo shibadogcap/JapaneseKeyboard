@@ -49,7 +49,7 @@ import com.google.android.material.color.DynamicColors
 import com.google.android.material.textview.MaterialTextView
 import com.kazumaproject.core.data.popup.PopupViewStyle
 import com.kazumaproject.core.data.popup.QwertyPopupViewStyleSet
-import com.kazumaproject.core.data.qwerty.CapsLockState
+import com.kazumaproject.core.domain.key.EnterKeyVisual
 import com.kazumaproject.core.data.qwerty.QWERTYKeys
 import com.kazumaproject.core.data.qwerty.VariationInfo
 import com.kazumaproject.core.domain.extensions.dpToPx
@@ -415,6 +415,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     private var customTextSpaceStr: String = ""
     private var customTextSymbolStr: String = ""
     private var customText123Str: String = ""
+    private var currentReturnKeyVisual: EnterKeyVisual = EnterKeyVisual.ARROW
     private var currentReturnKeyText: String = ""
     private var currentSpaceKeyText: String = ""
 
@@ -444,6 +445,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     }
     private val cachedCheckDrawable: Drawable? by lazy {
         androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_check_24)
+    }
+    private val cachedTabDrawable: Drawable? by lazy {
+        androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.keyboard_tab_24px)
     }
     private val cachedSpaceDrawable: Drawable? by lazy {
         androidx.core.content.ContextCompat.getDrawable(context, com.kazumaproject.core.R.drawable.baseline_space_bar_24)
@@ -805,7 +809,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     ) {
         val density = context.resources.displayMetrics.density
         val radius = 8f * density // 角丸の半径 (8dp)
-        val enterRadius = 32f * density
+        val enterRadius = 1000f
 
         // 1. 全体の背景色を設定
         if (liquidGlassEnable) {
@@ -1473,6 +1477,9 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         val bgSideRes = if (isDarkMode) com.kazumaproject.core.R.drawable.ten_keys_side_bg_material
         else com.kazumaproject.core.R.drawable.ten_keys_side_bg_material_light
 
+        val roundRes = if (isDarkMode) com.kazumaproject.core.R.drawable.round_key_bg_material
+        else com.kazumaproject.core.R.drawable.round_key_bg_material_light
+
         binding.apply {
             listOf(
                 key1, key2, key3, key4, key5, key6, key7, key8, key9, key0,
@@ -1495,7 +1502,10 @@ class QWERTYKeyboardView @JvmOverloads constructor(
                     it.setDrawableAlpha(liquidGlassKeyAlphaEnable)
                 }
             }
-            keyReturn.setBackgroundResource(com.kazumaproject.core.R.drawable.enter_key_bg)
+            keyReturn.background = ContextCompat.getDrawable(context, roundRes)
+            if (liquidGlassEnable) {
+                keyReturn.setDrawableAlpha(liquidGlassKeyAlphaEnable)
+            }
         }
     }
 
@@ -1509,23 +1519,50 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         )
     }
 
-    private fun returnDrawableForText(text: String): Drawable? {
+    private fun drawableForEnterKeyVisual(visual: EnterKeyVisual): Drawable? {
+        return ContextCompat.getDrawable(context, visual.drawableResId)
+    }
+
+    private fun enterKeyVisualForText(text: String): EnterKeyVisual? {
         return when (text.lowercase()) {
-            "search", "検索" -> cachedSearchDrawable
-            "done", "確定" -> cachedCheckDrawable
-            "return", "改行" -> cachedReturnDrawable
-            else -> cachedArrowRightAltDrawable
+            "search", "検索" -> EnterKeyVisual.SEARCH
+            "done", "確定" -> EnterKeyVisual.CHECK
+            "return", "改行" -> EnterKeyVisual.RETURN
+            "next", "次" -> EnterKeyVisual.TAB
+            else -> null
         }
+    }
+
+    fun setReturnKeyVisual(visual: EnterKeyVisual) {
+        currentReturnKeyVisual = visual
+        currentReturnKeyText = ""
+        setButtonImageOrText(
+            binding.keyReturn,
+            drawableForEnterKeyVisual(visual),
+            customEnterDrawable,
+            customTextEnterStr
+        )
     }
 
     fun setReturnKeyText(text: String) {
         currentReturnKeyText = text
-        setButtonImageOrText(
-            binding.keyReturn,
-            returnDrawableForText(text),
-            customEnterDrawable,
-            ""
-        )
+        val visual = enterKeyVisualForText(text)
+        if (visual != null) {
+            currentReturnKeyVisual = visual
+            setButtonImageOrText(
+                binding.keyReturn,
+                drawableForEnterKeyVisual(visual),
+                customEnterDrawable,
+                customTextEnterStr
+            )
+        } else {
+            setButtonImageOrText(
+                binding.keyReturn,
+                cachedArrowRightAltDrawable,
+                customEnterDrawable,
+                text
+            )
+        }
     }
 
     private val specialIconButtons: List<AppCompatImageButton> by lazy {
@@ -2280,28 +2317,40 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
 
-    fun resetQWERTYKeyboard(enterKyeText: String) {
+    fun resetQWERTYKeyboard(enterKeyVisual: EnterKeyVisual) {
         cancelQwertyGlideCandidate(notify = glideStarted)
         clearShiftCaps()
         _qwertyMode.update { QWERTYMode.Default }
         _romajiModeState.update { false }
         binding.apply {
             setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_english))
-            setReturnKeyText(enterKyeText)
+            setReturnKeyVisual(enterKeyVisual)
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
     }
 
-    fun setRomajiKeyboard(enterKeyText: String) {
+    fun resetQWERTYKeyboard(enterKyeText: String) {
+        resetQWERTYKeyboard(
+            enterKeyVisualForText(enterKyeText) ?: EnterKeyVisual.ARROW
+        )
+    }
+
+    fun setRomajiKeyboard(enterKeyVisual: EnterKeyVisual) {
         cancelQwertyGlideCandidate(notify = glideStarted)
         clearShiftCaps()
         _qwertyMode.update { QWERTYMode.Default }
         _romajiModeState.update { true }
         binding.apply {
             setSpaceKeyText(resources.getString(com.kazumaproject.core.R.string.space_japanese))
-            setReturnKeyText(enterKeyText)
+            setReturnKeyVisual(enterKeyVisual)
         }
         refreshSpecialKeyIconSizesWhenLaidOut()
+    }
+
+    fun setRomajiKeyboard(enterKeyText: String) {
+        setRomajiKeyboard(
+            enterKeyVisualForText(enterKeyText) ?: EnterKeyVisual.ARROW
+        )
     }
 
     /**
@@ -2315,7 +2364,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
             qwertyMode = qwertyMode.value,
             capsLockState = capsLockState.value,
             romajiMode = romajiModeState.value,
-            enterKeyText = currentReturnKeyText,
+            enterKeyVisual = currentReturnKeyVisual,
             spaceKeyText = currentSpaceKeyText,
             showRomajiEnglishSwitchKey = binding.switchRomajiEnglish.isVisible
         )
@@ -2341,7 +2390,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         _capsLockState.value = state.capsLockState
 
         binding.apply {
-            setReturnKeyText(state.enterKeyText.toString())
+            setReturnKeyVisual(state.enterKeyVisual)
             setSpaceKeyText(state.spaceKeyText.toString())
             switchRomajiEnglish.isVisible = state.showRomajiEnglishSwitchKey
         }
@@ -2354,7 +2403,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
         updateCapsLockUI(state.capsLockState)
         renderShiftKeyDrawable()
         binding.apply {
-            setReturnKeyText(state.enterKeyText.toString())
+            setReturnKeyVisual(state.enterKeyVisual)
             setSpaceKeyText(state.spaceKeyText.toString())
             switchRomajiEnglish.isVisible = state.showRomajiEnglishSwitchKey
         }
