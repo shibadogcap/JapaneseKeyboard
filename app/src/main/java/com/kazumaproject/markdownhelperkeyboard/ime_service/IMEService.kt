@@ -1021,6 +1021,32 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
 
     private var previousTenKeyQWERTYMode: TenKeyQWERTYMode? = null
 
+    private fun isSumireKeyboardEnabled(): Boolean {
+        return SumireKeyboardAvailabilityResolver.isSumireKeyboardEnabled(keyboardOrder)
+    }
+
+    private fun migrateFromDisabledSumireIfNeeded(showKeyboardIfViewActive: Boolean = false) {
+        val migration = SumireKeyboardAvailabilityResolver.migrateFromDisabledSumireIfNeeded(
+            keyboardOrder = keyboardOrder,
+            currentMode = qwertyMode.value,
+            previousMode = previousTenKeyQWERTYMode,
+        )
+        if (!migration.changed) return
+
+        _tenKeyQWERTYMode.update { migration.currentMode }
+        previousTenKeyQWERTYMode = migration.previousMode
+
+        val fallbackType = SumireKeyboardAvailabilityResolver.fallbackKeyboardType(keyboardOrder)
+        if (migration.currentMode != TenKeyQWERTYMode.Sumire) {
+            currentKeyboardOrder = keyboardOrder.indexOf(fallbackType).coerceAtLeast(0)
+        }
+
+        if (showKeyboardIfViewActive && migration.currentMode != TenKeyQWERTYMode.Number) {
+            val typeToShow = keyboardOrder.getOrNull(currentKeyboardOrder) ?: fallbackType
+            showKeyboard(typeToShow)
+        }
+    }
+
     private var currentKeyboardOrder = 0
 
     private data class ImeItem(
@@ -1300,7 +1326,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 sumireSpecialKeyPlacementOverrides = placementOverrides
                 sumireSpecialKeyActionOverrides = actionOverrides
                 withContext(Dispatchers.Main.immediate) {
-                    if (qwertyMode.value == TenKeyQWERTYMode.Sumire) {
+                    if (qwertyMode.value == TenKeyQWERTYMode.Sumire && isSumireKeyboardEnabled()) {
                         refreshActiveSumireLayoutIfNeeded()
                     } else {
                         renderCurrentKeyboardStateOnActiveSurface()
@@ -1377,6 +1403,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
             qwertyGlideInputPreference != preferences.qwertyGlideInputPreference
 
         keyboardOrder = preferences.keyboardOrder
+        migrateFromDisabledSumireIfNeeded(showKeyboardIfViewActive = isInputViewActive)
         candidateTabOrder = preferences.candidateTabOrder
         mozcUTPersonName = preferences.mozcUTPersonName
         mozcUTPlaces = preferences.mozcUTPlaces
@@ -2249,11 +2276,12 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         suggestionAdapterFull?.setCandidateTextSize(appPreference.candidate_letter_size ?: 14.0f)
         suggestionClickNum = 0
         setCurrentInputType(editorInfo)
+        migrateFromDisabledSumireIfNeeded()
         suggestionAdapter?.setClipboardDescriptionTextVisibility(
             !(clipboardPreviewTapToDelete ?: false)
         )
         val isNumberInputType = currentInputType in numberTypes
-        if (!isNumberInputType && qwertyMode.value == TenKeyQWERTYMode.Sumire) {
+        if (!isNumberInputType && isSumireKeyboardEnabled() && qwertyMode.value == TenKeyQWERTYMode.Sumire) {
             mainLayoutBinding?.let { mainView ->
                 Timber.d("TenKeyQWERTYMode.Sumire: ${currentInputModeForSession} ${switchQWERTYPassword}")
                 when (currentInputModeForSession) {
@@ -5054,7 +5082,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun refreshActiveSumireLayoutIfNeeded() {
-        if (qwertyMode.value != TenKeyQWERTYMode.Sumire) return
+        if (!isSumireKeyboardEnabled() || qwertyMode.value != TenKeyQWERTYMode.Sumire) return
         val surface = getActiveKeyboardSurface() ?: return
         val customLayout = surface.customLayout ?: return
         setSumireLayoutTo(customLayout)
@@ -5197,6 +5225,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun setSumireLayoutTo(flickView: FlickKeyboardView) {
+        if (!isSumireKeyboardEnabled()) return
         val layoutType = sumireInputKeyLayoutType ?: "toggle"
         flickView.setSumireSpecialKeyActionResolver(
             resolver = SumireSpecialKeyActionResolver(sumireSpecialKeyActionOverrides)::resolve,
@@ -5330,7 +5359,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     private fun refreshDeleteKeyFlickPreferenceLayouts() {
         val customLayout = getActiveKeyboardSurface()?.customLayout ?: return
         when (qwertyMode.value) {
-            TenKeyQWERTYMode.Sumire -> setSumireLayoutTo(customLayout)
+            TenKeyQWERTYMode.Sumire -> if (isSumireKeyboardEnabled()) setSumireLayoutTo(customLayout)
             TenKeyQWERTYMode.Custom -> setCurrentCustomLayoutTo(customLayout)
             TenKeyQWERTYMode.Number -> setNumberLayoutTo(customLayout)
             else -> Unit
@@ -7684,8 +7713,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
      * 指定されたキーボードを表示するための統一された関数
      */
     private fun showKeyboard(type: KeyboardType) {
+        val requestedType = if (type == KeyboardType.SUMIRE && !isSumireKeyboardEnabled()) {
+            SumireKeyboardAvailabilityResolver.fallbackKeyboardType(keyboardOrder)
+        } else {
+            type
+        }
         hideAllKeyboards()
-        val resolvedType = resolveKeyboardTypeForCurrentOrientation(type)
+        val resolvedType = resolveKeyboardTypeForCurrentOrientation(requestedType)
         Timber.d("showKeyboard called: requested=$type resolved=$resolvedType")
         mainLayoutBinding?.apply {
             when (resolvedType) {
@@ -7761,7 +7795,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             setQwertySwitchNumberLayoutKeyVisibilityOnActiveSurface(true)
                             setCurrentQwertyRomajiModeForSession(false)
                             setKeyboardSizeSwitchKeyboard(this)
-                            previousTenKeyQWERTYMode = TenKeyQWERTYMode.Sumire
+                            previousTenKeyQWERTYMode = if (isSumireKeyboardEnabled()) {
+                                TenKeyQWERTYMode.Sumire
+                            } else {
+                                null
+                            }
                             qwertyView.isVisible = true
                             customLayoutDefault.isVisible = false
                             keyboardView.isVisible = false
@@ -7872,6 +7910,10 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun createNewKeyboardLayoutForSumire() {
+        if (!isSumireKeyboardEnabled()) {
+            migrateFromDisabledSumireIfNeeded(showKeyboardIfViewActive = isInputViewActive)
+            return
+        }
         Timber.d("updateKeyboardLayout: ${qwertyMode.value} $currentEnterKeyIndex")
         when (qwertyMode.value) {
             TenKeyQWERTYMode.Custom -> {
@@ -7936,7 +7978,11 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                                 } else {
                                     setKeyboardHeightWithAdditional(mainView)
                                 }
-                                previousTenKeyQWERTYMode = TenKeyQWERTYMode.Sumire
+                                previousTenKeyQWERTYMode = if (isSumireKeyboardEnabled()) {
+                                TenKeyQWERTYMode.Sumire
+                            } else {
+                                null
+                            }
                             }
                         } else {
                             Timber.d("updateKeyboardLayout: $isFlickOnlyMode $sumireInputKeyType")
@@ -13492,7 +13538,17 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                 }
             when (firstItem) {
                 KeyboardType.TENKEY -> _tenKeyQWERTYMode.update { TenKeyQWERTYMode.Default }
-                KeyboardType.SUMIRE -> _tenKeyQWERTYMode.update { TenKeyQWERTYMode.Sumire }
+                KeyboardType.SUMIRE -> {
+                    if (isSumireKeyboardEnabled()) {
+                        _tenKeyQWERTYMode.update { TenKeyQWERTYMode.Sumire }
+                    } else {
+                        _tenKeyQWERTYMode.update {
+                            SumireKeyboardAvailabilityResolver.tenKeyQWERTYModeForKeyboardType(
+                                SumireKeyboardAvailabilityResolver.fallbackKeyboardType(keyboardOrder)
+                            )
+                        }
+                    }
+                }
                 KeyboardType.QWERTY -> _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTY }
                 KeyboardType.ROMAJI -> _tenKeyQWERTYMode.update { TenKeyQWERTYMode.TenKeyQWERTYRomaji }
                 KeyboardType.CUSTOM -> _tenKeyQWERTYMode.update { TenKeyQWERTYMode.Custom }
@@ -14388,8 +14444,13 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
                             if (previousTenKeyQWERTYMode == null) {
                                 returnDefaultQwertyFromNumberKey(mainView, insertString)
                             } else {
-                                previousTenKeyQWERTYMode?.let {
-                                    when (it) {
+                                previousTenKeyQWERTYMode?.let { previousMode ->
+                                    val resolvedPreviousMode =
+                                        SumireKeyboardAvailabilityResolver.resolveTenKeyQWERTYModeIfSumireDisabled(
+                                            previousMode,
+                                            keyboardOrder,
+                                        )
+                                    when (resolvedPreviousMode) {
                                         TenKeyQWERTYMode.Default -> {
                                             returnDefaultQwertyFromNumberKey(mainView, insertString)
                                         }
