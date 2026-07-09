@@ -913,13 +913,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     }
 
     private fun enterKeyDrawableForVisual(visual: EnterKeyVisual): Drawable? {
-        return when (visual) {
-            EnterKeyVisual.ARROW -> cachedArrowRightDrawable
-            EnterKeyVisual.RETURN -> cachedReturnDrawable
-            EnterKeyVisual.TAB -> cachedTabDrawable
-            EnterKeyVisual.CHECK -> cachedCheckDrawable
-            EnterKeyVisual.SEARCH -> cachedSearchDrawable
-        }
+        return ContextCompat.getDrawable(applicationContext, visual.drawableResId)
     }
 
     private fun applyEnterKeyVisualToSurfaces(visual: EnterKeyVisual) {
@@ -927,6 +921,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         mainLayoutBinding?.tabletView?.setSideKeyEnterDrawable(drawable)
         mainLayoutBinding?.keyboardView?.setSideKeyEnterDrawable(drawable)
         floatingKeyboardBinding?.keyboardViewFloating?.setSideKeyEnterDrawable(drawable)
+        updateQwertyOnActiveSurface { setReturnKeyVisual(visual) }
     }
 
     private val cachedEnglishDrawable: Drawable? by lazy {
@@ -16196,7 +16191,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         if (isTabletGojuonSurface()) {
             mainView.tabletView.apply {
                 setSideKeyEnterDrawable(
-                    cachedReturnDrawable
+                    enterKeyDrawableForVisual(EnterKeyVisual.CHECK)
                 )
                 when (currentInputMode.get()) {
                     InputMode.ModeJapanese -> {
@@ -16221,7 +16216,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
         } else {
             mainView.keyboardView.apply {
                 setSideKeyEnterDrawable(
-                    cachedReturnDrawable
+                    enterKeyDrawableForVisual(EnterKeyVisual.CHECK)
                 )
                 when (currentInputMode.value) {
                     InputMode.ModeJapanese -> {
@@ -16275,7 +16270,7 @@ class IMEService : InputMethodService(), LifecycleOwner, InputConnection,
     ) {
         floatingKeyboardLayoutBinding.keyboardViewFloating.apply {
             setSideKeyEnterDrawable(
-                cachedReturnDrawable
+                enterKeyDrawableForVisual(EnterKeyVisual.CHECK)
             )
             when (currentInputMode.value) {
                 InputMode.ModeJapanese -> {

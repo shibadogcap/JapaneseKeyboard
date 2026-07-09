@@ -115,7 +115,7 @@ class DynamicSumireSpecialKeyTapOverrideDisplayTest {
             stateIndex = 0,
             expectedAction = KeyAction.NewLine,
             expectedLabel = "改行",
-            expectedDrawableResId = null
+            expectedDrawableResId = com.kazumaproject.core.R.drawable.baseline_keyboard_return_24
         )
     }
 

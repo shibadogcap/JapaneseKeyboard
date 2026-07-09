@@ -1520,13 +1520,7 @@ class QWERTYKeyboardView @JvmOverloads constructor(
     }
 
     private fun drawableForEnterKeyVisual(visual: EnterKeyVisual): Drawable? {
-        return when (visual) {
-            EnterKeyVisual.ARROW -> cachedArrowRightAltDrawable
-            EnterKeyVisual.RETURN -> cachedReturnDrawable
-            EnterKeyVisual.TAB -> cachedTabDrawable
-            EnterKeyVisual.CHECK -> cachedCheckDrawable
-            EnterKeyVisual.SEARCH -> cachedSearchDrawable
-        }
+        return ContextCompat.getDrawable(context, visual.drawableResId)
     }
 
     private fun enterKeyVisualForText(text: String): EnterKeyVisual? {
